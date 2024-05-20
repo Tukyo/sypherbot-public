@@ -1635,8 +1635,8 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
     dispatcher.add_handler(CallbackQueryHandler(help_buttons, pattern='^help_'))
 
-    monitor_thread = threading.Thread(target=monitor_transfers)
-    monitor_thread.start()
+    # monitor_thread = threading.Thread(target=monitor_transfers)
+    # monitor_thread.start()
     
     # Start the Bot
     updater.start_polling()
