@@ -1026,92 +1026,92 @@ def plot_candlestick_chart(data_frame):
 #endregion Ethereum Logic
 
 #region Ethereum Slash Commands
-def price(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if rate_limit_check():
-        currency = context.args[0] if context.args else 'usd'
-        currency = currency.lower()
+# def price(update: Update, context: CallbackContext) -> None:
+#     msg = None
+#     if rate_limit_check():
+#         currency = context.args[0] if context.args else 'usd'
+#         currency = currency.lower()
 
-        # Check if the provided currency is supported
-        if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
-            msg = update.message.reply_text("Unsupported currency. Please use 'usd', 'eur'. 'jpy', 'gbp', 'aud', 'cad' or 'mxn'.")
-            return
+#         # Check if the provided currency is supported
+#         if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
+#             msg = update.message.reply_text("Unsupported currency. Please use 'usd', 'eur'. 'jpy', 'gbp', 'aud', 'cad' or 'mxn'.")
+#             return
 
-        # Fetch and format the token price in the specified currency
-        token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
-        if token_price_in_fiat is not None:
-            formatted_price = format(token_price_in_fiat, '.4f')
-            msg = update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
-        else:
-            msg = update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+#         # Fetch and format the token price in the specified currency
+#         token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
+#         if token_price_in_fiat is not None:
+#             formatted_price = format(token_price_in_fiat, '.4f')
+#             msg = update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
+#         else:
+#             msg = update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
+#     else:
+#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     
-    if msg is not None:
-        track_message(msg)
+#     if msg is not None:
+#         track_message(msg)
 
-def liquidity(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if rate_limit_check():
-        liquidity_usd = get_liquidity()
-        if liquidity_usd:
-            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
-        else:
-            msg = update.message.reply_text("Failed to fetch liquidity data.")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+# def liquidity(update: Update, context: CallbackContext) -> None:
+#     msg = None
+#     if rate_limit_check():
+#         liquidity_usd = get_liquidity()
+#         if liquidity_usd:
+#             msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
+#         else:
+#             msg = update.message.reply_text("Failed to fetch liquidity data.")
+#     else:
+#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     
-    if msg is not None:
-        track_message(msg)
+#     if msg is not None:
+#         track_message(msg)
 
-def volume(update, context):
-    msg = None
-    if rate_limit_check():
-        volume_24h_usd = get_volume()
-        if volume_24h_usd:
-            msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd}")
-        else:
-            msg = update.message.reply_text("Failed to fetch volume data.")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+# def volume(update, context):
+#     msg = None
+#     if rate_limit_check():
+#         volume_24h_usd = get_volume()
+#         if volume_24h_usd:
+#             msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd}")
+#         else:
+#             msg = update.message.reply_text("Failed to fetch volume data.")
+#     else:
+#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     
-    if msg is not None:
-        track_message(msg)
+#     if msg is not None:
+#         track_message(msg)
 
-def chart(update: Update, context: CallbackContext) -> None:
-    args = context.args
-    time_frame = 'minute'  # default to minute if no argument is provided
+# def chart(update: Update, context: CallbackContext) -> None:
+#     args = context.args
+#     time_frame = 'minute'  # default to minute if no argument is provided
     
-    if args:
-        interval_arg = args[0].lower()
-        if interval_arg == 'h':
-            time_frame = 'hour'
-        elif interval_arg == 'd':
-            time_frame = 'day'
-        elif interval_arg == 'm':
-            time_frame = 'minute'
-        else:
-            msg = update.message.reply_text('Invalid time frame specified. Please use /chart with m, h, or d.')
-            return
+#     if args:
+#         interval_arg = args[0].lower()
+#         if interval_arg == 'h':
+#             time_frame = 'hour'
+#         elif interval_arg == 'd':
+#             time_frame = 'day'
+#         elif interval_arg == 'm':
+#             time_frame = 'minute'
+#         else:
+#             msg = update.message.reply_text('Invalid time frame specified. Please use /chart with m, h, or d.')
+#             return
         
-    if rate_limit_check():
-        msg = None
-        ohlcv_data = fetch_ohlcv_data(time_frame)
-        if ohlcv_data:
-            data_frame = prepare_data_for_chart(ohlcv_data)
-            plot_candlestick_chart(data_frame)
-            msg = update.message.reply_photo(
-                photo=open('/tmp/candlestick_chart.png', 'rb'),
-                caption='\n[Dexscreener](https://dexscreener.com/base/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b) • [Dextools](https://www.dextools.io/app/en/base/pair-explorer/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b?t=1715831623074) • [CMC](https://coinmarketcap.com/dexscan/base/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b/) • [CG](https://www.geckoterminal.com/base/pools/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b?utm_source=coingecko)\n',
-                parse_mode='Markdown'
-            )
-        else:
-            msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+#     if rate_limit_check():
+#         msg = None
+#         ohlcv_data = fetch_ohlcv_data(time_frame)
+#         if ohlcv_data:
+#             data_frame = prepare_data_for_chart(ohlcv_data)
+#             plot_candlestick_chart(data_frame)
+#             msg = update.message.reply_photo(
+#                 photo=open('/tmp/candlestick_chart.png', 'rb'),
+#                 caption='\n[Dexscreener](https://dexscreener.com/base/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b) • [Dextools](https://www.dextools.io/app/en/base/pair-explorer/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b?t=1715831623074) • [CMC](https://coinmarketcap.com/dexscan/base/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b/) • [CG](https://www.geckoterminal.com/base/pools/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b?utm_source=coingecko)\n',
+#                 parse_mode='Markdown'
+#             )
+#         else:
+#             msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
+#     else:
+#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     
-    if msg is not None:
-        track_message(msg)
+#     if msg is not None:
+#         track_message(msg)
 #endregion Ethereum Slash Commands
 
 #region User Verification
@@ -1358,7 +1358,7 @@ def unmute_user(context: CallbackContext) -> None:
 
 def handle_message(update: Update, context: CallbackContext) -> None:
     
-    delete_unallowed_addresses(update, context)
+    # delete_unallowed_addresses(update, context)
     delete_filtered_phrases(update, context)
     delete_blocked_links(update, context)
 
@@ -1422,23 +1422,23 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
 
     return user_is_admin
 
-def delete_unallowed_addresses(update: Update, context: CallbackContext):
-    print("Checking message for unallowed addresses...")
+# def delete_unallowed_addresses(update: Update, context: CallbackContext):
+#     print("Checking message for unallowed addresses...")
 
-    message_text = update.message.text
+#     message_text = update.message.text
     
-    found_addresses = eth_address_pattern.findall(message_text)
+#     found_addresses = eth_address_pattern.findall(message_text)
 
-    print(f"Found addresses: {found_addresses}")
+#     print(f"Found addresses: {found_addresses}")
 
-    allowed_addresses = [config['contractAddress'].lower(), config['lpAddress'].lower()]
+#     allowed_addresses = [config['contractAddress'].lower(), config['lpAddress'].lower()]
 
-    print(f"Allowed addresses: {allowed_addresses}")
+#     print(f"Allowed addresses: {allowed_addresses}")
 
-    for address in found_addresses:
-        if address.lower() not in allowed_addresses:
-            update.message.delete()
-            break
+#     for address in found_addresses:
+#         if address.lower() not in allowed_addresses:
+#             update.message.delete()
+#             break
 
 def delete_filtered_phrases(update: Update, context: CallbackContext):
     print("Checking message for filtered phrases...")
