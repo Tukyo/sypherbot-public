@@ -312,12 +312,13 @@ def start(update: Update, context: CallbackContext) -> None:
     elif chat_type in ["group", "supergroup"]:
         if is_user_admin(update, context):
             setup_keyboard = [
-                [InlineKeyboardButton("Setup", callback_data='setup_home')]
+                [InlineKeyboardButton("Setup", callback_data='setup_home')],
+                [InlineKeyboardButton("Cancel", callback_data='cancel')]
             ]
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
 
             update.message.reply_text("Hey, please give me admin perms, then click the setup button below to get started.", reply_markup=setup_markup)
-            context.bot.send_message(user_id, "I have been added to your group. Please proceed with setup in the main chat!")
+            # context.bot.send_message(user_id, "I have been added to your group. Please proceed with setup in the main chat!")
     else:
         update.message.reply_text('That command only works in DM!')
 
@@ -332,8 +333,11 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
 
 def setup_home(update: Update, context: CallbackContext) -> None:
     keyboard = [
-        [InlineKeyboardButton("Ethereum", callback_data='setup_ethereum')],
-        [InlineKeyboardButton("Commands", callback_data='setup_custom_commands')]
+        [
+        InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
+        InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
+        ]
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -342,7 +346,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None  # This is fine to reset/setup context state
+    context.user_data['setup_stage'] = None
 
 def setup_ethereum_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -360,6 +364,7 @@ def setup_ethereum(update: Update, context: CallbackContext) -> None:
         InlineKeyboardButton("Liquidity", callback_data='setup_liquidity'),
         InlineKeyboardButton("ABI", callback_data='setup_ABI')
         ]
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -374,12 +379,19 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
+    keyboard = [
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Please respond with your contract address.'
+        text='Please respond with your contract address.',
+        reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = 'contract'
     print("Requesting contract address.")
+
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('setup_stage') == 'contract':
@@ -397,9 +409,15 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
+    keyboard = [
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Please respond with your liquidity address.'
+        text='Please respond with your liquidity address.',
+        reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = 'liquidity'
     print("Requesting liquidity address.")
@@ -421,9 +439,15 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
+    keyboard = [
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Please upload your ABI as a JSON file.\n\nExample file structure: ["function1(uint256)", "function2(string)"]'
+        text='Please upload your ABI as a JSON file.\n\nExample file structure: ["function1(uint256)", "function2(string)"]',
+        reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = 'ABI'
     print("Requesting ABI file.")
@@ -460,6 +484,13 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
             pass
         elif update.message.document:
             handle_ABI(update, context)
+
+def cancel_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    print("User pressed cancel, returning to home setup screen.")
+    setup_home(update, context)
+    context.user_data['setup_stage'] = None
 
 def fetch_group_addresses(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
@@ -1850,6 +1881,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
+    dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
