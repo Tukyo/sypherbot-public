@@ -299,14 +299,13 @@ def start(update: Update, context: CallbackContext) -> None:
     if chat_type == "private":
         if rate_limit_check():
             keyboard = [
-                [InlineKeyboardButton("Setup Group Management", callback_data='setup_group')],
-                [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/your_bot_username?startgroup=0")]
+                [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/sypher_robot?startgroup=0")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             update.message.reply_text(
                 'Hello! I am Sypher Bot. If you are here to verify, now you may return to main chat to begin.\n\n'
-                'Otherwise, you can setup group management or add me to your group with the buttons below.',
+                'If you want me to manage you group, add me to your group with the button below.',
                 reply_markup=reply_markup
             )
         else:
