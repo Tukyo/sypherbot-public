@@ -470,7 +470,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
 
 def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
     setup_stage = context.user_data.get('setup_stage')
-    print("Handling setup inputs from user.")
+    print("Checking if user is in setup mode.")
     if setup_stage == 'contract':
         handle_contract_address(update, context)
     elif setup_stage == 'liquidity':
@@ -493,13 +493,38 @@ def fetch_group_info(update: Update, context: CallbackContext):
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    # Fetch the document data synchronously
-    doc_snapshot = group_doc.get()
-    if doc_snapshot.exists:
-        return doc_snapshot.to_dict()
-    else:
-        update.message.reply_text("Group data not found.")
-        return None
+    try:
+        doc_snapshot = group_doc.get()
+        if doc_snapshot.exists:
+            return doc_snapshot.to_dict()
+        else:
+            update.message.reply_text("Group data not found.")
+    except Exception as e:
+        update.message.reply_text(f"Failed to fetch group info: {str(e)}")
+    
+    return None
+
+def delete_unallowed_addresses(update: Update, context: CallbackContext):
+    print("Checking message for unallowed addresses...")
+
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return
+    
+    message_text = update.message.text
+    found_addresses = eth_address_pattern.findall(message_text)
+
+    # Retrieve the contract and LP addresses from the fetched group info
+    allowed_addresses = [group_data.get('contract_address', '').lower(), group_data.get('liquidity_address', '').lower()]
+
+    print(f"Found addresses: {found_addresses}")
+    print(f"Allowed addresses: {allowed_addresses}")
+
+    for address in found_addresses:
+        if address.lower() not in allowed_addresses:
+            update.message.delete()
+            print("Deleted a message containing unallowed address.")
+            break
 
 def price(update: Update, context: CallbackContext) -> None:
     # Fetch group-specific contract information
@@ -1537,11 +1562,13 @@ def unmute_user(context: CallbackContext) -> None:
 
 def handle_message(update: Update, context: CallbackContext) -> None:
     
-    # delete_unallowed_addresses(update, context)
+    delete_unallowed_addresses(update, context)
     delete_filtered_phrases(update, context)
     delete_blocked_links(update, context)
 
     handle_guess(update, context)
+
+    handle_setup_inputs_from_user(update, context)
 
     if is_user_admin(update, context):
         return
@@ -1600,24 +1627,6 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
     user_is_admin = any(admin.user.id == user_id for admin in chat_admins)
 
     return user_is_admin
-
-# def delete_unallowed_addresses(update: Update, context: CallbackContext):
-#     print("Checking message for unallowed addresses...")
-
-#     message_text = update.message.text
-    
-#     found_addresses = eth_address_pattern.findall(message_text)
-
-#     print(f"Found addresses: {found_addresses}")
-
-#     allowed_addresses = [config['contractAddress'].lower(), config['lpAddress'].lower()]
-
-#     print(f"Allowed addresses: {allowed_addresses}")
-
-#     for address in found_addresses:
-#         if address.lower() not in allowed_addresses:
-#             update.message.delete()
-#             break
 
 def delete_filtered_phrases(update: Update, context: CallbackContext):
     print("Checking message for filtered phrases...")
@@ -1878,13 +1887,10 @@ def main() -> None:
     # Register the message handler for new users
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
-    dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_setup_inputs_from_user))
+    dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_message))
 
     # Add a handler for deleting service messages
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
-    
-    # Register the message handler for anti-spam
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
     # Register the callback query handler for button clicks
     dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^verify_\d+$'))
