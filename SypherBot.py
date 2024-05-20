@@ -65,15 +65,16 @@ load_dotenv()
 
 # Get the Telegram API token from environment variables
 TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
-VERIFICATION_LETTERS = os.getenv('VERIFICATION_LETTERS')
-CHAT_ID = os.getenv('CHAT_ID')
-BASE_ENDPOINT = os.getenv('ENDPOINT')
-BASESCAN_API_KEY = os.getenv('BASESCAN_API')
+
+VERIFICATION_LETTERS = os.getenv('VERIFICATION_LETTERS') # TODO: Move to firebase
+CHAT_ID = os.getenv('CHAT_ID') # TODO: Move to firebase
+BASE_ENDPOINT = os.getenv('ENDPOINT') # TODO: Move to firebase
+BASESCAN_API_KEY = os.getenv('BASESCAN_API') # TODO: Move to firebase
 
 web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
-# contract_address = config['contractAddress']
-# pool_address = config['lpAddress']
-# abi = config['abi']
+# contract_address = config['contractAddress'] # TODO: Move to firebase
+# pool_address = config['lpAddress'] # TODO: Move to firebase
+# abi = config['abi'] # TODO: Move to firebase
 
 eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 telegram_links_pattern = re.compile(r'https://t.me/\S+')
@@ -207,6 +208,11 @@ def check_warns(update, context, user_id):
             update.message.reply_text(f"Goodbye {user_id}!")
 #endregion Database Slash Commands
 
+#region Firebase Group Initialization
+# def create_firebase_database(chat_id):
+
+#endregion Firebase Group Initialization 
+
 #endregion Firebase
 
 #region Classes
@@ -289,10 +295,24 @@ def track_message(message):
 
 #region Main Slash Commands
 def start(update: Update, context: CallbackContext) -> None:
-    if rate_limit_check():
-        update.message.reply_text('Hello! I am Sypher Bot. For a list of commands, please use /help.')
-    else:
-        update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    chat_type = update.effective_chat.type
+    if chat_type == "private":
+        if rate_limit_check():
+            keyboard = [
+                [InlineKeyboardButton("Setup Group Management", callback_data='setup_group')],
+                [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/your_bot_username?startgroup=0")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            update.message.reply_text(
+                'Hello! I am Sypher Bot. If you are here to verify, now you may return to main chat to begin.\n\n'
+                'Otherwise, you can setup group management or add me to your group with the buttons below.',
+                reply_markup=reply_markup
+            )
+        else:
+            update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    elif chat_type in ["group", "supergroup"]:
+        update.message.reply_text('That command only works in DM!')
 
 def help(update: Update, context: CallbackContext) -> None:
     msg = None
