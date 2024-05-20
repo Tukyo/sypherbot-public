@@ -395,6 +395,14 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
             })
         context.user_data['setup_stage'] = None
 
+def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
+    setup_stage = context.user_data.get('setup_stage')
+    print("Handling setup inputs from user.")
+    if setup_stage == 'contract':
+        handle_contract_address(update, context)
+    elif setup_stage == 'liquidity':
+        handle_liquidity_address(update, context)
+
 def bot_added_to_group(update, context):
     new_members = update.message.new_chat_members
     if any(member.id != context.bot.id for member in new_members):
@@ -1748,8 +1756,7 @@ def main() -> None:
     # Register the message handler for new users
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
-    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_contract_address))
-    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_liquidity_address))
+    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_setup_inputs_from_user))
 
     # Add a handler for deleting service messages
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
