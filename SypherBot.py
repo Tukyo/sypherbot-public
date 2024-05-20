@@ -319,21 +319,32 @@ def start(update: Update, context: CallbackContext) -> None:
             ]
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
 
-            update.message.reply_text("Hey, please give me admin perms, then check your DMs to proceed.", reply_markup=setup_markup)
-            context.bot.send_message(user_id, "Hey there, to proceed with group setup, please use the Setup button.")
+            update.message.reply_text("Hey, please give me admin perms, then check your DMs to proceed.")
+            context.bot.send_message(user_id, "Hey there, to proceed with group setup, please use the Setup button.", reply_markup=setup_markup)
     else:
         update.message.reply_text('That command only works in DM!')
 
-def add_bot_to_group(update, context):
+def bot_added_to_group(update, context):
     new_members = update.message.new_chat_members
     if any(member.id != context.bot.id for member in new_members):
         return
     if any(member.id == context.bot.id for member in new_members):
         group_id = update.effective_chat.id
+        print(f"Adding group {group_id} to database.")
         group_doc = db.collection('groups').document(str(group_id))
         group_doc.set({
             'group_id': group_id,
         })
+def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
+    left_member = update.message.left_chat_member
+    if left_member.id != context.bot.id:
+        delete_service_messages(update, context)
+    if left_member.id == context.bot.id:
+        group_id = update.effective_chat.id
+        print(f"Removing group {group_id} from database.")
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.delete()
+        delete_service_messages(update, context)
 
 def help(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1081,7 +1092,7 @@ def chart(update: Update, context: CallbackContext) -> None:
 
 #region User Verification
 def handle_new_user(update: Update, context: CallbackContext) -> None:
-    add_bot_to_group(update, context)
+    bot_added_to_group(update, context)
     msg = None
     for member in update.message.new_chat_members:
         user_id = member.id
@@ -1663,9 +1674,10 @@ def main() -> None:
     
     # Register the message handler for new users
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
+    dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
 
     # Add a handler for deleting service messages
-    dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
+    # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
     
     # Register the message handler for anti-spam
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
