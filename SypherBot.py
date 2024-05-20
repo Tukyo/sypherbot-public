@@ -324,28 +324,6 @@ def start(update: Update, context: CallbackContext) -> None:
     else:
         update.message.reply_text('That command only works in DM!')
 
-def bot_added_to_group(update, context):
-    new_members = update.message.new_chat_members
-    if any(member.id != context.bot.id for member in new_members):
-        return
-    if any(member.id == context.bot.id for member in new_members):
-        group_id = update.effective_chat.id
-        print(f"Adding group {group_id} to database.")
-        group_doc = db.collection('groups').document(str(group_id))
-        group_doc.set({
-            'group_id': group_id,
-        })
-def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
-    left_member = update.message.left_chat_member
-    if left_member.id != context.bot.id:
-        delete_service_messages(update, context)
-    if left_member.id == context.bot.id:
-        group_id = update.effective_chat.id
-        print(f"Removing group {group_id} from database.")
-        group_doc = db.collection('groups').document(str(group_id))
-        group_doc.delete()
-        delete_service_messages(update, context)
-
 def setup_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -369,6 +347,67 @@ def setup(update: Update, context: CallbackContext) -> None:
         text='Welcome to the Sypher Bot setup. Please use the buttons below to setup your bot!',
         reply_markup=reply_markup
     )
+
+def setup_contract(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_contract':
+        add_contract_to_database(update, context)
+
+def add_contract_to_database(update: Update, context: CallbackContext) -> None:
+    contract_address = update.message.text
+    if eth_address_pattern.match(contract_address):
+        group_id = update.effective_chat.id
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.update({
+            'contract_address': contract_address,
+        })
+
+def setup_liquidity(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_contract':
+        add_liquidity_to_database(update, context)
+
+def add_liquidity_to_database(update: Update, context: CallbackContext) -> None:
+    liquidity_address = update.message.text
+    if eth_address_pattern.match(liquidity_address):
+        group_id = update.effective_chat.id
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.update({
+            'liquidity_address': liquidity_address,
+        })
+
+
+def bot_added_to_group(update, context):
+    new_members = update.message.new_chat_members
+    if any(member.id != context.bot.id for member in new_members):
+        return
+    if any(member.id == context.bot.id for member in new_members):
+        group_id = update.effective_chat.id
+        print(f"Adding group {group_id} to database.")
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.set({
+            'group_id': group_id,
+        })
+
+def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
+    left_member = update.message.left_chat_member
+    if left_member.id != context.bot.id:
+        delete_service_messages(update, context)
+    if left_member.id == context.bot.id:
+        group_id = update.effective_chat.id
+        print(f"Removing group {group_id} from database.")
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.delete()
+        delete_service_messages(update, context)
+
 
 def help(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1713,6 +1752,8 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
     dispatcher.add_handler(CallbackQueryHandler(help_buttons, pattern='^help_'))
     dispatcher.add_handler(CallbackQueryHandler(setup_callback, pattern='^setup$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
