@@ -333,7 +333,8 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         [
             InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
             InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
-        ]
+        ],
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -488,22 +489,41 @@ def cancel_callback(update: Update, context: CallbackContext) -> None:
     setup_home(update, context)
     context.user_data['setup_stage'] = None
 
-def fetch_group_info(update: Update, context: CallbackContext) -> None:
+def fetch_group_info(update: Update, context: CallbackContext):
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
-    
-    def callback(doc_snapshots, changes, read_time):
-        for doc_snapshot in doc_snapshots:
-            if doc_snapshot.exists:
-                group_data = doc_snapshot.to_dict()
-                contract_address = group_data.get('contract_address')
-                liquidity_address = group_data.get('liquidity_address')
-                abi = group_data.get('abi')
-                print(f"Contract Address: {contract_address}, Liquidity Address: {liquidity_address}, ABI: {abi}")
-            else:
-                print("Group data not found.")
-    
-    group_doc.on_snapshot(callback)
+
+    # Fetch the document data synchronously
+    doc_snapshot = group_doc.get()
+    if doc_snapshot.exists:
+        return doc_snapshot.to_dict()
+    else:
+        update.message.reply_text("Group data not found.")
+        return None
+
+def price(update: Update, context: CallbackContext) -> None:
+    # Fetch group-specific contract information
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return  # Early exit if no data found
+
+    contract_address = group_data.get('contract_address')
+    if not contract_address:
+        update.message.reply_text("Contract address not found for this group.")
+        return
+
+    # Proceed with price fetching
+    currency = context.args[0].lower() if context.args else 'usd'
+    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
+        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
+        return
+
+    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
+    if token_price_in_fiat is not None:
+        formatted_price = format(token_price_in_fiat, '.4f')
+        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
+    else:
+        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
 
 def bot_added_to_group(update, context):
     new_members = update.message.new_chat_members
@@ -1185,52 +1205,29 @@ def plot_candlestick_chart(data_frame):
 #endregion Ethereum Logic
 
 #region Ethereum Slash Commands
-def price(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if not rate_limit_check():
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-        if msg:
-            track_message(msg)
-        return
+# def price(update: Update, context: CallbackContext) -> None:
+#     msg = None
+#     if rate_limit_check():
+#         currency = context.args[0] if context.args else 'usd'
+#         currency = currency.lower()
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+#         # Check if the provided currency is supported
+#         if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
+#             msg = update.message.reply_text("Unsupported currency. Please use 'usd', 'eur'. 'jpy', 'gbp', 'aud', 'cad' or 'mxn'.")
+#             return
 
-    def fetch_and_respond(doc_snapshot, error):
-        if error:
-            update.message.reply_text('Failed to fetch group data.')
-            return
-        
-        if not doc_snapshot.exists:
-            update.message.reply_text("Group data not found.")
-            return
-
-        group_data = doc_snapshot.to_dict()
-        contract_address = group_data.get('contract_address')
-        if not contract_address:
-            update.message.reply_text("Contract address not found for this group.")
-            return
-
-        currency = context.args[0].lower() if context.args else 'usd'
-        if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
-            msg = update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
-            if msg:
-                track_message(msg)
-            return
-
-        token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
-        if token_price_in_fiat is not None:
-            formatted_price = format(token_price_in_fiat, '.4f')
-            msg = update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
-        else:
-            msg = update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
-
-        if msg:
-            track_message(msg)
-
-    # Fetch the document asynchronously and block till we get a response
-    doc_snapshot = group_doc.get().result()
-    fetch_and_respond(doc_snapshot, doc_snapshot._exception)
+#         # Fetch and format the token price in the specified currency
+#         token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
+#         if token_price_in_fiat is not None:
+#             formatted_price = format(token_price_in_fiat, '.4f')
+#             msg = update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
+#         else:
+#             msg = update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
+#     else:
+#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+#     if msg is not None:
+#         track_message(msg)
 
 # def liquidity(update: Update, context: CallbackContext) -> None:
 #     msg = None
