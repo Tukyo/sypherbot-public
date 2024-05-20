@@ -208,11 +208,6 @@ def check_warns(update, context, user_id):
             update.message.reply_text(f"Goodbye {user_id}!")
 #endregion Database Slash Commands
 
-#region Firebase Group Initialization
-# def create_firebase_database(chat_id):
-
-#endregion Firebase Group Initialization 
-
 #endregion Firebase
 
 #region Classes
@@ -338,6 +333,7 @@ def setup(update: Update, context: CallbackContext) -> None:
         [
         InlineKeyboardButton("Contract", callback_data='setup_contract'),
         InlineKeyboardButton("Liquidity", callback_data='setup_liquidity'),
+        InlineKeyboardButton("ABI", callback_data='setup_ABI')
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -388,12 +384,36 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
         liquidity_address = update.message.text
         if eth_address_pattern.match(liquidity_address):
             group_id = update.effective_chat.id
-            print(f"Adding contract address {liquidity_address} to group {group_id}")
+            print(f"Adding liquidity address {liquidity_address} to group {group_id}")
             group_doc = db.collection('groups').document(str(group_id))
             group_doc.update({
                 'liquidity_address': liquidity_address,
             })
         context.user_data['setup_stage'] = None
+
+
+def setup_ABI(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Please respond with your ABI in a single message\n\n. Example: ["function1(uint256)", "function2(string)"]'
+    )
+    context.user_data['setup_stage'] = 'ABI'
+    print("Requesting ABI.")
+
+def handle_ABI(update: Update, context: CallbackContext) -> None:
+    if context.user_data.get('setup_stage') == 'ABI':
+        abi = update.message.text
+        group_id = update.effective_chat.id
+        print(f"Adding ABI to group {group_id}")
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.update({
+            'abi': abi,
+        })
+        context.user_data['setup_stage'] = None
+        update.message.reply_text("ABI has been successfully saved.")
 
 def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
     setup_stage = context.user_data.get('setup_stage')
@@ -402,6 +422,23 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
         handle_contract_address(update, context)
     elif setup_stage == 'liquidity':
         handle_liquidity_address(update, context)
+    elif setup_stage == 'ABI':
+        handle_ABI(update, context)
+
+def fetch_group_addresses(update: Update, context: CallbackContext) -> None:
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+    
+    def callback(group_snapshot, changes, read_time):
+        if group_snapshot.exists:
+            group_data = group_snapshot.to_dict()
+            contract_address = group_data.get('contract_address')
+            liquidity_address = group_data.get('liquidity_address')
+            print(f"Contract Address: {contract_address}, Liquidity Address: {liquidity_address}")
+        else:
+            print("Group data not found.")
+    
+    group_doc.on_snapshot(callback)
 
 def bot_added_to_group(update, context):
     new_members = update.message.new_chat_members
