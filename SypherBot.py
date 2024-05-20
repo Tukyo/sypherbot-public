@@ -312,7 +312,7 @@ def start(update: Update, context: CallbackContext) -> None:
     elif chat_type in ["group", "supergroup"]:
         if is_user_admin(update, context):
             setup_keyboard = [
-                [InlineKeyboardButton("Setup", callback_data='setup')]
+                [InlineKeyboardButton("Setup", callback_data='setup_home')]
             ]
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
 
@@ -321,16 +321,39 @@ def start(update: Update, context: CallbackContext) -> None:
     else:
         update.message.reply_text('That command only works in DM!')
 
-def setup_callback(update: Update, context: CallbackContext) -> None:
+def setup_home_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
     update = Update(update.update_id, message=query.message)
 
-    if query.data == 'setup':
-        setup(update, context)
+    if query.data == 'setup_home':
+        setup_home(update, context)
 
-def setup(update: Update, context: CallbackContext) -> None:
+def setup_home(update: Update, context: CallbackContext) -> None:
+    keyboard = [
+        InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
+        InlineKeyboardButton("Commands", callback_data='setup_custom_commands'),
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
+        reply_markup=reply_markup
+    )
+
+
+def setup_ethereum_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_ethereum':
+        setup_ethereum(update, context)
+
+def setup_ethereum(update: Update, context: CallbackContext) -> None:
     keyboard = [
         [
         InlineKeyboardButton("Contract", callback_data='setup_contract'),
@@ -342,7 +365,7 @@ def setup(update: Update, context: CallbackContext) -> None:
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Welcome to the Sypher Bot setup. Please use the buttons below to setup your bot!',
+        text='This is the ethereum setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1822,7 +1845,8 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
     dispatcher.add_handler(CallbackQueryHandler(help_buttons, pattern='^help_'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_callback, pattern='^setup$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_ethereum, pattern='^setup_ethereum$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
