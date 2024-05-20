@@ -332,8 +332,8 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
 
 def setup_home(update: Update, context: CallbackContext) -> None:
     keyboard = [
-        InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
-        InlineKeyboardButton("Commands", callback_data='setup_custom_commands'),
+        [InlineKeyboardButton("Ethereum", callback_data='setup_ethereum')],
+        [InlineKeyboardButton("Commands", callback_data='setup_custom_commands')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -342,7 +342,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
         reply_markup=reply_markup
     )
-
+    context.user_data['setup_stage'] = None  # This is fine to reset/setup context state
 
 def setup_ethereum_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
