@@ -1,0 +1,7 @@
+python-telegram-bot==13.7
+python-dotenv==0.19.2
+urllib3==1.26.5
+web3
+pandas
+mplfinance
+firebase-admin
