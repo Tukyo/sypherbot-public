@@ -1810,6 +1810,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_callback, pattern='^setup$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
