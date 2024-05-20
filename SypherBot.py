@@ -57,8 +57,8 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 ### /filterlist - Get a list of filtered words
 #
 
-with open('config.json') as f:
-    config = json.load(f)
+# with open('config.json') as f:
+#     config = json.load(f)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -71,9 +71,9 @@ BASE_ENDPOINT = os.getenv('ENDPOINT')
 BASESCAN_API_KEY = os.getenv('BASESCAN_API')
 
 web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
-contract_address = config['contractAddress']
-pool_address = config['lpAddress']
-abi = config['abi']
+# contract_address = config['contractAddress']
+# pool_address = config['lpAddress']
+# abi = config['abi']
 
 eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 telegram_links_pattern = re.compile(r'https://t.me/\S+')
@@ -85,7 +85,7 @@ else:
     print("Failed to connect")
 
 # Create a contract instance
-contract = web3.eth.contract(address=contract_address, abi=abi)
+# contract = web3.eth.contract(address=contract_address, abi=abi)
 
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
@@ -346,14 +346,14 @@ def help_buttons(update: Update, context: CallbackContext) -> None:
     #     ca(update, context)
     # elif query.data == 'help_website':
     #     website(update, context)
-    elif query.data == 'help_price':
-        price(update, context)
-    elif query.data == 'help_chart':
-        chart(update, context)
-    elif query.data == 'help_liquidity':
-        liquidity(update, context)
-    elif query.data == 'help_volume':
-        volume(update, context)
+    # elif query.data == 'help_price':
+    #     price(update, context)
+    # elif query.data == 'help_chart':
+    #     chart(update, context)
+    # elif query.data == 'help_liquidity':
+    #     liquidity(update, context)
+    # elif query.data == 'help_volume':
+    #     volume(update, context)
 
 #region Play Game
 def play(update: Update, context: CallbackContext) -> None:
@@ -894,57 +894,57 @@ def plot_candlestick_chart(data_frame):
 #endregion Chart
 
 #region Buybot
-def monitor_transfers():
-    transfer_filter = contract.events.Transfer.create_filter(fromBlock='latest', argument_filters={'from': pool_address})
+# def monitor_transfers():
+#     transfer_filter = contract.events.Transfer.create_filter(fromBlock='latest', argument_filters={'from': pool_address})
     
-    while True:
-        for event in transfer_filter.get_new_entries():
-            handle_transfer_event(event)
-        time.sleep(10)
+#     while True:
+#         for event in transfer_filter.get_new_entries():
+#             handle_transfer_event(event)
+#         time.sleep(10)
 
-def handle_transfer_event(event):
-    from_address = event['args']['from']
-    amount = event['args']['value']
+# def handle_transfer_event(event):
+#     from_address = event['args']['from']
+#     amount = event['args']['value']
     
-    # Check if the transfer is from the LP address
-    if from_address.lower() == pool_address.lower():
-        # Convert amount to SYPHER (from Wei)
-        sypher_amount = web3.from_wei(amount, 'ether')
+#     # Check if the transfer is from the LP address
+#     if from_address.lower() == pool_address.lower():
+#         # Convert amount to SYPHER (from Wei)
+#         sypher_amount = web3.from_wei(amount, 'ether')
 
-        # Fetch the USD price of SYPHER
-        sypher_price_in_usd = get_token_price_in_fiat(contract_address, 'usd')
-        if sypher_price_in_usd is not None:
-            sypher_price_in_usd = Decimal(sypher_price_in_usd)
-            total_value_usd = sypher_amount * sypher_price_in_usd
-            if total_value_usd < 500:
-                print("Ignoring small buy")
-                return
-            value_message = f" ({total_value_usd:.2f} USD)"
-            header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
-        else:
-            value_message = " (USD price not available)"
-            header_emoji, buyer_emoji = "💸", "🐟"  # Default to Fish if unable to determine price
+#         # Fetch the USD price of SYPHER
+#         sypher_price_in_usd = get_token_price_in_fiat(contract_address, 'usd')
+#         if sypher_price_in_usd is not None:
+#             sypher_price_in_usd = Decimal(sypher_price_in_usd)
+#             total_value_usd = sypher_amount * sypher_price_in_usd
+#             if total_value_usd < 500:
+#                 print("Ignoring small buy")
+#                 return
+#             value_message = f" ({total_value_usd:.2f} USD)"
+#             header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
+#         else:
+#             value_message = " (USD price not available)"
+#             header_emoji, buyer_emoji = "💸", "🐟"  # Default to Fish if unable to determine price
 
-        # Format message with Markdown
-        message = f"{header_emoji}SYPHER BUY{header_emoji}\n\n{buyer_emoji} {sypher_amount} SYPHER{value_message}"
-        print(message)  # Debugging
+#         # Format message with Markdown
+#         message = f"{header_emoji}SYPHER BUY{header_emoji}\n\n{buyer_emoji} {sypher_amount} SYPHER{value_message}"
+#         print(message)  # Debugging
 
-        send_buy_message(message)
+#         send_buy_message(message)
 
-def categorize_buyer(usd_value):
-    if usd_value < 2500:
-        return "💸", "🐟"
-    elif usd_value < 5000:
-        return "💰", "🐬"
-    else:
-        return "🤑", "🐳"
+# def categorize_buyer(usd_value):
+#     if usd_value < 2500:
+#         return "💸", "🐟"
+#     elif usd_value < 5000:
+#         return "💰", "🐬"
+#     else:
+#         return "🤑", "🐳"
     
-def send_buy_message(text):
-    msg = None
-    bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    msg = bot.send_message(chat_id=CHAT_ID, text=text)
-    if msg is not None:
-        track_message(msg)
+# def send_buy_message(text):
+#     msg = None
+#     bot = telegram.Bot(token=TELEGRAM_TOKEN)
+#     msg = bot.send_message(chat_id=CHAT_ID, text=text)
+#     if msg is not None:
+#         track_message(msg)
 #endregion Buybot
 
 #endregion Ethereum Logic
@@ -1595,11 +1595,11 @@ def main() -> None:
     # dispatcher.add_handler(CommandHandler("ca", ca))
     # dispatcher.add_handler(CommandHandler("tokenomics", sypher))
     # dispatcher.add_handler(CommandHandler("website", website))
-    dispatcher.add_handler(CommandHandler("chart", chart))
-    dispatcher.add_handler(CommandHandler("price", price))
-    dispatcher.add_handler(CommandHandler("liquidity", liquidity))
-    dispatcher.add_handler(CommandHandler("lp", liquidity))
-    dispatcher.add_handler(CommandHandler("volume", volume))
+    # dispatcher.add_handler(CommandHandler("chart", chart))
+    # dispatcher.add_handler(CommandHandler("price", price))
+    # dispatcher.add_handler(CommandHandler("liquidity", liquidity))
+    # dispatcher.add_handler(CommandHandler("lp", liquidity))
+    # dispatcher.add_handler(CommandHandler("volume", volume))
 
     dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
