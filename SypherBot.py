@@ -304,7 +304,7 @@ def start(update: Update, context: CallbackContext) -> None:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             update.message.reply_text(
-                'Hello! I am Sypher Bot. If you are here to verify, now you may return to main chat to begin.\n\n'
+                'Hello! I am Sypher Bot. If you are here to verify, now you may return to main chat.\n\n'
                 'If you want me to manage you group, add me to your group with the button below.',
                 reply_markup=reply_markup
             )
