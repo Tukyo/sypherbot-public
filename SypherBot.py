@@ -1748,6 +1748,8 @@ def main() -> None:
     # Register the message handler for new users
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
+    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_contract_address))
+    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_liquidity_address))
 
     # Add a handler for deleting service messages
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
