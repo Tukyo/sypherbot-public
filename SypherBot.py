@@ -319,8 +319,8 @@ def start(update: Update, context: CallbackContext) -> None:
             ]
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
 
-            update.message.reply_text("Hey, please give me admin perms, then check your DMs to proceed.")
-            context.bot.send_message(user_id, "Hey there, to proceed with group setup, please use the Setup button.", reply_markup=setup_markup)
+            update.message.reply_text("Hey, please give me admin perms, then click the setup button below to get started.", reply_markup=setup_markup)
+            context.bot.send_message(user_id, "I have been added to your group. Please proceed with setup in the main chat!")
     else:
         update.message.reply_text('That command only works in DM!')
 
@@ -345,6 +345,70 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         group_doc = db.collection('groups').document(str(group_id))
         group_doc.delete()
         delete_service_messages(update, context)
+
+def setup_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup':
+        setup(update, context)
+
+def contract_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Please respond with your contract address.'
+    )
+
+    return 'WAITING_FOR_CONTRACT_ADDRESS'
+
+def liquidity_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Please respond with your liquidity pool address.'
+    )
+
+    return 'WAITING_FOR_LIQUIDITY_ADDRESS'
+
+def handle_contract_address(update: Update, context: CallbackContext) -> None:
+    contract_address = update.message.text
+    if eth_address_pattern.match(contract_address):
+        group_id = update.effective_chat.id
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.update({
+            'contract_address': contract_address,
+        })
+
+def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
+    liquidity_address = update.message.text
+    if eth_address_pattern.match(liquidity_address):
+        group_id = update.effective_chat.id
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.update({
+            'liquidity_address': liquidity_address,
+        })
+
+def setup(update: Update, context: CallbackContext) -> None:
+    keyboard = [
+        [
+        InlineKeyboardButton("Contract", callback_data='setup_contract'),
+        InlineKeyboardButton("Liquidity", callback_data='setup_liquidity'),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Welcome to the Sypher Bot setup. Please use the buttons below to setup your bot!',
+        reply_markup=reply_markup
+    )
 
 def help(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1688,6 +1752,11 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
     dispatcher.add_handler(CallbackQueryHandler(help_buttons, pattern='^help_'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_callback, pattern='^setup$'))
+    dispatcher.add_handler(CallbackQueryHandler(contract_callback, pattern='^setup_contract$'))
+    dispatcher.add_handler(CallbackQueryHandler(liquidity_callback, pattern='^setup_liquidity$'))
+    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_contract_address, state='WAITING_FOR_CONTRACT_ADDRESS'))
+    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_liquidity_address, state='WAITING_FOR_LIQUIDITY_ADDRESS'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
