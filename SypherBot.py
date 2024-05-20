@@ -372,7 +372,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
 
     update = Update(update.update_id, message=query.message)
 
-    if query.data == 'setup_contract':
+    if query.data == 'setup_liquidity':
         add_liquidity_to_database(update, context)
 
 def add_liquidity_to_database(update: Update, context: CallbackContext) -> None:
