@@ -293,8 +293,6 @@ def start(update: Update, context: CallbackContext) -> None:
     chat_type = update.effective_chat.type
     user_id = update.effective_user.id
 
-    fetch_group_addresses(update, context)
-
     if chat_type == "private":
         if rate_limit_check():
             keyboard = [
@@ -312,8 +310,7 @@ def start(update: Update, context: CallbackContext) -> None:
     elif chat_type in ["group", "supergroup"]:
         if is_user_admin(update, context):
             setup_keyboard = [
-                [InlineKeyboardButton("Setup", callback_data='setup_home')],
-                [InlineKeyboardButton("Cancel", callback_data='cancel')]
+                [InlineKeyboardButton("Setup", callback_data='setup_home')]
             ]
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
 
@@ -336,7 +333,8 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         [
             InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
             InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
-        ]
+        ],
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -491,7 +489,7 @@ def cancel_callback(update: Update, context: CallbackContext) -> None:
     setup_home(update, context)
     context.user_data['setup_stage'] = None
 
-def fetch_group_addresses(update: Update, context: CallbackContext) -> None:
+def fetch_group_info(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
     
@@ -1188,29 +1186,52 @@ def plot_candlestick_chart(data_frame):
 #endregion Ethereum Logic
 
 #region Ethereum Slash Commands
-# def price(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     if rate_limit_check():
-#         currency = context.args[0] if context.args else 'usd'
-#         currency = currency.lower()
+def price(update: Update, context: CallbackContext) -> None:
+    msg = None
+    if not rate_limit_check():
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        if msg:
+            track_message(msg)
+        return
 
-#         # Check if the provided currency is supported
-#         if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
-#             msg = update.message.reply_text("Unsupported currency. Please use 'usd', 'eur'. 'jpy', 'gbp', 'aud', 'cad' or 'mxn'.")
-#             return
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
 
-#         # Fetch and format the token price in the specified currency
-#         token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
-#         if token_price_in_fiat is not None:
-#             formatted_price = format(token_price_in_fiat, '.4f')
-#             msg = update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
-#         else:
-#             msg = update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
+    def fetch_and_respond(doc_snapshot, error):
+        if error:
+            update.message.reply_text('Failed to fetch group data.')
+            return
+        
+        if not doc_snapshot.exists:
+            update.message.reply_text("Group data not found.")
+            return
+
+        group_data = doc_snapshot.to_dict()
+        contract_address = group_data.get('contract_address')
+        if not contract_address:
+            update.message.reply_text("Contract address not found for this group.")
+            return
+
+        currency = context.args[0].lower() if context.args else 'usd'
+        if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
+            msg = update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
+            if msg:
+                track_message(msg)
+            return
+
+        token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
+        if token_price_in_fiat is not None:
+            formatted_price = format(token_price_in_fiat, '.4f')
+            msg = update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
+        else:
+            msg = update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
+
+        if msg:
+            track_message(msg)
+
+    # Fetch the document asynchronously and block till we get a response
+    doc_snapshot = group_doc.get().result()
+    fetch_and_respond(doc_snapshot, doc_snapshot._exception)
 
 # def liquidity(update: Update, context: CallbackContext) -> None:
 #     msg = None
