@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from collections import deque, defaultdict
 from firebase_admin import credentials, firestore
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
-from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler, JobQueue
+from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, ConversationHandler, Filters, CallbackQueryHandler, JobQueue
 
 #
 ## This is the public version of the bot that was developed by Tukyo Games for the deSypher project.
@@ -65,6 +65,8 @@ load_dotenv()
 
 # Get the Telegram API token from environment variables
 TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
+
+CONTRACT, LIQUIDITY = range(2)
 
 VERIFICATION_LETTERS = os.getenv('VERIFICATION_LETTERS') # TODO: Move to firebase
 CHAT_ID = os.getenv('CHAT_ID') # TODO: Move to firebase
@@ -352,33 +354,56 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
-    update = Update(update.update_id, message=query.message)
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Please respond with your contract address.'
+    )
+    print("Requesting contract address.")
+    return CONTRACT
 
-    if query.data == 'setup_contract':
-        add_contract_to_database(update, context)
-
-def add_contract_to_database(update: Update, context: CallbackContext) -> None:
+def handle_contract_address(update: Update, context: CallbackContext) -> None:
     contract_address = update.message.text
     if eth_address_pattern.match(contract_address):
         group_id = update.effective_chat.id
+        print(f"Adding contract address {contract_address} to group {group_id}")
         group_doc = db.collection('groups').document(str(group_id))
         group_doc.update({
             'contract_address': contract_address,
         })
+    return ConversationHandler.END
 
+conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(setup_contract, pattern='^setup_contract$')],
+    states={
+        CONTRACT: [MessageHandler(Filters.text & (~Filters.command), handle_contract_address)],
+    },
+    # fallbacks=[CommandHandler('cancel', cancel)]
+)
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
-    update = Update(update.update_id, message=query.message)
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Please respond with your liquidity address.'
+    )
+    print("Requesting liquidity address.")
 
-    if query.data == 'setup_liquidity':
-        add_liquidity_to_database(update, context)
+def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
+    liquidity_address = update.message.text
+    if eth_address_pattern.match(liquidity_address):
+        group_id = update.effective_chat.id
+        print(f"Adding contract address {liquidity_address} to group {group_id}")
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.update({
+            'liquidity_address': liquidity_address,
+        })
 
 def add_liquidity_to_database(update: Update, context: CallbackContext) -> None:
     liquidity_address = update.message.text
     if eth_address_pattern.match(liquidity_address):
         group_id = update.effective_chat.id
+        print(f"Adding liquidity address {liquidity_address} to group {group_id}")
         group_doc = db.collection('groups').document(str(group_id))
         group_doc.update({
             'liquidity_address': liquidity_address,
