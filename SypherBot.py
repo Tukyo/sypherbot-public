@@ -333,8 +333,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         [
             InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
             InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
-        ],
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1856,7 +1855,7 @@ def main() -> None:
     # dispatcher.add_handler(CommandHandler("tokenomics", sypher))
     # dispatcher.add_handler(CommandHandler("website", website))
     # dispatcher.add_handler(CommandHandler("chart", chart))
-    # dispatcher.add_handler(CommandHandler("price", price))
+    dispatcher.add_handler(CommandHandler("price", price))
     # dispatcher.add_handler(CommandHandler("liquidity", liquidity))
     # dispatcher.add_handler(CommandHandler("lp", liquidity))
     # dispatcher.add_handler(CommandHandler("volume", volume))
