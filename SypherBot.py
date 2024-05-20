@@ -398,22 +398,29 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Please respond with your ABI in a single message\n\n. Example: ["function1(uint256)", "function2(string)"]'
+        text='Please upload your ABI as a JSON file.\n\n Example file structure: ["function1(uint256)", "function2(string)"]'
     )
     context.user_data['setup_stage'] = 'ABI'
-    print("Requesting ABI.")
+    print("Requesting ABI file.")
 
 def handle_ABI(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('setup_stage') == 'ABI':
-        abi = update.message.text
-        group_id = update.effective_chat.id
-        print(f"Adding ABI to group {group_id}")
-        group_doc = db.collection('groups').document(str(group_id))
-        group_doc.update({
-            'abi': abi,
-        })
-        context.user_data['setup_stage'] = None
-        update.message.reply_text("ABI has been successfully saved.")
+        document = update.message.document
+        if document.mime_type == 'application/json':
+            file = context.bot.getFile(document.file_id)
+            file.download('temp_abi.json')
+            with open('temp_abi.json', 'r') as file:
+                abi = file.read()
+                group_id = update.effective_chat.id
+                print(f"Adding ABI to group {group_id}")
+                group_doc = db.collection('groups').document(str(group_id))
+                group_doc.update({
+                    'abi': abi,
+                })
+                context.user_data['setup_stage'] = None
+                update.message.reply_text("ABI has been successfully saved.")
+        else:
+            update.message.reply_text("Please make sure the file is a JSON file.")
 
 def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
     setup_stage = context.user_data.get('setup_stage')
