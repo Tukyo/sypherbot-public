@@ -296,6 +296,8 @@ def track_message(message):
 #region Main Slash Commands
 def start(update: Update, context: CallbackContext) -> None:
     chat_type = update.effective_chat.type
+    user_id = update.effective_user.id
+
     if chat_type == "private":
         if rate_limit_check():
             keyboard = [
@@ -305,12 +307,16 @@ def start(update: Update, context: CallbackContext) -> None:
 
             update.message.reply_text(
                 'Hello! I am Sypher Bot. If you are here to verify, now you may return to main chat.\n\n'
-                'If you want me to manage you group, add me to your group with the button below.',
+                'If you want me to manage you group, add me to your group with the button below. After adding me to your group, please give me admin rights.',
                 reply_markup=reply_markup
             )
         else:
             update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     elif chat_type in ["group", "supergroup"]:
+        if is_user_admin(update, context):
+            update.message.reply_text("Hey, please give me admin perms, then check your DMs to proceed.")
+            context.bot.send_message(user_id, "Hey there, if you need to proceed with group setup, please use the /setup command. Otherwise, use /help for a list of commands.")
+    else:
         update.message.reply_text('That command only works in DM!')
 
 def help(update: Update, context: CallbackContext) -> None:
