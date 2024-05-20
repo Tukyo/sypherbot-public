@@ -293,6 +293,8 @@ def start(update: Update, context: CallbackContext) -> None:
     chat_type = update.effective_chat.type
     user_id = update.effective_user.id
 
+    fetch_group_addresses(update, context)
+
     if chat_type == "private":
         if rate_limit_check():
             keyboard = [
@@ -445,7 +447,8 @@ def fetch_group_addresses(update: Update, context: CallbackContext) -> None:
             group_data = group_snapshot.to_dict()
             contract_address = group_data.get('contract_address')
             liquidity_address = group_data.get('liquidity_address')
-            print(f"Contract Address: {contract_address}, Liquidity Address: {liquidity_address}")
+            abi= group_data.get('abi')
+            print(f"Contract Address: {contract_address}, Liquidity Address: {liquidity_address}, ABI: {abi}")
         else:
             print("Group data not found.")
     
