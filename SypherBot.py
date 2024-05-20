@@ -442,15 +442,16 @@ def fetch_group_addresses(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
     
-    def callback(group_snapshot, changes, read_time):
-        if group_snapshot.exists:
-            group_data = group_snapshot.to_dict()
-            contract_address = group_data.get('contract_address')
-            liquidity_address = group_data.get('liquidity_address')
-            abi= group_data.get('abi')
-            print(f"Contract Address: {contract_address}, Liquidity Address: {liquidity_address}, ABI: {abi}")
-        else:
-            print("Group data not found.")
+    def callback(doc_snapshots, changes, read_time):
+        for doc_snapshot in doc_snapshots:
+            if doc_snapshot.exists:
+                group_data = doc_snapshot.to_dict()
+                contract_address = group_data.get('contract_address')
+                liquidity_address = group_data.get('liquidity_address')
+                abi = group_data.get('abi')
+                print(f"Contract Address: {contract_address}, Liquidity Address: {liquidity_address}, ABI: {abi}")
+            else:
+                print("Group data not found.")
     
     group_doc.on_snapshot(callback)
 
