@@ -398,7 +398,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Please upload your ABI as a JSON file.\n\n Example file structure: ["function1(uint256)", "function2(string)"]'
+        text='Please upload your ABI as a JSON file.\n\nExample file structure: ["function1(uint256)", "function2(string)"]'
     )
     context.user_data['setup_stage'] = 'ABI'
     print("Requesting ABI file.")
@@ -430,7 +430,11 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
     elif setup_stage == 'liquidity':
         handle_liquidity_address(update, context)
     elif setup_stage == 'ABI':
-        handle_ABI(update, context)
+        if update.message.text:
+            update.message.reply_text("Please upload the ABI as a JSON file.")
+            pass
+        elif update.message.document:
+            handle_ABI(update, context)
 
 def fetch_group_addresses(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
@@ -1800,7 +1804,7 @@ def main() -> None:
     # Register the message handler for new users
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
-    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_setup_inputs_from_user))
+    dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_setup_inputs_from_user))
 
     # Add a handler for deleting service messages
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
