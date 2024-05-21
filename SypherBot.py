@@ -551,6 +551,11 @@ def delete_unallowed_addresses(update: Update, context: CallbackContext):
         return
     
     message_text = update.message.text
+    
+    if message_text is None:
+        print("No text in message.")
+        return
+
     found_addresses = eth_address_pattern.findall(message_text)
 
     # Retrieve the contract and LP addresses from the fetched group info
@@ -1867,20 +1872,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("help", help))
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
-    # dispatcher.add_handler(CommandHandler("tukyo", tukyo))
-    # dispatcher.add_handler(CommandHandler("tukyogames", tukyogames))
-    # dispatcher.add_handler(CommandHandler("desypher", deSypher))
-    # dispatcher.add_handler(CommandHandler("sypher", sypher))
-    # dispatcher.add_handler(CommandHandler("whitepaper", whitepaper))
-    # dispatcher.add_handler(CommandHandler("contract", ca))
-    # dispatcher.add_handler(CommandHandler("ca", ca))
-    # dispatcher.add_handler(CommandHandler("tokenomics", sypher))
-    # dispatcher.add_handler(CommandHandler("website", website))
-    # dispatcher.add_handler(CommandHandler("chart", chart))
     dispatcher.add_handler(CommandHandler("price", price))
-    # dispatcher.add_handler(CommandHandler("liquidity", liquidity))
-    # dispatcher.add_handler(CommandHandler("lp", liquidity))
-    # dispatcher.add_handler(CommandHandler("volume", volume))
 
     dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
