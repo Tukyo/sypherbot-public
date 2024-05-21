@@ -66,6 +66,7 @@ TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 
 eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+domain_pattern = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
 
 # if web3.is_connected():
 #     network_id = web3.net.version
@@ -1093,14 +1094,20 @@ def delete_blocked_links(update: Update, context: CallbackContext):
 
     # Regular expression to match all URLs
     found_links = url_pattern.findall(message_text)
-    print(f"Found links: {found_links}")
+    
+    # Regular expression to match any word with .[domain]
+    found_domains = domain_pattern.findall(message_text)
 
-    for link in found_links:
-        normalized_link = link.replace('http://', '').replace('https://', '')
-        if not any(normalized_link.startswith(allowed_item) for allowed_item in allowlist_items):
+    # Combine the found links and domains
+    found_items = found_links + found_domains
+    print(f"Found items: {found_items}")
+
+    for item in found_items:
+        normalized_item = item.replace('http://', '').replace('https://', '')
+        if not any(normalized_item.startswith(allowed_item) for allowed_item in allowlist_items):
             try:
                 update.message.delete()
-                print("Deleted a message with unallowed link.")
+                print("Deleted a message with unallowed item.")
                 return  # Stop further checking if a message is deleted
             except Exception as e:
                 print(f"Failed to delete message: {e}")
