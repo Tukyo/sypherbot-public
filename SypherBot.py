@@ -356,9 +356,15 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         print(f"Error getting group link: {e}")
         group_link = None
 
+    # Get the group username
+    group_username = update.effective_chat.username
+    if group_username is not None:
+        group_username = "@" + group_username
+
     # Update the group document
     group_doc.update({
         'group_link': group_link,
+        'group_username': group_username,
     })
 
     keyboard = [
