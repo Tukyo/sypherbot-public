@@ -861,61 +861,6 @@ def fetch_random_word() -> str:
         return random.choice(words)
 #endregion Play Game
 
-# def tukyo(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     if rate_limit_check():
-#         msg = update.message.reply_text(
-#             'Tukyo is the developer of this bot, deSypher and other projects. There are many impersonators, the only real Tukyo on telegram is @tukyowave.\n'
-#             '\n'
-#             '| Socials |\n'
-#             'Website: https://www.tukyo.org/\n'
-#             'Twitter/X: https://twitter.com/TUKYOWAVE\n'
-#             'Instagram: https://www.instagram.com/tukyowave/\n'
-#             'Medium: https://tukyo.medium.com/\n'
-#             'Youtube: https://www.youtube.com/tukyo\n'
-#             'Spotify: https://sptfy.com/QGbt\n'
-#             'Bandcamp: https://tukyo.bandcamp.com/\n'
-#             'Github: https://github.com/tukyo\n'
-#         )
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
-
-# def tukyogames(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     if rate_limit_check():
-#         msg = update.message.reply_text(
-#             'Tukyo Games is a game development studio that is focused on bringing innovative blockchain technology to captivating and new game ideas. We use blockchain technology, without hindering the gaming experience.\n'
-#             '\n'
-#             'Website: https://tukyogames.com/ (Coming Soon)\n'
-#             '\n'
-#             '| Projects |\n'
-#             'deSypher: https://desypher.net/\n'
-#             'Super G.I.M.P. Girl: https://superhobogimpgirl.com/\n'
-#             'Profectio: https://www.tukyowave.com/projects/profectio\n'
-#         )
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
-
-# def deSypher(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     if rate_limit_check():
-#         msg = update.message.reply_text(
-#             'deSypher is an Onchain puzzle game that can be played on Base. It is a game that requires SYPHER to play. The goal of the game is to guess the correct word in four attempts. Guess the correct word, or go broke!\n'
-#             '\n'
-#             'Website: https://desypher.net/\n'
-#         )
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
-
 # def sypher(update: Update, context: CallbackContext) -> None:
 #     msg = None
 #     if rate_limit_check():
@@ -1677,6 +1622,11 @@ def delete_filtered_phrases(update: Update, context: CallbackContext):
 def delete_blocked_links(update: Update, context: CallbackContext):
     print("Checking message for unallowed Telegram links...")
     message_text = update.message.text
+
+    if message_text is None:
+        print("No text in message.")
+        return
+
     found_links = telegram_links_pattern.findall(message_text)
     print(f"Found Telegram links: {found_links}")
 
