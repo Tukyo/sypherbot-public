@@ -1046,12 +1046,12 @@ def get_token_price_in_fiat(contract_address, currency):
     return token_price_in_fiat
 
 #region Chart
-def fetch_ohlcv_data(time_frame, chain, contract_address):
+def fetch_ohlcv_data(time_frame, chain, liquidity_address):
     now = datetime.now()
     one_hour_ago = now - timedelta(hours=1)
     start_of_hour_timestamp = int(one_hour_ago.timestamp())
 
-    url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{contract_address}/ohlcv/{time_frame}"
+    url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{liquidity_address}/ohlcv/{time_frame}"
     params = {
         'aggregate': '1' + time_frame[0],  # '1m', '1h', '1d' depending on the time frame
         'before_timestamp': start_of_hour_timestamp,
@@ -1314,19 +1314,19 @@ def chart(update: Update, context: CallbackContext) -> None:
         if not chain:
             update.message.reply_text("Chain not found for this group.")
             return
-        contract_address = group_data.get('contract_address')
-        if not contract_address:
+        liquidity_address = group_data.get('liquidity_address')
+        if not liquidity_address:
             update.message.reply_text("Contract address not found for this group.")
             return
         
 
-        ohlcv_data = fetch_ohlcv_data(time_frame, chain, contract_address)
+        ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
         if ohlcv_data:
             data_frame = prepare_data_for_chart(ohlcv_data)
             plot_candlestick_chart(data_frame)
             msg = update.message.reply_photo(
                 photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
-                caption=f"\n[Dexscreener](https://dexscreener.com/{chain}/{contract_address}) • [Dextools](https://www.dextools.io/app/{chain}/pair-explorer/{contract_address})\n",
+                caption=f"\n[Dexscreener](https://dexscreener.com/{chain}/{liquidity_address}) • [Dextools](https://www.dextools.io/app/{chain}/pair-explorer/{liquidity_address})\n",
                 parse_mode='Markdown'
             )
         else:
