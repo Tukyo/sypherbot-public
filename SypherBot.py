@@ -61,8 +61,6 @@ load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 
-VERIFICATION_LETTERS = os.getenv('VERIFICATION_LETTERS') # TODO: Move to firebase
-
 # BASE_ENDPOINT = os.getenv('BASE_ENDPOINT') # TODO: Move to firebase
 # web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
 
@@ -276,6 +274,37 @@ def track_message(message):
     print(f"Tracked message: {message.message_id}")
 
 #region Main Slash Commands
+def bot_added_to_group(update, context):
+    new_members = update.message.new_chat_members
+    if any(member.id != context.bot.id for member in new_members):
+        return
+    if any(member.id == context.bot.id for member in new_members):
+        group_id = update.effective_chat.id
+        print(f"Adding group {group_id} to database.")
+        group_doc = db.collection('groups').document(str(group_id))
+
+        try:
+            group_link = context.bot.export_chat_invite_link(group_id)
+        except Exception as e:
+            print(f"Error getting group link: {e}")
+            group_link = None
+
+        group_doc.set({
+            'group_id': group_id,
+            'group_link': group_link,
+        })
+
+def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
+    left_member = update.message.left_chat_member
+    if left_member.id != context.bot.id:
+        delete_service_messages(update, context)
+    if left_member.id == context.bot.id:
+        group_id = update.effective_chat.id
+        print(f"Removing group {group_id} from database.")
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.delete()
+        delete_service_messages(update, context)
+
 def start(update: Update, context: CallbackContext) -> None:
     chat_type = update.effective_chat.type
     user_id = update.effective_user.id
@@ -636,6 +665,8 @@ def math_verification(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'verification': True,
             'verification_type': 'math',
+            'verification_question': 'none',
+            'verification_answer': 'none'
         })
 
     context.bot.send_message(
@@ -760,31 +791,6 @@ def delete_unallowed_addresses(update: Update, context: CallbackContext):
             update.message.delete()
             print("Deleted a message containing unallowed address.")
             break
-
-
-
-def bot_added_to_group(update, context):
-    new_members = update.message.new_chat_members
-    if any(member.id != context.bot.id for member in new_members):
-        return
-    if any(member.id == context.bot.id for member in new_members):
-        group_id = update.effective_chat.id
-        print(f"Adding group {group_id} to database.")
-        group_doc = db.collection('groups').document(str(group_id))
-        group_doc.set({
-            'group_id': group_id,
-        })
-
-def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
-    left_member = update.message.left_chat_member
-    if left_member.id != context.bot.id:
-        delete_service_messages(update, context)
-    if left_member.id == context.bot.id:
-        group_id = update.effective_chat.id
-        print(f"Removing group {group_id} from database.")
-        group_doc = db.collection('groups').document(str(group_id))
-        group_doc.delete()
-        delete_service_messages(update, context)
 
 
 def help(update: Update, context: CallbackContext) -> None:
@@ -1529,159 +1535,159 @@ def chart(update: Update, context: CallbackContext) -> None:
 #endregion Ethereum Slash Commands
 
 #region User Verification
-def handle_new_user(update: Update, context: CallbackContext) -> None:
-    bot_added_to_group(update, context)
-    msg = None
-    for member in update.message.new_chat_members:
-        user_id = member.id
-        chat_id = update.message.chat.id
+# def handle_new_user(update: Update, context: CallbackContext) -> None:
+#     bot_added_to_group(update, context)
+#     msg = None
+#     for member in update.message.new_chat_members:
+#         user_id = member.id
+#         chat_id = update.message.chat.id
 
-        # Mute the new user
-        context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user_id,
-            permissions=ChatPermissions(can_send_messages=False)
-        )
+#         # Mute the new user
+#         context.bot.restrict_chat_member(
+#             chat_id=chat_id,
+#             user_id=user_id,
+#             permissions=ChatPermissions(can_send_messages=False)
+#         )
 
-        if anti_raid.is_raid():
-            msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
+#         if anti_raid.is_raid():
+#             msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
             
-            # Get the user_id of the user that just joined
-            user_id = update.message.new_chat_members[0].id
+#             # Get the user_id of the user that just joined
+#             user_id = update.message.new_chat_members[0].id
 
-            # Kick the user that just joined
-            context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
-            return
+#             # Kick the user that just joined
+#             context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
+#             return
         
-        print("Allowing new user to join, antiraid is not active.")
+#         print("Allowing new user to join, antiraid is not active.")
 
-        # Send the welcome message with the verification button
-        welcome_message = (
-            "Welcome to Tukyo Games!\n\n"
-            "⚠️ Admins will NEVER DM YOU FIRST ⚠️\n\n"
-            "To start verification, please click Initialize Bot, then send the bot a /start command in DM.\n\n"
-            "After initializing the bot, return to the main chat and press 'Click Here to Verify'.\n"
-        )
+#         # Send the welcome message with the verification button
+#         welcome_message = (
+#             "Welcome to Tukyo Games!\n\n"
+#             "⚠️ Admins will NEVER DM YOU FIRST ⚠️\n\n"
+#             "To start verification, please click Initialize Bot, then send the bot a /start command in DM.\n\n"
+#             "After initializing the bot, return to the main chat and press 'Click Here to Verify'.\n"
+#         )
 
-        keyboard = [
-            [InlineKeyboardButton("Initialize Bot", url=f"https://t.me/deSypher_bot?start={user_id}")],
-            [InlineKeyboardButton("Click Here to Verify", callback_data=f'verify_{user_id}')]
-        ]
+#         keyboard = [
+#             [InlineKeyboardButton("Initialize Bot", url=f"https://t.me/deSypher_bot?start={user_id}")],
+#             [InlineKeyboardButton("Click Here to Verify", callback_data=f'verify_{user_id}')]
+#         ]
         
-        reply_markup = InlineKeyboardMarkup(keyboard)
+#         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        welcomeMessage = context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
-        welcome_message_id = welcomeMessage.message_id
-        context.chat_data['non_deletable_message_id'] = welcomeMessage.message_id
+#         welcomeMessage = context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
+#         welcome_message_id = welcomeMessage.message_id
+#         context.chat_data['non_deletable_message_id'] = welcomeMessage.message_id
 
-        # Start a verification timeout job
-        job_queue = context.job_queue
-        job_queue.run_once(verification_timeout, 600, context={'chat_id': chat_id, 'user_id': user_id, 'welcome_message_id': welcome_message_id}, name=str(user_id))
+#         # Start a verification timeout job
+#         job_queue = context.job_queue
+#         job_queue.run_once(verification_timeout, 600, context={'chat_id': chat_id, 'user_id': user_id, 'welcome_message_id': welcome_message_id}, name=str(user_id))
 
-        update.message.delete()
+#         update.message.delete()
 
-    if msg is not None:
-        track_message(msg)
+#     if msg is not None:
+#         track_message(msg)
 
-def start_verification_dm(user_id: int, context: CallbackContext) -> None:
-    print("Sending verification message to user's DM.")
-    verification_message = "Welcome to Tukyo Games! Please click the button to begin verification."
-    keyboard = [[InlineKeyboardButton("Start Verification", callback_data='start_verification')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+# def start_verification_dm(user_id: int, context: CallbackContext) -> None:
+#     print("Sending verification message to user's DM.")
+#     verification_message = "Welcome to Tukyo Games! Please click the button to begin verification."
+#     keyboard = [[InlineKeyboardButton("Start Verification", callback_data='start_verification')]]
+#     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    message = context.bot.send_message(chat_id=user_id, text=verification_message, reply_markup=reply_markup)
-    return message.message_id
+#     message = context.bot.send_message(chat_id=user_id, text=verification_message, reply_markup=reply_markup)
+#     return message.message_id
 
-def verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    callback_data = query.data
-    user_id = query.from_user.id
-    chat_id = query.message.chat_id
-    query.answer()
+# def verification_callback(update: Update, context: CallbackContext) -> None:
+#     query = update.callback_query
+#     callback_data = query.data
+#     user_id = query.from_user.id
+#     chat_id = query.message.chat_id
+#     query.answer()
 
-    # Extract user_id from the callback_data
-    _, callback_user_id = callback_data.split('_')
-    callback_user_id = int(callback_user_id)
+#     # Extract user_id from the callback_data
+#     _, callback_user_id = callback_data.split('_')
+#     callback_user_id = int(callback_user_id)
 
-    if user_id != callback_user_id:
-        return  # Do not process if the callback user ID does not match the button user ID
+#     if user_id != callback_user_id:
+#         return  # Do not process if the callback user ID does not match the button user ID
 
-    if is_user_admin(update, context):
-        return
+#     if is_user_admin(update, context):
+#         return
     
-    # Send a message to the user's DM to start the verification process
-    start_verification_dm(user_id, context)
+#     # Send a message to the user's DM to start the verification process
+#     start_verification_dm(user_id, context)
     
-    # Optionally, you can edit the original message to indicate the button was clicked
-    verification_started_message = query.edit_message_text(text="A verification message has been sent to your DMs. Please check your messages.")
-    verification_started_id = verification_started_message.message_id
+#     # Optionally, you can edit the original message to indicate the button was clicked
+#     verification_started_message = query.edit_message_text(text="A verification message has been sent to your DMs. Please check your messages.")
+#     verification_started_id = verification_started_message.message_id
 
-    job_queue = context.job_queue
-    job_queue.run_once(delete_verification_message, 30, context={'chat_id': chat_id, 'message_id': verification_started_id})
+#     job_queue = context.job_queue
+#     job_queue.run_once(delete_verification_message, 30, context={'chat_id': chat_id, 'message_id': verification_started_id})
 
-def delete_verification_message(context: CallbackContext) -> None:
-    job = context.job
-    context.bot.delete_message(
-        chat_id=job.context['chat_id'],
-        message_id=job.context['message_id']
-    )
+# def delete_verification_message(context: CallbackContext) -> None:
+#     job = context.job
+#     context.bot.delete_message(
+#         chat_id=job.context['chat_id'],
+#         message_id=job.context['message_id']
+#     )
 
-def generate_verification_buttons() -> InlineKeyboardMarkup:
-    all_letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-    required_letters = list(VERIFICATION_LETTERS)
+# def generate_verification_buttons() -> InlineKeyboardMarkup:
+#     all_letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+#     required_letters = list(VERIFICATION_LETTERS)
     
-    for letter in required_letters:
-        if letter in all_letters:
-            all_letters.remove(letter)
+#     for letter in required_letters:
+#         if letter in all_letters:
+#             all_letters.remove(letter)
     
-    # Shuffle the remaining letters
-    random.shuffle(all_letters)
+#     # Shuffle the remaining letters
+#     random.shuffle(all_letters)
     
-    # Randomly select 11 letters from the shuffled list
-    selected_random_letters = all_letters[:11]
+#     # Randomly select 11 letters from the shuffled list
+#     selected_random_letters = all_letters[:11]
     
-    # Combine required letters with the random letters
-    final_letters = required_letters + selected_random_letters
+#     # Combine required letters with the random letters
+#     final_letters = required_letters + selected_random_letters
     
-    # Shuffle the final list of 16 letters
-    random.shuffle(final_letters)
+#     # Shuffle the final list of 16 letters
+#     random.shuffle(final_letters)
     
-    buttons = []
-    row = []
-    for i, letter in enumerate(final_letters):
-        row.append(InlineKeyboardButton(letter, callback_data=f'verify_letter_{letter}'))
-        if (i + 1) % 4 == 0:
-            buttons.append(row)
-            row = []
+#     buttons = []
+#     row = []
+#     for i, letter in enumerate(final_letters):
+#         row.append(InlineKeyboardButton(letter, callback_data=f'verify_letter_{letter}'))
+#         if (i + 1) % 4 == 0:
+#             buttons.append(row)
+#             row = []
 
-    if row:
-        buttons.append(row)
+#     if row:
+#         buttons.append(row)
 
-    return InlineKeyboardMarkup(buttons)
+#     return InlineKeyboardMarkup(buttons)
 
-def handle_start_verification(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    user_id = query.from_user.id
-    query.answer()
+# def handle_start_verification(update: Update, context: CallbackContext) -> None:
+#     query = update.callback_query
+#     user_id = query.from_user.id
+#     query.answer()
 
-    # Initialize user verification progress
-    user_verification_progress[user_id] = {
-        'progress': [],
-        'main_message_id': query.message.message_id,
-        'chat_id': query.message.chat_id,
-        'verification_message_id': query.message.message_id
-    }
+#     # Initialize user verification progress
+#     user_verification_progress[user_id] = {
+#         'progress': [],
+#         'main_message_id': query.message.message_id,
+#         'chat_id': query.message.chat_id,
+#         'verification_message_id': query.message.message_id
+#     }
 
-    verification_question = "Who is the lead developer at Tukyo Games?"
-    reply_markup = generate_verification_buttons()
+#     verification_question = "Who is the lead developer at Tukyo Games?"
+#     reply_markup = generate_verification_buttons()
 
-    # Edit the initial verification prompt
-    context.bot.edit_message_text(
-        chat_id=user_id,
-        message_id=user_verification_progress[user_id]['verification_message_id'],
-        text=verification_question,
-        reply_markup=reply_markup
-    )
+#     # Edit the initial verification prompt
+#     context.bot.edit_message_text(
+#         chat_id=user_id,
+#         message_id=user_verification_progress[user_id]['verification_message_id'],
+#         text=verification_question,
+#         reply_markup=reply_markup
+#     )
 
 # def handle_verification_button(update: Update, context: CallbackContext) -> None:
 #     query = update.callback_query
@@ -2097,7 +2103,7 @@ def main() -> None:
     #endregion Admin Slash Command Handlers
     
     # Register the message handler for new users
-    dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
+    # dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
     dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_message))
 
