@@ -980,7 +980,7 @@ def unmute_user(context: CallbackContext) -> None:
 
 def handle_message(update: Update, context: CallbackContext) -> None:
     
-    delete_unallowed_addresses(update, context)
+    delete_blocked_addresses(update, context)
     delete_blocked_phrases(update, context)
     delete_blocked_links(update, context)
 
@@ -1046,7 +1046,7 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
 
     return user_is_admin
 
-def delete_unallowed_addresses(update: Update, context: CallbackContext):
+def delete_blocked_addresses(update: Update, context: CallbackContext):
     print("Checking message for unallowed addresses...")
 
     group_data = fetch_group_info(update, context)
@@ -1072,6 +1072,50 @@ def delete_unallowed_addresses(update: Update, context: CallbackContext):
             update.message.delete()
             print("Deleted a message containing unallowed address.")
             break
+
+def delete_blocked_links(update: Update, context: CallbackContext):
+    print("Checking message for unallowed Telegram links...")
+    message_text = update.message.text
+
+    if message_text is None:
+        print("No text in message.")
+        return
+
+    # Fetch the group-specific allowlist
+    group_info = fetch_group_info(update, context)
+    if not group_info:
+        print("No group info available.")
+        return
+
+    allowlist_field = 'allowlist'
+    allowlist_string = group_info.get(allowlist_field, "")
+    allowlist_items = [item.strip() for item in allowlist_string.split(',') if item.strip()]
+
+    found_links = telegram_links_pattern.findall(message_text)
+    print(f"Found Telegram links: {found_links}")
+
+    for link in found_links:
+        normalized_link = link.replace('http://', '').replace('https://', '')
+        if normalized_link not in allowlist_items:
+            try:
+                update.message.delete()
+                print("Deleted a message with unallowed Telegram link.")
+                return  # Stop further checking if a message is deleted
+            except Exception as e:
+                print(f"Failed to delete message: {e}")
+
+def delete_service_messages(update, context):
+    non_deletable_message_id = context.chat_data.get('non_deletable_message_id')
+    if update.message.message_id == non_deletable_message_id:
+        return  # Do not delete this message
+
+    if update.message.left_chat_member or update.message.new_chat_members:
+        try:
+            context.bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
+            print(f"Deleted service message in chat {update.message.chat_id}")
+        except Exception as e:
+            print(f"Failed to delete service message: {str(e)}")
+
 
 def block(update: Update, context: CallbackContext):
     if is_user_admin(update, context):
@@ -1172,6 +1216,10 @@ def blocklist(update: Update, context: CallbackContext):
             print(f"Error retrieving blocklist: {e}")
 
 def delete_blocked_phrases(update: Update, context: CallbackContext):
+    if is_user_admin(update, context):
+        # Don't block admin messages
+        return
+
     print("Checking message for filtered phrases...")
     message_text = update.message.text
 
@@ -1203,46 +1251,68 @@ def delete_blocked_phrases(update: Update, context: CallbackContext):
                 print(f"Error deleting message: {e}")
             break  # Exit loop after deleting the message to prevent multiple deletions for one message
 
+def allow(update: Update, context: CallbackContext):
+    if is_user_admin(update, context):
+        command_text = update.message.text[len('/allow '):].strip()
 
+        # Normalize the URL by removing the 'http://' or 'https://'
+        if command_text.startswith('http://'):
+            command_text = command_text[7:]
+        elif command_text.startswith('https://'):
+            command_text = command_text[8:]
 
+        group_id = str(update.effective_chat.id)
+        group_doc = db.collection('groups').document(group_id)
+        allowlist_field = 'allowlist'
 
-def delete_blocked_links(update: Update, context: CallbackContext):
-    print("Checking message for unallowed Telegram links...")
-    message_text = update.message.text
-
-    if message_text is None:
-        print("No text in message.")
-        return
-
-    found_links = telegram_links_pattern.findall(message_text)
-    print(f"Found Telegram links: {found_links}")
-
-    allowed_links = [
-        'https://t.me/tukyogames',
-        'https://t.me/tukyowave',
-        'https://t.me/tukyogamesannouncements'
-    ]
-
-    for link in found_links:
-        if link not in allowed_links:
-            try:
-                update.message.delete()
-                print("Deleted a message with unallowed Telegram link.")
-                return  # Stop further checking if a message is deleted
-            except Exception as e:
-                print(f"Failed to delete message: {e}")
-
-def delete_service_messages(update, context):
-    non_deletable_message_id = context.chat_data.get('non_deletable_message_id')
-    if update.message.message_id == non_deletable_message_id:
-        return  # Do not delete this message
-
-    if update.message.left_chat_member or update.message.new_chat_members:
         try:
-            context.bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
-            print(f"Deleted service message in chat {update.message.chat_id}")
+            # Fetch current allowlist from the group's document
+            doc_snapshot = group_doc.get()
+            if doc_snapshot.exists:
+                group_data = doc_snapshot.to_dict()
+                current_allowlist = group_data.get(allowlist_field, "")
+                new_allowlist = current_allowlist + command_text + ", "
+
+                # Update the allowlist in the group's document
+                group_doc.update({allowlist_field: new_allowlist})
+                update.message.reply_text(f"'{command_text}' added to allowlist!")
+                print("Updated allowlist:", new_allowlist)
+
+            else:
+                # If no allowlist exists, create it with the current command text
+                group_doc.set({allowlist_field: command_text + ", "})
+                update.message.reply_text(f"'{command_text}' allowlisted!")
+                print("Created new allowlist with:", command_text)
+
         except Exception as e:
-            print(f"Failed to delete service message: {str(e)}")
+            update.message.reply_text(f"Failed to update allowlist: {str(e)}")
+            print(f"Error updating allowlist: {e}")
+
+def allowlist(update: Update, context: CallbackContext):
+    if is_user_admin(update, context):
+        group_id = str(update.effective_chat.id)
+        group_doc = db.collection('groups').document(group_id)
+
+        try:
+            doc_snapshot = group_doc.get()
+            if doc_snapshot.exists:
+                group_data = doc_snapshot.to_dict()
+                allowlist_field = 'allowlist'
+                current_allowlist = group_data.get(allowlist_field, "")
+                
+                if current_allowlist:
+                    # Split the allowlist string by commas and strip spaces
+                    allowlist_items = [item.strip() for item in current_allowlist.split(',') if item.strip()]
+                    message = "\n".join(allowlist_items)
+                    update.message.reply_text(message)
+                else:
+                    update.message.reply_text("The allowlist is currently empty.")
+            else:
+                update.message.reply_text("No allowlist found for this group.")
+        
+        except Exception as e:
+            update.message.reply_text(f"Failed to retrieve allowlist: {str(e)}")
+            print(f"Error retrieving allowlist: {e}")
 
 def fetch_group_info(update: Update, context: CallbackContext):
     group_id = update.effective_chat.id
@@ -1258,7 +1328,6 @@ def fetch_group_info(update: Update, context: CallbackContext):
         update.message.reply_text(f"Failed to fetch group info: {str(e)}")
     
     return None
-
 #endregion Admin Controls
 
 def report(update: Update, context: CallbackContext) -> None:
@@ -2187,6 +2256,8 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("block", block))
     dispatcher.add_handler(CommandHandler("removeblock", remove_block))
     dispatcher.add_handler(CommandHandler("blocklist", blocklist))
+    dispatcher.add_handler(CommandHandler("allow", allow))
+    dispatcher.add_handler(CommandHandler("allowlist", allowlist))
     # dispatcher.add_handler(CommandHandler("warn", warn))
     #endregion Admin Slash Command Handlers
     
