@@ -65,7 +65,7 @@ TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 # web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
 
 eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
-telegram_links_pattern = re.compile(r'https://t.me/\S+')
+url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 
 # if web3.is_connected():
 #     network_id = web3.net.version
@@ -1074,7 +1074,7 @@ def delete_blocked_addresses(update: Update, context: CallbackContext):
             break
 
 def delete_blocked_links(update: Update, context: CallbackContext):
-    print("Checking message for unallowed Telegram links...")
+    print("Checking message for unallowed links...")
     message_text = update.message.text
 
     if message_text is None:
@@ -1091,18 +1091,55 @@ def delete_blocked_links(update: Update, context: CallbackContext):
     allowlist_string = group_info.get(allowlist_field, "")
     allowlist_items = [item.strip() for item in allowlist_string.split(',') if item.strip()]
 
-    found_links = telegram_links_pattern.findall(message_text)
-    print(f"Found Telegram links: {found_links}")
+    # Regular expression to match all URLs
+    found_links = url_pattern.findall(message_text)
+    print(f"Found links: {found_links}")
 
     for link in found_links:
         normalized_link = link.replace('http://', '').replace('https://', '')
         if normalized_link not in allowlist_items:
             try:
                 update.message.delete()
-                print("Deleted a message with unallowed Telegram link.")
+                print("Deleted a message with unallowed link.")
                 return  # Stop further checking if a message is deleted
             except Exception as e:
                 print(f"Failed to delete message: {e}")
+
+def delete_blocked_phrases(update: Update, context: CallbackContext):
+    if is_user_admin(update, context):
+        # Don't block admin messages
+        return
+
+    print("Checking message for filtered phrases...")
+    message_text = update.message.text
+
+    if message_text is None:
+        print("No text in message.")
+        return
+
+    message_text = message_text.lower()
+
+    # Fetch the group info to get the blocklist
+    group_info = fetch_group_info(update, context)
+    if not group_info:
+        print("No group info available.")
+        return
+
+    # Get the blocklist from the group info
+    blocklist_field = 'blocklist'
+    blocklist_string = group_info.get(blocklist_field, "")
+    blocklist_items = [item.strip() for item in blocklist_string.split(',') if item.strip()]
+
+    # Check each blocked phrase in the group's blocklist
+    for phrase in blocklist_items:
+        if phrase in message_text:
+            print(f"Found blocked phrase: {phrase}")
+            try:
+                update.message.delete()
+                print("Message deleted due to blocked phrase.")
+            except Exception as e:
+                print(f"Error deleting message: {e}")
+            break  # Exit loop after deleting the message to prevent multiple deletions for one message
 
 def delete_service_messages(update, context):
     non_deletable_message_id = context.chat_data.get('non_deletable_message_id')
@@ -1115,7 +1152,6 @@ def delete_service_messages(update, context):
             print(f"Deleted service message in chat {update.message.chat_id}")
         except Exception as e:
             print(f"Failed to delete service message: {str(e)}")
-
 
 def block(update: Update, context: CallbackContext):
     if is_user_admin(update, context):
@@ -1214,42 +1250,6 @@ def blocklist(update: Update, context: CallbackContext):
         except Exception as e:
             update.message.reply_text(f"Failed to retrieve blocklist: {str(e)}")
             print(f"Error retrieving blocklist: {e}")
-
-def delete_blocked_phrases(update: Update, context: CallbackContext):
-    if is_user_admin(update, context):
-        # Don't block admin messages
-        return
-
-    print("Checking message for filtered phrases...")
-    message_text = update.message.text
-
-    if message_text is None:
-        print("No text in message.")
-        return
-
-    message_text = message_text.lower()
-
-    # Fetch the group info to get the blocklist
-    group_info = fetch_group_info(update, context)
-    if not group_info:
-        print("No group info available.")
-        return
-
-    # Get the blocklist from the group info
-    blocklist_field = 'blocklist'
-    blocklist_string = group_info.get(blocklist_field, "")
-    blocklist_items = [item.strip() for item in blocklist_string.split(',') if item.strip()]
-
-    # Check each blocked phrase in the group's blocklist
-    for phrase in blocklist_items:
-        if phrase in message_text:
-            print(f"Found blocked phrase: {phrase}")
-            try:
-                update.message.delete()
-                print("Message deleted due to blocked phrase.")
-            except Exception as e:
-                print(f"Error deleting message: {e}")
-            break  # Exit loop after deleting the message to prevent multiple deletions for one message
 
 def allow(update: Update, context: CallbackContext):
     if is_user_admin(update, context):
