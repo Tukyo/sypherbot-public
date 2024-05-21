@@ -1652,9 +1652,12 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
 def delete_filtered_phrases(update: Update, context: CallbackContext):
     print("Checking message for filtered phrases...")
 
-    message_text = update.message.text.lower()  # Convert to lowercase for case-insensitive matching
+    if message_text is None:
+        print("No text in message.")
+        return
 
-    # Retrieve filtered words from Firestore
+    message_text = update.message.text.lower()
+
     docs = db.collection('filters').stream()
 
     filtered_phrases = [doc.id for doc in docs]
