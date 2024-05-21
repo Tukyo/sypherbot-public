@@ -282,16 +282,8 @@ def bot_added_to_group(update, context):
         group_id = update.effective_chat.id
         print(f"Adding group {group_id} to database.")
         group_doc = db.collection('groups').document(str(group_id))
-
-        try:
-            group_link = context.bot.export_chat_invite_link(group_id)
-        except Exception as e:
-            print(f"Error getting group link: {e}")
-            group_link = None
-
         group_doc.set({
             'group_id': group_id,
-            'group_link': group_link,
         })
 
 def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
@@ -339,12 +331,36 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
+    # Check if the bot is an admin
+    chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)
+    if not chat_member.can_invite_users:
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Please give me admin permissions first!'
+        )
+        return
+
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'setup_home':
         setup_home(update, context)
 
 def setup_home(update: Update, context: CallbackContext) -> None:
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    # Get the invite link
+    try:
+        group_link = context.bot.export_chat_invite_link(group_id)
+    except Exception as e:
+        print(f"Error getting group link: {e}")
+        group_link = None
+
+    # Update the group document
+    group_doc.update({
+        'group_link': group_link,
+    })
+    
     keyboard = [
         [
             InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
