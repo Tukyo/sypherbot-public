@@ -2116,6 +2116,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|linea)$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_verification, pattern='^setup_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_verification, pattern='^enable_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(disable_verification, pattern='^disable_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(math_verification, pattern='^math_verification$'))
