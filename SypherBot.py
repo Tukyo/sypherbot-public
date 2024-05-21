@@ -521,42 +521,6 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
         })
         context.user_data['setup_stage'] = None
 
-def liquidity(update: Update, context: CallbackContext) -> None:
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return
-
-    lp_address = group_data.get('liquidity_address')
-    chain = group_data.get('chain')
-
-    if not lp_address or not chain:
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
-
-    if rate_limit_check():
-        liquidity_usd = get_liquidity(chain, lp_address)
-        if liquidity_usd:
-            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
-        else:
-            msg = update.message.reply_text("Failed to fetch liquidity data.")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-
-def get_liquidity(chain, lp_address):
-    try:
-        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        liquidity_usd = data['data']['attributes']['reserve_in_usd']
-        return liquidity_usd
-    except requests.RequestException as e:
-        print(f"Failed to fetch liquidity data: {str(e)}")
-        return None
-
 def cancel_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -606,29 +570,6 @@ def delete_unallowed_addresses(update: Update, context: CallbackContext):
             print("Deleted a message containing unallowed address.")
             break
 
-def price(update: Update, context: CallbackContext) -> None:
-    # Fetch group-specific contract information
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return  # Early exit if no data found
-
-    contract_address = group_data.get('contract_address')
-    if not contract_address:
-        update.message.reply_text("Contract address not found for this group.")
-        return
-
-    # Proceed with price fetching
-    currency = context.args[0].lower() if context.args else 'usd'
-    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
-        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
-        return
-
-    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
-    if token_price_in_fiat is not None:
-        formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
-    else:
-        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
 
 
 def bot_added_to_group(update, context):
@@ -897,6 +838,10 @@ def fetch_random_word() -> str:
         return random.choice(words)
 #endregion Play Game
 
+
+
+
+
 # def sypher(update: Update, context: CallbackContext) -> None:
 #     msg = None
 #     if rate_limit_check():
@@ -912,18 +857,6 @@ def fetch_random_word() -> str:
 #             'Ticker: SYPHER\n',
 #             parse_mode='Markdown',
 #             disable_web_page_preview=True
-#         )
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
-
-# def ca(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     if rate_limit_check():
-#         msg = update.message.reply_text(
-#             '0x21b9D428EB20FA075A29d51813E57BAb85406620\n'
 #         )
 #     else:
 #         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
@@ -1112,25 +1045,13 @@ def get_token_price_in_fiat(contract_address, currency):
     token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
     return token_price_in_fiat
 
-# def get_volume():
-#     try:
-#         response = requests.get("https://api.geckoterminal.com/api/v2/networks/base/pools/0xB0fbaa5c7D28B33Ac18D9861D4909396c1B8029b")
-#         response.raise_for_status()
-#         data = response.json()
-#         # Navigate the JSON to find the 24-hour volume in USD
-#         volume_24h_usd = data['data']['attributes']['volume_usd']['h24']
-#         return volume_24h_usd
-#     except requests.RequestException as e:
-#         print(f"Failed to fetch volume data: {str(e)}")
-#         return None
-
 #region Chart
-def fetch_ohlcv_data(time_frame):
+def fetch_ohlcv_data(time_frame, chain, contract_address):
     now = datetime.now()
     one_hour_ago = now - timedelta(hours=1)
     start_of_hour_timestamp = int(one_hour_ago.timestamp())
-    
-    url = f"https://api.geckoterminal.com/api/v2/networks/base/pools/0xB0fbaa5c7D28B33Ac18D9861D4909396c1B8029b/ohlcv/{time_frame}"
+
+    url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{contract_address}/ohlcv/{time_frame}"
     params = {
         'aggregate': '1' + time_frame[0],  # '1m', '1h', '1d' depending on the time frame
         'before_timestamp': start_of_hour_timestamp,
@@ -1160,7 +1081,7 @@ def prepare_data_for_chart(ohlcv_data):
     data_frame.set_index('Date', inplace=True)
     return data_frame
 
-def plot_candlestick_chart(data_frame):
+def plot_candlestick_chart(data_frame, group_id):
     mc = mpf.make_marketcolors(
         up='#2dc60e',
         down='#ff0000',
@@ -1182,7 +1103,7 @@ def plot_candlestick_chart(data_frame):
             'axes.facecolor': 'black'
         }
     )
-    save_path = '/tmp/candlestick_chart.png'
+    save_path = f'/tmp/candlestick_chart_{group_id}.png'
     mpf.plot(data_frame, type='candle', style=s, volume=True, savefig=save_path)
     print(f"Chart saved to {save_path}")
 #endregion Chart
@@ -1243,56 +1164,177 @@ def plot_candlestick_chart(data_frame):
 #endregion Ethereum Logic
 
 #region Ethereum Slash Commands
+def price(update: Update, context: CallbackContext) -> None:
+    # Fetch group-specific contract information
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return  # Early exit if no data found
 
+    contract_address = group_data.get('contract_address')
+    if not contract_address:
+        update.message.reply_text("Contract address not found for this group.")
+        return
 
-# def volume(update, context):
-#     msg = None
-#     if rate_limit_check():
-#         volume_24h_usd = get_volume()
-#         if volume_24h_usd:
-#             msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd}")
-#         else:
-#             msg = update.message.reply_text("Failed to fetch volume data.")
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
+    # Proceed with price fetching
+    currency = context.args[0].lower() if context.args else 'usd'
+    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
+        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
+        return
 
-# def chart(update: Update, context: CallbackContext) -> None:
-#     args = context.args
-#     time_frame = 'minute'  # default to minute if no argument is provided
-    
-#     if args:
-#         interval_arg = args[0].lower()
-#         if interval_arg == 'h':
-#             time_frame = 'hour'
-#         elif interval_arg == 'd':
-#             time_frame = 'day'
-#         elif interval_arg == 'm':
-#             time_frame = 'minute'
-#         else:
-#             msg = update.message.reply_text('Invalid time frame specified. Please use /chart with m, h, or d.')
-#             return
+    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
+    if token_price_in_fiat is not None:
+        formatted_price = format(token_price_in_fiat, '.4f')
+        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
+    else:
+        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
+
+def ca(update: Update, context: CallbackContext) -> None:
+    msg = None
+    if rate_limit_check():
+        group_data = fetch_group_info(update, context)
+        if group_data is None:
+            return  # Early exit if no data is found
+
+        contract_address = group_data.get('contract_address')
+        if not contract_address:
+            update.message.reply_text("Contract address not found for this group.")
+            return
         
-#     if rate_limit_check():
-#         msg = None
-#         ohlcv_data = fetch_ohlcv_data(time_frame)
-#         if ohlcv_data:
-#             data_frame = prepare_data_for_chart(ohlcv_data)
-#             plot_candlestick_chart(data_frame)
-#             msg = update.message.reply_photo(
-#                 photo=open('/tmp/candlestick_chart.png', 'rb'),
-#                 caption='\n[Dexscreener](https://dexscreener.com/base/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b) • [Dextools](https://www.dextools.io/app/en/base/pair-explorer/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b?t=1715831623074) • [CMC](https://coinmarketcap.com/dexscan/base/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b/) • [CG](https://www.geckoterminal.com/base/pools/0xb0fbaa5c7d28b33ac18d9861d4909396c1b8029b?utm_source=coingecko)\n',
-#                 parse_mode='Markdown'
-#             )
-#         else:
-#             msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        msg = update.message.reply_text(contract_address)
+
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     
-#     if msg is not None:
-#         track_message(msg)
+    if msg is not None:
+        track_message(msg)
+
+def liquidity(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return
+
+    lp_address = group_data.get('liquidity_address')
+    chain = group_data.get('chain')
+
+    if not lp_address or not chain:
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    if rate_limit_check():
+        liquidity_usd = get_liquidity(chain, lp_address)
+        if liquidity_usd:
+            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
+        else:
+            msg = update.message.reply_text("Failed to fetch liquidity data.")
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+
+def get_liquidity(chain, lp_address):
+    try:
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        liquidity_usd = data['data']['attributes']['reserve_in_usd']
+        return liquidity_usd
+    except requests.RequestException as e:
+        print(f"Failed to fetch liquidity data: {str(e)}")
+        return None
+    
+def volume(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_data = fetch_group_info(update, context)
+
+    if group_data is None:
+        return
+
+    lp_address = group_data.get('liquidity_address')
+    chain = group_data.get('chain')    
+
+    if not lp_address or not chain:
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    if rate_limit_check():
+        volume_24h_usd = get_volume(chain, lp_address)
+        if volume_24h_usd:
+            msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd}")
+        else:
+            msg = update.message.reply_text("Failed to fetch volume data.")
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+    
+def get_volume(chain, lp_address):
+    try:
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        volume_24h_usd = data['data']['attributes']['volume_usd']['h24']
+        return volume_24h_usd
+    except requests.RequestException as e:
+        print(f"Failed to fetch volume data: {str(e)}")
+        return None
+
+def chart(update: Update, context: CallbackContext) -> None:
+    args = context.args
+    time_frame = 'minute'  # default to minute if no argument is provided
+    
+    if args:
+        interval_arg = args[0].lower()
+        if interval_arg == 'h':
+            time_frame = 'hour'
+        elif interval_arg == 'd':
+            time_frame = 'day'
+        elif interval_arg == 'm':
+            time_frame = 'minute'
+        else:
+            msg = update.message.reply_text('Invalid time frame specified. Please use /chart with m, h, or d.')
+            return
+        
+    if rate_limit_check():
+        # Fetch group-specific contract information
+        group_data = fetch_group_info(update, context)
+        if group_data is None:
+            return  # Early exit if no data is found
+        
+        group_id = group_data.get('group_id')
+        if not group_id:
+            update.message.reply_text("Group ID not found for this group.")
+            return
+        chain = group_data.get('chain')  # Use a default chain if not specified
+        if not chain:
+            update.message.reply_text("Chain not found for this group.")
+            return
+        contract_address = group_data.get('contract_address')
+        if not contract_address:
+            update.message.reply_text("Contract address not found for this group.")
+            return
+        
+
+        ohlcv_data = fetch_ohlcv_data(time_frame, chain, contract_address)
+        if ohlcv_data:
+            data_frame = prepare_data_for_chart(ohlcv_data)
+            plot_candlestick_chart(data_frame)
+            msg = update.message.reply_photo(
+                photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
+                caption=f"\n[Dexscreener](https://dexscreener.com/{chain}/{contract_address}) • [Dextools](https://www.dextools.io/app/{chain}/pair-explorer/{contract_address})\n",
+                parse_mode='Markdown'
+            )
+        else:
+            msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
 #endregion Ethereum Slash Commands
 
 #region User Verification
@@ -1838,11 +1880,13 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("help", help))
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
+    dispatcher.add_handler(CommandHandler("contract", ca))
+    dispatcher.add_handler(CommandHandler("ca", ca))
     dispatcher.add_handler(CommandHandler("price", price))
-    # dispatcher.add_handler(CommandHandler("chart", chart))
+    dispatcher.add_handler(CommandHandler("chart", chart))
     dispatcher.add_handler(CommandHandler("liquidity", liquidity))
     dispatcher.add_handler(CommandHandler("lp", liquidity))
-    # dispatcher.add_handler(CommandHandler("volume", volume))
+    dispatcher.add_handler(CommandHandler("volume", volume))
     dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
     #endregion General Slash Command Handlers
