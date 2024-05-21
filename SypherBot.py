@@ -475,7 +475,7 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
             handle_ABI(update, context)
     elif setup_stage == 'setup_password_verification':
         handle_verification_question(update, context)
-    elif setup_stage == 'verification_question':
+    elif setup_stage == 'setup_verification_question':
         handle_verification_answer(update, context)
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
@@ -688,6 +688,8 @@ def handle_verification_question(update: Update, context: CallbackContext) -> No
         chat_id=update.effective_chat.id,
         text='What is the five letter answer to the question?'
     )
+
+    context.user_data['setup_stage'] = 'setup_verification_question'
 
 def handle_verification_answer(update: Update, context: CallbackContext) -> None:
     # Store the answer in user_data
