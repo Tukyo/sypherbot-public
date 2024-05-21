@@ -521,6 +521,42 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
         })
         context.user_data['setup_stage'] = None
 
+def liquidity(update: Update, context: CallbackContext) -> None:
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return
+
+    lp_address = group_data.get('liquidity_address')
+    chain = group_data.get('chain')
+
+    if not lp_address or not chain:
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    if rate_limit_check():
+        liquidity_usd = get_liquidity(chain, lp_address)
+        if liquidity_usd:
+            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
+        else:
+            msg = update.message.reply_text("Failed to fetch liquidity data.")
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+
+def get_liquidity(chain, lp_address):
+    try:
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        liquidity_usd = data['data']['attributes']['reserve_in_usd']
+        return liquidity_usd
+    except requests.RequestException as e:
+        print(f"Failed to fetch liquidity data: {str(e)}")
+        return None
+
 def cancel_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1076,18 +1112,6 @@ def get_token_price_in_fiat(contract_address, currency):
     token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
     return token_price_in_fiat
 
-# def get_liquidity():
-#     try:
-#         response = requests.get("https://api.geckoterminal.com/api/v2/networks/base/pools/0xB0fbaa5c7D28B33Ac18D9861D4909396c1B8029b")
-#         response.raise_for_status()
-#         data = response.json()
-#         # Navigate the JSON to find the liquidity in USD
-#         liquidity_usd = data['data']['attributes']['reserve_in_usd']
-#         return liquidity_usd
-#     except requests.RequestException as e:
-#         print(f"Failed to fetch liquidity data: {str(e)}")
-#         return None
-
 # def get_volume():
 #     try:
 #         response = requests.get("https://api.geckoterminal.com/api/v2/networks/base/pools/0xB0fbaa5c7D28B33Ac18D9861D4909396c1B8029b")
@@ -1220,19 +1244,6 @@ def plot_candlestick_chart(data_frame):
 
 #region Ethereum Slash Commands
 
-# def liquidity(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     if rate_limit_check():
-#         liquidity_usd = get_liquidity()
-#         if liquidity_usd:
-#             msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
-#         else:
-#             msg = update.message.reply_text("Failed to fetch liquidity data.")
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
 
 # def volume(update, context):
 #     msg = None
