@@ -1108,62 +1108,103 @@ def block(update: Update, context: CallbackContext):
             update.message.reply_text(f"Failed to update blocklist: {str(e)}")
             print(f"Error updating blocklist: {e}")
 
-
-
-def remove_block(update, context):
+def remove_block(update: Update, context: CallbackContext):
     if is_user_admin(update, context):
-
         command_text = update.message.text[len('/removeblock '):].strip().lower()
 
         if not command_text:
             update.message.reply_text("Please provide some text to remove.")
             return
 
-        # Get the document in the 'filtered-words' collection
-        doc_ref = db.collection('blocklist').document(command_text)
+        group_id = str(update.effective_chat.id)
+        group_doc = db.collection('groups').document(group_id)
+        blocklist_field = 'blocklist'
 
-        # Check if document exists
-        doc = doc_ref.get()
-        if doc.exists:
-            # If document exists, delete it
-            doc_ref.delete()
-            update.message.reply_text(f"'{command_text}' removed from blocklist!")
-        else:
-            update.message.reply_text(f"'{command_text}' is not in the blocklist.")
+        try:
+            # Fetch the current blocklist from the group's document
+            doc_snapshot = group_doc.get()
+            if doc_snapshot.exists:
+                group_data = doc_snapshot.to_dict()
+                current_blocklist = group_data.get(blocklist_field, "")
+                # Create a list from the blocklist string, remove the word, and convert back to string
+                blocklist_items = current_blocklist.split(', ')
+                if command_text in blocklist_items:
+                    blocklist_items.remove(command_text)
+                    new_blocklist = ', '.join(blocklist_items)
+                    # Update the blocklist in the group's document
+                    group_doc.update({blocklist_field: new_blocklist})
+                    update.message.reply_text(f"'{command_text}' removed from blocklist!")
+                    print("Updated blocklist after removal:", new_blocklist)
+                else:
+                    update.message.reply_text(f"'{command_text}' is not in the blocklist.")
 
-def blocklist(update, context):
+            else:
+                update.message.reply_text("No blocklist found for this group.")
+
+        except Exception as e:
+            update.message.reply_text(f"Failed to remove from blocklist: {str(e)}")
+            print(f"Error removing from blocklist: {e}")
+
+def blocklist(update: Update, context: CallbackContext):
     if is_user_admin(update, context):
-        docs = db.collection('blocklist').stream()
+        group_id = str(update.effective_chat.id)
+        group_doc = db.collection('groups').document(group_id)
 
-        blocklist = [doc.id for doc in docs]
-        message = "\n".join(blocklist)
-
-        update.message.reply_text(message)
+        try:
+            doc_snapshot = group_doc.get()
+            if doc_snapshot.exists:
+                group_data = doc_snapshot.to_dict()
+                blocklist_field = 'blocklist'
+                current_blocklist = group_data.get(blocklist_field, "")
+                
+                if current_blocklist:
+                    # Split the blocklist string by commas and strip spaces
+                    blocklist_items = [item.strip() for item in current_blocklist.split(',') if item.strip()]
+                    message = "\n".join(blocklist_items)
+                    update.message.reply_text(message)
+                else:
+                    update.message.reply_text("The blocklist is currently empty.")
+            else:
+                update.message.reply_text("No blocklist found for this group.")
+        
+        except Exception as e:
+            update.message.reply_text(f"Failed to retrieve blocklist: {str(e)}")
+            print(f"Error retrieving blocklist: {e}")
 
 def delete_blocked_phrases(update: Update, context: CallbackContext):
     print("Checking message for filtered phrases...")
-
     message_text = update.message.text
 
     if message_text is None:
         print("No text in message.")
         return
 
-    message_text = update.message.text.lower()
+    message_text = message_text.lower()
 
-    docs = db.collection('blocklist').stream()
+    # Fetch the group info to get the blocklist
+    group_info = fetch_group_info(update, context)
+    if not group_info:
+        print("No group info available.")
+        return
 
-    filtered_phrases = [doc.id for doc in docs]
-    
-    for phrase in filtered_phrases:
+    # Get the blocklist from the group info
+    blocklist_field = 'blocklist'
+    blocklist_string = group_info.get(blocklist_field, "")
+    blocklist_items = [item.strip() for item in blocklist_string.split(',') if item.strip()]
+
+    # Check each blocked phrase in the group's blocklist
+    for phrase in blocklist_items:
         if phrase in message_text:
-            print(f"Found filter: {phrase}")
+            print(f"Found blocked phrase: {phrase}")
             try:
                 update.message.delete()
-                print("Message deleted.")
-            except Exception as e:  # Catch potential errors in message deletion
+                print("Message deleted due to blocked phrase.")
+            except Exception as e:
                 print(f"Error deleting message: {e}")
-            break  # Exit loop after deleting the message
+            break  # Exit loop after deleting the message to prevent multiple deletions for one message
+
+
+
 
 def delete_blocked_links(update: Update, context: CallbackContext):
     print("Checking message for unallowed Telegram links...")
