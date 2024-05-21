@@ -1652,6 +1652,8 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
 def delete_filtered_phrases(update: Update, context: CallbackContext):
     print("Checking message for filtered phrases...")
 
+    message_text = update.message.text
+
     if message_text is None:
         print("No text in message.")
         return
