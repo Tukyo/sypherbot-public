@@ -67,14 +67,9 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 
 VERIFICATION_LETTERS = os.getenv('VERIFICATION_LETTERS') # TODO: Move to firebase
-CHAT_ID = os.getenv('CHAT_ID') # TODO: Move to firebase
-BASE_ENDPOINT = os.getenv('ENDPOINT') # TODO: Move to firebase
-BASESCAN_API_KEY = os.getenv('BASESCAN_API') # TODO: Move to firebase
+BASE_ENDPOINT = os.getenv('BASE_ENDPOINT') # TODO: Move to firebase
 
 web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
-# contract_address = config['contractAddress'] # TODO: Move to firebase
-# pool_address = config['lpAddress'] # TODO: Move to firebase
-# abi = config['abi'] # TODO: Move to firebase
 
 eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 telegram_links_pattern = re.compile(r'https://t.me/\S+')
@@ -358,7 +353,10 @@ def setup_ethereum(update: Update, context: CallbackContext) -> None:
     keyboard = [
         [
             InlineKeyboardButton("Contract", callback_data='setup_contract'),
-            InlineKeyboardButton("Liquidity", callback_data='setup_liquidity'),
+            InlineKeyboardButton("Liquidity", callback_data='setup_liquidity')
+        ],
+        [
+            InlineKeyboardButton("Chain", callback_data='setup_chain'),
             InlineKeyboardButton("ABI", callback_data='setup_ABI')
         ],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
@@ -388,7 +386,6 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     )
     context.user_data['setup_stage'] = 'contract'
     print("Requesting contract address.")
-
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('setup_stage') == 'contract':
@@ -430,7 +427,6 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
                 'liquidity_address': liquidity_address,
             })
         context.user_data['setup_stage'] = None
-
 
 def setup_ABI(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -481,6 +477,49 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
             pass
         elif update.message.document:
             handle_ABI(update, context)
+
+def setup_chain(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Ethereum", callback_data='ethereum'),
+            InlineKeyboardButton("Arbitrum", callback_data='arbitrum'),
+            InlineKeyboardButton("Polygon", callback_data='polygon'),
+        ],
+        [
+            InlineKeyboardButton("Base", callback_data='base'),
+            InlineKeyboardButton("Optimism", callback_data='optimism'),
+            InlineKeyboardButton("Fantom", callback_data='fantom'),
+        ],
+        [
+            InlineKeyboardButton("Avalanche", callback_data='avalanche'),
+            InlineKeyboardButton("Binance", callback_data='binance'),
+            InlineKeyboardButton("Linea", callback_data='linea'),
+        ],
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Please choose your chain from the list.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = 'chain'
+    print("Requesting Chain.")
+
+def handle_chain(update: Update, context: CallbackContext) -> None:
+    if context.user_data.get('setup_stage') == 'chain':
+        chain = update.callback_query.data
+        group_id = update.effective_chat.id
+        print(f"Adding chain {chain} to group {group_id}")
+        group_doc = db.collection('groups').document(str(group_id))
+        group_doc.update({
+            'chain': chain,
+        })
+        context.user_data['setup_stage'] = None
 
 def cancel_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -549,6 +588,7 @@ def price(update: Update, context: CallbackContext) -> None:
         update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
     else:
         update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
+
 
 def bot_added_to_group(update, context):
     new_members = update.message.new_chat_members
@@ -1086,29 +1126,29 @@ def get_token_price_in_fiat(contract_address, currency):
     token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
     return token_price_in_fiat
 
-def get_liquidity():
-    try:
-        response = requests.get("https://api.geckoterminal.com/api/v2/networks/base/pools/0xB0fbaa5c7D28B33Ac18D9861D4909396c1B8029b")
-        response.raise_for_status()
-        data = response.json()
-        # Navigate the JSON to find the liquidity in USD
-        liquidity_usd = data['data']['attributes']['reserve_in_usd']
-        return liquidity_usd
-    except requests.RequestException as e:
-        print(f"Failed to fetch liquidity data: {str(e)}")
-        return None
+# def get_liquidity():
+#     try:
+#         response = requests.get("https://api.geckoterminal.com/api/v2/networks/base/pools/0xB0fbaa5c7D28B33Ac18D9861D4909396c1B8029b")
+#         response.raise_for_status()
+#         data = response.json()
+#         # Navigate the JSON to find the liquidity in USD
+#         liquidity_usd = data['data']['attributes']['reserve_in_usd']
+#         return liquidity_usd
+#     except requests.RequestException as e:
+#         print(f"Failed to fetch liquidity data: {str(e)}")
+#         return None
 
-def get_volume():
-    try:
-        response = requests.get("https://api.geckoterminal.com/api/v2/networks/base/pools/0xB0fbaa5c7D28B33Ac18D9861D4909396c1B8029b")
-        response.raise_for_status()
-        data = response.json()
-        # Navigate the JSON to find the 24-hour volume in USD
-        volume_24h_usd = data['data']['attributes']['volume_usd']['h24']
-        return volume_24h_usd
-    except requests.RequestException as e:
-        print(f"Failed to fetch volume data: {str(e)}")
-        return None
+# def get_volume():
+#     try:
+#         response = requests.get("https://api.geckoterminal.com/api/v2/networks/base/pools/0xB0fbaa5c7D28B33Ac18D9861D4909396c1B8029b")
+#         response.raise_for_status()
+#         data = response.json()
+#         # Navigate the JSON to find the 24-hour volume in USD
+#         volume_24h_usd = data['data']['attributes']['volume_usd']['h24']
+#         return volume_24h_usd
+#     except requests.RequestException as e:
+#         print(f"Failed to fetch volume data: {str(e)}")
+#         return None
 
 #region Chart
 def fetch_ohlcv_data(time_frame):
@@ -1202,8 +1242,7 @@ def plot_candlestick_chart(data_frame):
 #             value_message = f" ({total_value_usd:.2f} USD)"
 #             header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
 #         else:
-#             value_message = " (USD price not available)"
-#             header_emoji, buyer_emoji = "💸", "🐟"  # Default to Fish if unable to determine price
+            # print("Failed to fetch token price in USD.")
 
 #         # Format message with Markdown
 #         message = f"{header_emoji}SYPHER BUY{header_emoji}\n\n{buyer_emoji} {sypher_amount} SYPHER{value_message}"
@@ -1230,29 +1269,6 @@ def plot_candlestick_chart(data_frame):
 #endregion Ethereum Logic
 
 #region Ethereum Slash Commands
-# def price(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     if rate_limit_check():
-#         currency = context.args[0] if context.args else 'usd'
-#         currency = currency.lower()
-
-#         # Check if the provided currency is supported
-#         if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
-#             msg = update.message.reply_text("Unsupported currency. Please use 'usd', 'eur'. 'jpy', 'gbp', 'aud', 'cad' or 'mxn'.")
-#             return
-
-#         # Fetch and format the token price in the specified currency
-#         token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
-#         if token_price_in_fiat is not None:
-#             formatted_price = format(token_price_in_fiat, '.4f')
-#             msg = update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
-#         else:
-#             msg = update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
 
 # def liquidity(update: Update, context: CallbackContext) -> None:
 #     msg = None
@@ -1903,6 +1919,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
