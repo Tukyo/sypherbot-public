@@ -1535,59 +1535,59 @@ def chart(update: Update, context: CallbackContext) -> None:
 #endregion Ethereum Slash Commands
 
 #region User Verification
-# def handle_new_user(update: Update, context: CallbackContext) -> None:
-#     bot_added_to_group(update, context)
-#     msg = None
-#     for member in update.message.new_chat_members:
-#         user_id = member.id
-#         chat_id = update.message.chat.id
+def handle_new_user(update: Update, context: CallbackContext) -> None:
+    bot_added_to_group(update, context)
+    msg = None
+    for member in update.message.new_chat_members:
+        user_id = member.id
+        chat_id = update.message.chat.id
 
-#         # Mute the new user
-#         context.bot.restrict_chat_member(
-#             chat_id=chat_id,
-#             user_id=user_id,
-#             permissions=ChatPermissions(can_send_messages=False)
-#         )
+        # Mute the new user
+        context.bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=user_id,
+            permissions=ChatPermissions(can_send_messages=False)
+        )
 
-#         if anti_raid.is_raid():
-#             msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
+        if anti_raid.is_raid():
+            msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
             
-#             # Get the user_id of the user that just joined
-#             user_id = update.message.new_chat_members[0].id
+            # Get the user_id of the user that just joined
+            user_id = update.message.new_chat_members[0].id
 
-#             # Kick the user that just joined
-#             context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
-#             return
+            # Kick the user that just joined
+            context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
+            return
         
-#         print("Allowing new user to join, antiraid is not active.")
+        print("Allowing new user to join, antiraid is not active.")
 
-#         # Send the welcome message with the verification button
-#         welcome_message = (
-#             "Welcome to Tukyo Games!\n\n"
-#             "⚠️ Admins will NEVER DM YOU FIRST ⚠️\n\n"
-#             "To start verification, please click Initialize Bot, then send the bot a /start command in DM.\n\n"
-#             "After initializing the bot, return to the main chat and press 'Click Here to Verify'.\n"
-#         )
+        # Send the welcome message with the verification button
+        welcome_message = (
+            "Welcome to Tukyo Games!\n\n"
+            "⚠️ Admins will NEVER DM YOU FIRST ⚠️\n\n"
+            "To start verification, please click Initialize Bot, then send the bot a /start command in DM.\n\n"
+            "After initializing the bot, return to the main chat and press 'Click Here to Verify'.\n"
+        )
 
-#         keyboard = [
-#             [InlineKeyboardButton("Initialize Bot", url=f"https://t.me/deSypher_bot?start={user_id}")],
-#             [InlineKeyboardButton("Click Here to Verify", callback_data=f'verify_{user_id}')]
-#         ]
+        keyboard = [
+            [InlineKeyboardButton("Initialize Bot", url=f"https://t.me/deSypher_bot?start={user_id}")],
+            [InlineKeyboardButton("Click Here to Verify", callback_data=f'verify_{user_id}')]
+        ]
         
-#         reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-#         welcomeMessage = context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
-#         welcome_message_id = welcomeMessage.message_id
-#         context.chat_data['non_deletable_message_id'] = welcomeMessage.message_id
+        welcomeMessage = context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
+        welcome_message_id = welcomeMessage.message_id
+        context.chat_data['non_deletable_message_id'] = welcomeMessage.message_id
 
-#         # Start a verification timeout job
-#         job_queue = context.job_queue
-#         job_queue.run_once(verification_timeout, 600, context={'chat_id': chat_id, 'user_id': user_id, 'welcome_message_id': welcome_message_id}, name=str(user_id))
+        # Start a verification timeout job
+        job_queue = context.job_queue
+        job_queue.run_once(verification_timeout, 600, context={'chat_id': chat_id, 'user_id': user_id, 'welcome_message_id': welcome_message_id}, name=str(user_id))
 
-#         update.message.delete()
+        update.message.delete()
 
-#     if msg is not None:
-#         track_message(msg)
+    if msg is not None:
+        track_message(msg)
 
 # def start_verification_dm(user_id: int, context: CallbackContext) -> None:
 #     print("Sending verification message to user's DM.")
