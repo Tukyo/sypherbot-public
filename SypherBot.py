@@ -1839,7 +1839,10 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
     dispatcher.add_handler(CommandHandler("price", price))
-
+    # dispatcher.add_handler(CommandHandler("chart", chart))
+    dispatcher.add_handler(CommandHandler("liquidity", liquidity))
+    dispatcher.add_handler(CommandHandler("lp", liquidity))
+    # dispatcher.add_handler(CommandHandler("volume", volume))
     dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
     #endregion General Slash Command Handlers
