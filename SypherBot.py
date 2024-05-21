@@ -297,6 +297,20 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         group_doc.delete()
         delete_service_messages(update, context)
 
+def cancel_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    print("User pressed cancel, returning to home setup screen.")
+    setup_home(update, context)
+    context.user_data['setup_stage'] = None
+
+def cancel_end_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    print("User pressed cancel, ending setup.")
+    query.message.delete()
+    context.user_data['setup_stage'] = None
+
 def start(update: Update, context: CallbackContext) -> None:
     chat_type = update.effective_chat.type
     user_id = update.effective_user.id
@@ -369,14 +383,14 @@ def setup_home(update: Update, context: CallbackContext) -> None:
 
     keyboard = [
         [
-            InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
+            InlineKeyboardButton("Admin", callback_data='setup_admin'),
             InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
         ],
         [
-            InlineKeyboardButton("Admin", callback_data='setup_admin'),
-            InlineKeyboardButton("Verification", callback_data='setup_verification')
+            InlineKeyboardButton("Verification", callback_data='setup_verification'),
+            InlineKeyboardButton("Ethereum", callback_data='setup_ethereum')
         ],
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        [InlineKeyboardButton("Cancel", callback_data='cancel_end')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -765,13 +779,6 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
     )
 
 
-def cancel_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    print("User pressed cancel, returning to home setup screen.")
-    setup_home(update, context)
-    context.user_data['setup_stage'] = None
-
 def fetch_group_info(update: Update, context: CallbackContext):
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -1109,34 +1116,26 @@ def fetch_random_word() -> str:
 
 
 def report(update: Update, context: CallbackContext) -> None:
-    admins= [
-        '@tukyowave',
-        '@jetLunar',
-        '@pr0satoshi',
-        '@dzhv_bradbrown',
-        '@motorgala'
-    ]
-
     chat_id = update.effective_chat.id
-    CHAT_ID = int(os.getenv('CHAT_ID'))
 
     reported_user = update.message.reply_to_message.from_user.username
 
-    if chat_id == CHAT_ID:
-        if reported_user in admins:
-            # If the reported user is an admin, send a message saying that admins cannot be reported
-            context.bot.send_message(CHAT_ID, text="Nice try lol")
-        else:
-            admin_mentions = ' '.join(admins)
+    # Get the list of admins
+    chat_admins = context.bot.get_chat_administrators(chat_id)
+    admin_usernames = ['@' + admin.user.username for admin in chat_admins if admin.user.username is not None]
 
-            report_message = f"Reported Message to admins.\n {admin_mentions}\n"
-            # Send the message as plain text
-            message = context.bot.send_message(CHAT_ID, text=report_message, disable_web_page_preview=True)
-
-            # Immediately edit the message to remove the usernames, using Markdown for the new message
-            context.bot.edit_message_text(chat_id=CHAT_ID, message_id=message.message_id, text="⚠️ Message Reported to Admins ⚠️", parse_mode='Markdown', disable_web_page_preview=True)
+    if reported_user in admin_usernames:
+        # If the reported user is an admin, send a message saying that admins cannot be reported
+        context.bot.send_message(chat_id, text="Nice try lol")
     else:
-        update.message.reply_text("This command can only be used in the main chat.")
+        admin_mentions = ' '.join(admin_usernames)
+
+        report_message = f"Reported Message to admins.\n {admin_mentions}\n"
+        # Send the message as plain text
+        message = context.bot.send_message(chat_id, text=report_message, disable_web_page_preview=True)
+
+        # Immediately edit the message to remove the usernames, using Markdown for the new message
+        context.bot.edit_message_text(chat_id=chat_id, message_id=message.message_id, text="⚠️ Message Reported to Admins ⚠️", parse_mode='Markdown', disable_web_page_preview=True)
 
 def save(update: Update, context: CallbackContext):
     msg = None
@@ -2106,7 +2105,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("liquidity", liquidity))
     dispatcher.add_handler(CommandHandler("lp", liquidity))
     dispatcher.add_handler(CommandHandler("volume", volume))
-    # dispatcher.add_handler(CommandHandler("report", report))
+    dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
     #endregion General Slash Command Handlers
 
