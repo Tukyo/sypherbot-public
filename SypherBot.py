@@ -360,7 +360,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
     group_doc.update({
         'group_link': group_link,
     })
-    
+
     keyboard = [
         [
             InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
@@ -2119,7 +2119,7 @@ def main() -> None:
     #endregion Admin Slash Command Handlers
     
     # Register the message handler for new users
-    # dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
+    dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
     dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_message))
 
