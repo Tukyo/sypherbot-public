@@ -1921,6 +1921,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
+    dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|linea)$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
