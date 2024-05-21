@@ -1306,11 +1306,7 @@ def chart(update: Update, context: CallbackContext) -> None:
         if group_data is None:
             return  # Early exit if no data is found
         
-        group_id = group_data.get('group_id')
-        if not group_id:
-            update.message.reply_text("Group ID not found for this group.")
-            return
-        chain = group_data.get('chain')  # Use a default chain if not specified
+        chain = group_data.get('chain')
         if not chain:
             update.message.reply_text("Chain not found for this group.")
             return
@@ -1318,12 +1314,12 @@ def chart(update: Update, context: CallbackContext) -> None:
         if not liquidity_address:
             update.message.reply_text("Contract address not found for this group.")
             return
-        
 
+        group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
         ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
         if ohlcv_data:
             data_frame = prepare_data_for_chart(ohlcv_data)
-            plot_candlestick_chart(data_frame)
+            plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
             msg = update.message.reply_photo(
                 photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
                 caption=f"\n[Dexscreener](https://dexscreener.com/{chain}/{liquidity_address}) • [Dextools](https://www.dextools.io/app/{chain}/pair-explorer/{liquidity_address})\n",
@@ -1336,6 +1332,7 @@ def chart(update: Update, context: CallbackContext) -> None:
     
     if msg is not None:
         track_message(msg)
+
 #endregion Ethereum Slash Commands
 
 #region User Verification
