@@ -671,7 +671,7 @@ def password_verification(update: Update, context: CallbackContext) -> None:
         })
 
     # Set the state in user_data
-    context.user_data['setup_password_verification'] = 'setup_password_verification'
+    context.user_data['setup_stage'] = 'setup_password_verification'
 
     # Ask the question for new users
     context.bot.send_message(
@@ -702,7 +702,7 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
     })
 
     # Clear the state in user_data
-    context.user_data['setup_password_verification'] = None
+    context.user_data['setup_stage'] = None
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,
