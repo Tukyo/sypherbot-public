@@ -1058,11 +1058,12 @@ def fetch_ohlcv_data(time_frame, chain, contract_address):
         'limit': '60',  # Fetch only the last hour data
         'currency': 'usd'
     }
+    print(f"Fetching OHLCV data from URL: {url} with params: {params}")
     response = requests.get(url, params=params)
     if response.status_code == 200:
-        return response.json()  # Process this data as needed
+        return response.json()
     else:
-        print("Failed to fetch data:", response.status_code)
+        print("Failed to fetch data:", response.status_code, response.text)
         return None
 
 def prepare_data_for_chart(ohlcv_data):
