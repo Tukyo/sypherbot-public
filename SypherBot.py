@@ -105,60 +105,6 @@ db = firestore.client()
 print("Firebase initialized.")
 
 #region Database Slash Commands
-# def filter(update, context):
-#     if is_user_admin(update, context):
-
-#         command_text = update.message.text[len('/filter '):].strip().lower()
-
-#         if not command_text:
-#             update.message.reply_text("Please provide some text to filter.")
-#             return
-        
-#         # Create or update the document in the 'filtered-words' collection
-#         doc_ref = db.collection('filters').document(command_text)
-
-#         # Check if document exists
-#         doc = doc_ref.get()
-#         if doc.exists:
-#             update.message.reply_text(f"'{command_text}' is already filtered.")
-#         else:
-#             # If document does not exist, create it with initial values
-#             doc_ref.set({
-#                 'text': command_text,
-#             })
-
-#             update.message.reply_text(f"'{command_text}' filtered!")
-
-# def remove_filter(update, context):
-#     if is_user_admin(update, context):
-
-#         command_text = update.message.text[len('/removefilter '):].strip().lower()
-
-#         if not command_text:
-#             update.message.reply_text("Please provide some text to remove.")
-#             return
-
-#         # Get the document in the 'filtered-words' collection
-#         doc_ref = db.collection('filters').document(command_text)
-
-#         # Check if document exists
-#         doc = doc_ref.get()
-#         if doc.exists:
-#             # If document exists, delete it
-#             doc_ref.delete()
-#             update.message.reply_text(f"'{command_text}' removed from filters!")
-#         else:
-#             update.message.reply_text(f"'{command_text}' is not in the filters.")
-
-# def filter_list(update, context):
-#     if is_user_admin(update, context):
-#         docs = db.collection('filters').stream()
-
-#         filters = [doc.id for doc in docs]
-#         message = "\n".join(filters)
-
-#         update.message.reply_text(message)
-
 # def warn(update, context):
 #     if is_user_admin(update, context):
 
@@ -778,21 +724,327 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
         text='Password verification setup complete.'
     )
 
+#region Ethereum
 
-def fetch_group_info(update: Update, context: CallbackContext):
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+#region Slash Commands
+def price(update: Update, context: CallbackContext) -> None:
+    # Fetch group-specific contract information
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return  # Early exit if no data found
 
-    try:
-        doc_snapshot = group_doc.get()
-        if doc_snapshot.exists:
-            return doc_snapshot.to_dict()
-        else:
-            update.message.reply_text("Group data not found.")
-    except Exception as e:
-        update.message.reply_text(f"Failed to fetch group info: {str(e)}")
+    contract_address = group_data.get('contract_address')
+    if not contract_address:
+        update.message.reply_text("Contract address not found for this group.")
+        return
+
+    # Proceed with price fetching
+    currency = context.args[0].lower() if context.args else 'usd'
+    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
+        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
+        return
+
+    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
+    if token_price_in_fiat is not None:
+        formatted_price = format(token_price_in_fiat, '.4f')
+        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
+    else:
+        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
+
+def ca(update: Update, context: CallbackContext) -> None:
+    msg = None
+    if rate_limit_check():
+        group_data = fetch_group_info(update, context)
+        if group_data is None:
+            return  # Early exit if no data is found
+
+        contract_address = group_data.get('contract_address')
+        if not contract_address:
+            update.message.reply_text("Contract address not found for this group.")
+            return
+        
+        msg = update.message.reply_text(contract_address)
+
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     
-    return None
+    if msg is not None:
+        track_message(msg)
+
+def liquidity(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return
+
+    lp_address = group_data.get('liquidity_address')
+    chain = group_data.get('chain')
+
+    if not lp_address or not chain:
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    if rate_limit_check():
+        liquidity_usd = get_liquidity(chain, lp_address)
+        if liquidity_usd:
+            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
+        else:
+            msg = update.message.reply_text("Failed to fetch liquidity data.")
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+
+def get_liquidity(chain, lp_address):
+    try:
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        liquidity_usd = data['data']['attributes']['reserve_in_usd']
+        return liquidity_usd
+    except requests.RequestException as e:
+        print(f"Failed to fetch liquidity data: {str(e)}")
+        return None
+    
+def volume(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_data = fetch_group_info(update, context)
+
+    if group_data is None:
+        return
+
+    lp_address = group_data.get('liquidity_address')
+    chain = group_data.get('chain')    
+
+    if not lp_address or not chain:
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    if rate_limit_check():
+        volume_24h_usd = get_volume(chain, lp_address)
+        if volume_24h_usd:
+            msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd}")
+        else:
+            msg = update.message.reply_text("Failed to fetch volume data.")
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+    
+def get_volume(chain, lp_address):
+    try:
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        volume_24h_usd = data['data']['attributes']['volume_usd']['h24']
+        return volume_24h_usd
+    except requests.RequestException as e:
+        print(f"Failed to fetch volume data: {str(e)}")
+        return None
+
+def chart(update: Update, context: CallbackContext) -> None:
+    args = context.args
+    time_frame = 'minute'  # default to minute if no argument is provided
+    
+    if args:
+        interval_arg = args[0].lower()
+        if interval_arg == 'h':
+            time_frame = 'hour'
+        elif interval_arg == 'd':
+            time_frame = 'day'
+        elif interval_arg == 'm':
+            time_frame = 'minute'
+        else:
+            msg = update.message.reply_text('Invalid time frame specified. Please use /chart with m, h, or d.')
+            return
+        
+    if rate_limit_check():
+        # Fetch group-specific contract information
+        group_data = fetch_group_info(update, context)
+        if group_data is None:
+            return  # Early exit if no data is found
+        
+        chain = group_data.get('chain')
+        if not chain:
+            update.message.reply_text("Chain not found for this group.")
+            return
+        liquidity_address = group_data.get('liquidity_address')
+        if not liquidity_address:
+            update.message.reply_text("Contract address not found for this group.")
+            return
+
+        group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
+        ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
+        if ohlcv_data:
+            data_frame = prepare_data_for_chart(ohlcv_data)
+            plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
+            msg = update.message.reply_photo(
+                photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
+                caption=f"\n[Dexscreener](https://dexscreener.com/{chain}/{liquidity_address}) • [Dextools](https://www.dextools.io/app/{chain}/pair-explorer/{liquidity_address})\n",
+                parse_mode='Markdown'
+            )
+        else:
+            msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+#endregion Slash Commands
+
+#region Chart
+def fetch_ohlcv_data(time_frame, chain, liquidity_address):
+    now = datetime.now()
+    one_hour_ago = now - timedelta(hours=1)
+    start_of_hour_timestamp = int(one_hour_ago.timestamp())
+
+    url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{liquidity_address}/ohlcv/{time_frame}"
+    params = {
+        'aggregate': '1' + time_frame[0],  # '1m', '1h', '1d' depending on the time frame
+        'before_timestamp': start_of_hour_timestamp,
+        'limit': '60',  # Fetch only the last hour data
+        'currency': 'usd'
+    }
+    print(f"Fetching OHLCV data from URL: {url} with params: {params}")
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print("Failed to fetch data:", response.status_code, response.text)
+        return None
+
+def prepare_data_for_chart(ohlcv_data):
+    ohlcv_list = ohlcv_data['data']['attributes']['ohlcv_list']
+    data = [{
+        'Date': pd.to_datetime(item[0], unit='s'),
+        'Open': item[1],
+        'High': item[2],
+        'Low': item[3],
+        'Close': item[4],
+        'Volume': item[5]
+    } for item in ohlcv_list]
+
+    data_frame = pd.DataFrame(data)
+    data_frame.sort_values('Date', inplace=True)
+    data_frame.set_index('Date', inplace=True)
+    return data_frame
+
+def plot_candlestick_chart(data_frame, group_id):
+    mc = mpf.make_marketcolors(
+        up='#2dc60e',
+        down='#ff0000',
+        edge='inherit',
+        wick='inherit',
+        volume='inherit'
+    )
+    s = mpf.make_mpf_style(
+        marketcolors=mc,
+        rc={
+            'font.size': 8,
+            'axes.labelcolor': '#2dc60e',
+            'axes.edgecolor': '#2dc60e',
+            'xtick.color': '#2dc60e',
+            'ytick.color': '#2dc60e',
+            'grid.color': '#0f3e07',
+            'grid.linestyle': '--',
+            'figure.facecolor': 'black',
+            'axes.facecolor': 'black'
+        }
+    )
+    save_path = f'/tmp/candlestick_chart_{group_id}.png'
+    mpf.plot(data_frame, type='candle', style=s, volume=True, savefig=save_path)
+    print(f"Chart saved to {save_path}")
+#endregion Chart
+
+#endregion Ethereum
+
+#region Admin Controls
+def unmute_user(context: CallbackContext) -> None:
+    job = context.job
+    context.bot.restrict_chat_member(
+        chat_id=job.context['chat_id'],
+        user_id=job.context['user_id'],
+        permissions=ChatPermissions(
+            can_send_messages=True,
+            can_send_media_messages=True,
+            can_send_other_messages=True,
+            can_send_videos=True,
+            can_send_photos=True,
+            can_send_audios=True
+            )
+    )
+
+def handle_message(update: Update, context: CallbackContext) -> None:
+    
+    delete_unallowed_addresses(update, context)
+    delete_blocked_phrases(update, context)
+    delete_blocked_links(update, context)
+
+    handle_guess(update, context)
+
+    handle_setup_inputs_from_user(update, context)
+
+    if is_user_admin(update, context):
+        return
+    
+    user_id = update.message.from_user.id
+    chat_id = update.message.chat.id
+    username = update.message.from_user.username or update.message.from_user.first_name
+    msg = None
+
+    if anti_spam.is_spam(user_id):
+        mute_time = anti_spam.mute_time  # Get the mute time from AntiSpam class
+        msg = update.message.reply_text(f'{username}, you are spamming. You have been muted for {mute_time} seconds.')
+
+        # Mute the user for the mute time
+        until_date = int(time.time() + mute_time)
+        context.bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=user_id,
+            permissions=ChatPermissions(can_send_messages=False),
+            until_date=until_date
+        )
+
+        # Schedule job to unmute the user
+        job_queue = context.job_queue
+        job_queue.run_once(unmute_user, mute_time, context={'chat_id': chat_id, 'user_id': user_id})
+    
+    if msg is not None:
+        track_message(msg)
+
+def rate_limit_check():
+    global last_check_time, command_count
+    current_time = time.time()
+
+    # Reset count if time period has expired
+    if current_time - last_check_time > TIME_PERIOD:
+        command_count = 0
+        last_check_time = current_time
+
+    # Check if the bot is within the rate limit
+    if command_count < RATE_LIMIT:
+        command_count += 1
+        return True
+    else:
+        return False
+
+def is_user_admin(update: Update, context: CallbackContext) -> bool:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    if update.effective_chat.type == 'private':
+        print("User is in a private chat.")
+        return False
+
+    # Check if the user is an admin in this chat
+    chat_admins = context.bot.get_chat_administrators(chat_id)
+    user_is_admin = any(admin.user.id == user_id for admin in chat_admins)
+
+    return user_is_admin
 
 def delete_unallowed_addresses(update: Update, context: CallbackContext):
     print("Checking message for unallowed addresses...")
@@ -820,6 +1072,255 @@ def delete_unallowed_addresses(update: Update, context: CallbackContext):
             update.message.delete()
             print("Deleted a message containing unallowed address.")
             break
+
+def block(update: Update, context: CallbackContext):
+    if is_user_admin(update, context):
+        command_text = update.message.text[len('/block '):].strip().lower()
+
+        if not command_text:
+            update.message.reply_text("Please provide some text to block.")
+            return
+
+        group_id = str(update.effective_chat.id)
+        group_doc = db.collection('groups').document(group_id)
+        blocklist_field = 'blocklist'
+
+        try:
+            # Fetch current blocklist from the group's document
+            doc_snapshot = group_doc.get()
+            if doc_snapshot.exists:
+                group_data = doc_snapshot.to_dict()
+                current_blocklist = group_data.get(blocklist_field, "")
+                new_blocklist = current_blocklist + command_text + ", "
+
+                # Update the blocklist in the group's document
+                group_doc.update({blocklist_field: new_blocklist})
+                update.message.reply_text(f"'{command_text}' added to blocklist!")
+                print("Updated blocklist:", new_blocklist)
+
+            else:
+                # If no blocklist exists, create it with the current command text
+                group_doc.set({blocklist_field: command_text + ", "})
+                update.message.reply_text(f"'{command_text}' blocked!")
+                print("Created new blocklist with:", command_text)
+
+        except Exception as e:
+            update.message.reply_text(f"Failed to update blocklist: {str(e)}")
+            print(f"Error updating blocklist: {e}")
+
+
+
+def remove_block(update, context):
+    if is_user_admin(update, context):
+
+        command_text = update.message.text[len('/removeblock '):].strip().lower()
+
+        if not command_text:
+            update.message.reply_text("Please provide some text to remove.")
+            return
+
+        # Get the document in the 'filtered-words' collection
+        doc_ref = db.collection('blocklist').document(command_text)
+
+        # Check if document exists
+        doc = doc_ref.get()
+        if doc.exists:
+            # If document exists, delete it
+            doc_ref.delete()
+            update.message.reply_text(f"'{command_text}' removed from blocklist!")
+        else:
+            update.message.reply_text(f"'{command_text}' is not in the blocklist.")
+
+def blocklist(update, context):
+    if is_user_admin(update, context):
+        docs = db.collection('blocklist').stream()
+
+        blocklist = [doc.id for doc in docs]
+        message = "\n".join(blocklist)
+
+        update.message.reply_text(message)
+
+def delete_blocked_phrases(update: Update, context: CallbackContext):
+    print("Checking message for filtered phrases...")
+
+    message_text = update.message.text
+
+    if message_text is None:
+        print("No text in message.")
+        return
+
+    message_text = update.message.text.lower()
+
+    docs = db.collection('blocklist').stream()
+
+    filtered_phrases = [doc.id for doc in docs]
+    
+    for phrase in filtered_phrases:
+        if phrase in message_text:
+            print(f"Found filter: {phrase}")
+            try:
+                update.message.delete()
+                print("Message deleted.")
+            except Exception as e:  # Catch potential errors in message deletion
+                print(f"Error deleting message: {e}")
+            break  # Exit loop after deleting the message
+
+def delete_blocked_links(update: Update, context: CallbackContext):
+    print("Checking message for unallowed Telegram links...")
+    message_text = update.message.text
+
+    if message_text is None:
+        print("No text in message.")
+        return
+
+    found_links = telegram_links_pattern.findall(message_text)
+    print(f"Found Telegram links: {found_links}")
+
+    allowed_links = [
+        'https://t.me/tukyogames',
+        'https://t.me/tukyowave',
+        'https://t.me/tukyogamesannouncements'
+    ]
+
+    for link in found_links:
+        if link not in allowed_links:
+            try:
+                update.message.delete()
+                print("Deleted a message with unallowed Telegram link.")
+                return  # Stop further checking if a message is deleted
+            except Exception as e:
+                print(f"Failed to delete message: {e}")
+
+def delete_service_messages(update, context):
+    non_deletable_message_id = context.chat_data.get('non_deletable_message_id')
+    if update.message.message_id == non_deletable_message_id:
+        return  # Do not delete this message
+
+    if update.message.left_chat_member or update.message.new_chat_members:
+        try:
+            context.bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
+            print(f"Deleted service message in chat {update.message.chat_id}")
+        except Exception as e:
+            print(f"Failed to delete service message: {str(e)}")
+
+def fetch_group_info(update: Update, context: CallbackContext):
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    try:
+        doc_snapshot = group_doc.get()
+        if doc_snapshot.exists:
+            return doc_snapshot.to_dict()
+        else:
+            update.message.reply_text("Group data not found.")
+    except Exception as e:
+        update.message.reply_text(f"Failed to fetch group info: {str(e)}")
+    
+    return None
+
+#endregion Admin Controls
+
+def report(update: Update, context: CallbackContext) -> None:
+    chat_id = update.effective_chat.id
+
+    reported_user = update.message.reply_to_message.from_user.username
+
+    # Get the list of admins
+    chat_admins = context.bot.get_chat_administrators(chat_id)
+    admin_usernames = ['@' + admin.user.username for admin in chat_admins if admin.user.username is not None]
+
+    if reported_user in admin_usernames:
+        # If the reported user is an admin, send a message saying that admins cannot be reported
+        context.bot.send_message(chat_id, text="Nice try lol")
+    else:
+        admin_mentions = ' '.join(admin_usernames)
+
+        report_message = f"Reported Message to admins.\n {admin_mentions}\n"
+        # Send the message as plain text
+        message = context.bot.send_message(chat_id, text=report_message, disable_web_page_preview=True)
+
+        # Immediately edit the message to remove the usernames, using Markdown for the new message
+        context.bot.edit_message_text(chat_id=chat_id, message_id=message.message_id, text="⚠️ Message Reported to Admins ⚠️", parse_mode='Markdown', disable_web_page_preview=True)
+
+def save(update: Update, context: CallbackContext):
+    msg = None
+    if rate_limit_check():
+        target_message = update.message.reply_to_message
+        if target_message is None:
+            msg = update.message.reply_text("Please reply to the message you want to save with /save.")
+            return
+
+        user = update.effective_user
+        if user is None:
+            msg = update.message.reply_text("Could not identify the user.")
+            return
+
+        # Determine the type of the message
+        content = None
+        content_type = None
+        if target_message.text:
+            content = target_message.text
+            content_type = 'text'
+        elif target_message.photo:
+            content = target_message.photo[-1].file_id
+            content_type = 'photo'
+        elif target_message.audio:
+            content = target_message.audio.file_id
+            content_type = 'audio'
+        elif target_message.document:
+            content = target_message.document.file_id
+            content_type = 'document'
+        elif target_message.animation:
+            content = target_message.animation.file_id
+            content_type = 'animation'
+        elif target_message.video:
+            content = target_message.video.file_id
+            content_type = 'video'
+        elif target_message.voice:
+            content = target_message.voice.file_id
+            content_type = 'voice'
+        elif target_message.video_note:
+            content = target_message.video_note.file_id
+            content_type = 'video_note'
+        elif target_message.sticker:
+            content = target_message.sticker.file_id
+            content_type = 'sticker'
+        elif target_message.contact:
+            content = target_message.contact
+            content_type = 'contact'
+        elif target_message.location:
+            content = target_message.location
+            content_type = 'location'
+        else:
+            msg = update.message.reply_text("The message format is not supported.")
+            return
+
+        # Send the message or media to the user's DM
+        try:
+            if content_type == 'text':
+                context.bot.send_message(chat_id=user.id, text=content)
+            elif content_type in ['photo', 'audio', 'document', 'animation', 'video', 'voice', 'video_note', 'sticker']:
+                send_function = getattr(context.bot, f'send_{content_type}')
+                send_function(chat_id=user.id, **{content_type: content})
+            elif content_type == 'contact':
+                context.bot.send_contact(chat_id=user.id, phone_number=content.phone_number, first_name=content.first_name, last_name=content.last_name)
+            elif content_type == 'location':
+                context.bot.send_location(chat_id=user.id, latitude=content.latitude, longitude=content.longitude)
+            
+
+            msg = update.message.reply_text("Check your DMs.")
+        except Exception as e:
+            msg = update.message.reply_text(f"Failed to send DM: {str(e)}")
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+
+    if msg is not None:
+        track_message(msg)
+
+
+
+
+
 
 
 def help(update: Update, context: CallbackContext) -> None:
@@ -882,6 +1383,9 @@ def help_buttons(update: Update, context: CallbackContext) -> None:
     #     liquidity(update, context)
     # elif query.data == 'help_volume':
     #     volume(update, context)
+
+
+
 
 #region Play Game
 def play(update: Update, context: CallbackContext) -> None:
@@ -1111,106 +1615,6 @@ def fetch_random_word() -> str:
 #     if msg is not None:
 #         track_message(msg)
 
-
-
-
-
-def report(update: Update, context: CallbackContext) -> None:
-    chat_id = update.effective_chat.id
-
-    reported_user = update.message.reply_to_message.from_user.username
-
-    # Get the list of admins
-    chat_admins = context.bot.get_chat_administrators(chat_id)
-    admin_usernames = ['@' + admin.user.username for admin in chat_admins if admin.user.username is not None]
-
-    if reported_user in admin_usernames:
-        # If the reported user is an admin, send a message saying that admins cannot be reported
-        context.bot.send_message(chat_id, text="Nice try lol")
-    else:
-        admin_mentions = ' '.join(admin_usernames)
-
-        report_message = f"Reported Message to admins.\n {admin_mentions}\n"
-        # Send the message as plain text
-        message = context.bot.send_message(chat_id, text=report_message, disable_web_page_preview=True)
-
-        # Immediately edit the message to remove the usernames, using Markdown for the new message
-        context.bot.edit_message_text(chat_id=chat_id, message_id=message.message_id, text="⚠️ Message Reported to Admins ⚠️", parse_mode='Markdown', disable_web_page_preview=True)
-
-def save(update: Update, context: CallbackContext):
-    msg = None
-    if rate_limit_check():
-        target_message = update.message.reply_to_message
-        if target_message is None:
-            msg = update.message.reply_text("Please reply to the message you want to save with /save.")
-            return
-
-        user = update.effective_user
-        if user is None:
-            msg = update.message.reply_text("Could not identify the user.")
-            return
-
-        # Determine the type of the message
-        content = None
-        content_type = None
-        if target_message.text:
-            content = target_message.text
-            content_type = 'text'
-        elif target_message.photo:
-            content = target_message.photo[-1].file_id
-            content_type = 'photo'
-        elif target_message.audio:
-            content = target_message.audio.file_id
-            content_type = 'audio'
-        elif target_message.document:
-            content = target_message.document.file_id
-            content_type = 'document'
-        elif target_message.animation:
-            content = target_message.animation.file_id
-            content_type = 'animation'
-        elif target_message.video:
-            content = target_message.video.file_id
-            content_type = 'video'
-        elif target_message.voice:
-            content = target_message.voice.file_id
-            content_type = 'voice'
-        elif target_message.video_note:
-            content = target_message.video_note.file_id
-            content_type = 'video_note'
-        elif target_message.sticker:
-            content = target_message.sticker.file_id
-            content_type = 'sticker'
-        elif target_message.contact:
-            content = target_message.contact
-            content_type = 'contact'
-        elif target_message.location:
-            content = target_message.location
-            content_type = 'location'
-        else:
-            msg = update.message.reply_text("The message format is not supported.")
-            return
-
-        # Send the message or media to the user's DM
-        try:
-            if content_type == 'text':
-                context.bot.send_message(chat_id=user.id, text=content)
-            elif content_type in ['photo', 'audio', 'document', 'animation', 'video', 'voice', 'video_note', 'sticker']:
-                send_function = getattr(context.bot, f'send_{content_type}')
-                send_function(chat_id=user.id, **{content_type: content})
-            elif content_type == 'contact':
-                context.bot.send_contact(chat_id=user.id, phone_number=content.phone_number, first_name=content.first_name, last_name=content.last_name)
-            elif content_type == 'location':
-                context.bot.send_location(chat_id=user.id, latitude=content.latitude, longitude=content.longitude)
-            
-
-            msg = update.message.reply_text("Check your DMs.")
-        except Exception as e:
-            msg = update.message.reply_text(f"Failed to send DM: {str(e)}")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-
-    if msg is not None:
-        track_message(msg)
 #endregion Main Slash Commands
 
 #region Ethereum Logic
@@ -1266,69 +1670,7 @@ def get_token_price_in_fiat(contract_address, currency):
     token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
     return token_price_in_fiat
 
-#region Chart
-def fetch_ohlcv_data(time_frame, chain, liquidity_address):
-    now = datetime.now()
-    one_hour_ago = now - timedelta(hours=1)
-    start_of_hour_timestamp = int(one_hour_ago.timestamp())
 
-    url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{liquidity_address}/ohlcv/{time_frame}"
-    params = {
-        'aggregate': '1' + time_frame[0],  # '1m', '1h', '1d' depending on the time frame
-        'before_timestamp': start_of_hour_timestamp,
-        'limit': '60',  # Fetch only the last hour data
-        'currency': 'usd'
-    }
-    print(f"Fetching OHLCV data from URL: {url} with params: {params}")
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print("Failed to fetch data:", response.status_code, response.text)
-        return None
-
-def prepare_data_for_chart(ohlcv_data):
-    ohlcv_list = ohlcv_data['data']['attributes']['ohlcv_list']
-    data = [{
-        'Date': pd.to_datetime(item[0], unit='s'),
-        'Open': item[1],
-        'High': item[2],
-        'Low': item[3],
-        'Close': item[4],
-        'Volume': item[5]
-    } for item in ohlcv_list]
-
-    data_frame = pd.DataFrame(data)
-    data_frame.sort_values('Date', inplace=True)
-    data_frame.set_index('Date', inplace=True)
-    return data_frame
-
-def plot_candlestick_chart(data_frame, group_id):
-    mc = mpf.make_marketcolors(
-        up='#2dc60e',
-        down='#ff0000',
-        edge='inherit',
-        wick='inherit',
-        volume='inherit'
-    )
-    s = mpf.make_mpf_style(
-        marketcolors=mc,
-        rc={
-            'font.size': 8,
-            'axes.labelcolor': '#2dc60e',
-            'axes.edgecolor': '#2dc60e',
-            'xtick.color': '#2dc60e',
-            'ytick.color': '#2dc60e',
-            'grid.color': '#0f3e07',
-            'grid.linestyle': '--',
-            'figure.facecolor': 'black',
-            'axes.facecolor': 'black'
-        }
-    )
-    save_path = f'/tmp/candlestick_chart_{group_id}.png'
-    mpf.plot(data_frame, type='candle', style=s, volume=True, savefig=save_path)
-    print(f"Chart saved to {save_path}")
-#endregion Chart
 
 #region Buybot
 # def monitor_transfers():
@@ -1384,176 +1726,6 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Buybot
 
 #endregion Ethereum Logic
-
-#region Ethereum Slash Commands
-def price(update: Update, context: CallbackContext) -> None:
-    # Fetch group-specific contract information
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return  # Early exit if no data found
-
-    contract_address = group_data.get('contract_address')
-    if not contract_address:
-        update.message.reply_text("Contract address not found for this group.")
-        return
-
-    # Proceed with price fetching
-    currency = context.args[0].lower() if context.args else 'usd'
-    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
-        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
-        return
-
-    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
-    if token_price_in_fiat is not None:
-        formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
-    else:
-        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
-
-def ca(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if rate_limit_check():
-        group_data = fetch_group_info(update, context)
-        if group_data is None:
-            return  # Early exit if no data is found
-
-        contract_address = group_data.get('contract_address')
-        if not contract_address:
-            update.message.reply_text("Contract address not found for this group.")
-            return
-        
-        msg = update.message.reply_text(contract_address)
-
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-
-def liquidity(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return
-
-    lp_address = group_data.get('liquidity_address')
-    chain = group_data.get('chain')
-
-    if not lp_address or not chain:
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
-
-    if rate_limit_check():
-        liquidity_usd = get_liquidity(chain, lp_address)
-        if liquidity_usd:
-            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
-        else:
-            msg = update.message.reply_text("Failed to fetch liquidity data.")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-
-def get_liquidity(chain, lp_address):
-    try:
-        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        liquidity_usd = data['data']['attributes']['reserve_in_usd']
-        return liquidity_usd
-    except requests.RequestException as e:
-        print(f"Failed to fetch liquidity data: {str(e)}")
-        return None
-    
-def volume(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_data = fetch_group_info(update, context)
-
-    if group_data is None:
-        return
-
-    lp_address = group_data.get('liquidity_address')
-    chain = group_data.get('chain')    
-
-    if not lp_address or not chain:
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
-
-    if rate_limit_check():
-        volume_24h_usd = get_volume(chain, lp_address)
-        if volume_24h_usd:
-            msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd}")
-        else:
-            msg = update.message.reply_text("Failed to fetch volume data.")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-    
-def get_volume(chain, lp_address):
-    try:
-        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        volume_24h_usd = data['data']['attributes']['volume_usd']['h24']
-        return volume_24h_usd
-    except requests.RequestException as e:
-        print(f"Failed to fetch volume data: {str(e)}")
-        return None
-
-def chart(update: Update, context: CallbackContext) -> None:
-    args = context.args
-    time_frame = 'minute'  # default to minute if no argument is provided
-    
-    if args:
-        interval_arg = args[0].lower()
-        if interval_arg == 'h':
-            time_frame = 'hour'
-        elif interval_arg == 'd':
-            time_frame = 'day'
-        elif interval_arg == 'm':
-            time_frame = 'minute'
-        else:
-            msg = update.message.reply_text('Invalid time frame specified. Please use /chart with m, h, or d.')
-            return
-        
-    if rate_limit_check():
-        # Fetch group-specific contract information
-        group_data = fetch_group_info(update, context)
-        if group_data is None:
-            return  # Early exit if no data is found
-        
-        chain = group_data.get('chain')
-        if not chain:
-            update.message.reply_text("Chain not found for this group.")
-            return
-        liquidity_address = group_data.get('liquidity_address')
-        if not liquidity_address:
-            update.message.reply_text("Contract address not found for this group.")
-            return
-
-        group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
-        ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
-        if ohlcv_data:
-            data_frame = prepare_data_for_chart(ohlcv_data)
-            plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
-            msg = update.message.reply_photo(
-                photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
-                caption=f"\n[Dexscreener](https://dexscreener.com/{chain}/{liquidity_address}) • [Dextools](https://www.dextools.io/app/{chain}/pair-explorer/{liquidity_address})\n",
-                parse_mode='Markdown'
-            )
-        else:
-            msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-#endregion Ethereum Slash Commands
 
 #region User Verification
 def handle_new_user(update: Update, context: CallbackContext) -> None:
@@ -1781,171 +1953,25 @@ def verification_timeout(context: CallbackContext) -> None:
         track_message(msg)
 #endregion User Verification
 
-#region Admin Controls
-def unmute_user(context: CallbackContext) -> None:
-    job = context.job
-    context.bot.restrict_chat_member(
-        chat_id=job.context['chat_id'],
-        user_id=job.context['user_id'],
-        permissions=ChatPermissions(
-            can_send_messages=True,
-            can_send_media_messages=True,
-            can_send_other_messages=True,
-            can_send_videos=True,
-            can_send_photos=True,
-            can_send_audios=True
-            )
-    )
 
-def handle_message(update: Update, context: CallbackContext) -> None:
-    
-    delete_unallowed_addresses(update, context)
-    delete_filtered_phrases(update, context)
-    delete_blocked_links(update, context)
-
-    handle_guess(update, context)
-
-    handle_setup_inputs_from_user(update, context)
-
-    if is_user_admin(update, context):
-        return
-    
-    user_id = update.message.from_user.id
-    chat_id = update.message.chat.id
-    username = update.message.from_user.username or update.message.from_user.first_name
-    msg = None
-
-    if anti_spam.is_spam(user_id):
-        mute_time = anti_spam.mute_time  # Get the mute time from AntiSpam class
-        msg = update.message.reply_text(f'{username}, you are spamming. You have been muted for {mute_time} seconds.')
-
-        # Mute the user for the mute time
-        until_date = int(time.time() + mute_time)
-        context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user_id,
-            permissions=ChatPermissions(can_send_messages=False),
-            until_date=until_date
-        )
-
-        # Schedule job to unmute the user
-        job_queue = context.job_queue
-        job_queue.run_once(unmute_user, mute_time, context={'chat_id': chat_id, 'user_id': user_id})
-    
-    if msg is not None:
-        track_message(msg)
-
-def rate_limit_check():
-    global last_check_time, command_count
-    current_time = time.time()
-
-    # Reset count if time period has expired
-    if current_time - last_check_time > TIME_PERIOD:
-        command_count = 0
-        last_check_time = current_time
-
-    # Check if the bot is within the rate limit
-    if command_count < RATE_LIMIT:
-        command_count += 1
-        return True
-    else:
-        return False
-
-def is_user_admin(update: Update, context: CallbackContext) -> bool:
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    if update.effective_chat.type == 'private':
-        print("User is in a private chat.")
-        return False
-
-    # Check if the user is an admin in this chat
-    chat_admins = context.bot.get_chat_administrators(chat_id)
-    user_is_admin = any(admin.user.id == user_id for admin in chat_admins)
-
-    return user_is_admin
-
-def delete_filtered_phrases(update: Update, context: CallbackContext):
-    print("Checking message for filtered phrases...")
-
-    message_text = update.message.text
-
-    if message_text is None:
-        print("No text in message.")
-        return
-
-    message_text = update.message.text.lower()
-
-    docs = db.collection('filters').stream()
-
-    filtered_phrases = [doc.id for doc in docs]
-    
-    for phrase in filtered_phrases:
-        if phrase in message_text:
-            print(f"Found filter: {phrase}")
-            try:
-                update.message.delete()
-                print("Message deleted.")
-            except Exception as e:  # Catch potential errors in message deletion
-                print(f"Error deleting message: {e}")
-            break  # Exit loop after deleting the message
-
-def delete_blocked_links(update: Update, context: CallbackContext):
-    print("Checking message for unallowed Telegram links...")
-    message_text = update.message.text
-
-    if message_text is None:
-        print("No text in message.")
-        return
-
-    found_links = telegram_links_pattern.findall(message_text)
-    print(f"Found Telegram links: {found_links}")
-
-    allowed_links = [
-        'https://t.me/tukyogames',
-        'https://t.me/tukyowave',
-        'https://t.me/tukyogamesannouncements'
-    ]
-
-    for link in found_links:
-        if link not in allowed_links:
-            try:
-                update.message.delete()
-                print("Deleted a message with unallowed Telegram link.")
-                return  # Stop further checking if a message is deleted
-            except Exception as e:
-                print(f"Failed to delete message: {e}")
-
-def delete_service_messages(update, context):
-    # Check if the message ID is marked as non-deletable
-    non_deletable_message_id = context.chat_data.get('non_deletable_message_id')
-    if update.message.message_id == non_deletable_message_id:
-        return  # Do not delete this message
-
-    if update.message.left_chat_member or update.message.new_chat_members:
-        try:
-            context.bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
-            print(f"Deleted service message in chat {update.message.chat_id}")
-        except Exception as e:
-            print(f"Failed to delete service message: {str(e)}")
-#endregion Admin Controls
 
 #region Admin Slash Commands
 def admin_help(update: Update, context: CallbackContext) -> None:
     msg = None
     if is_user_admin(update, context):
         msg = update.message.reply_text(
-            "Admin commands:\n"
-            "/cleanbot - Cleans all bot messages\n"
-            "/cleargames - Clear all active games\n"
-            "/antiraid - Manage anti-raid settings\n"
-            "/mute - Mute a user\n"
-            "/unmute - Unmute a user\n"
-            "/kick - Kick a user\n"
-            "/warn - Warn a user\n"
-            "/filter - Filter a word or phrase\n"
-            "/removefilter - Remove a filtered word or phrase\n"
-            "/filterlist - List all filtered words and phrases\n"
+            "*Admin commands:*\n"
+            "*/cleanbot*\nCleans all bot messages\n"
+            "*/cleargames*\nClear all active games\n"
+            "*/antiraid*\nManage anti-raid settings\n"
+            "*/mute*\nMute a user\n"
+            "*/unmute*\nUnmute a user\n"
+            "*/kick*\nKick a user\n"
+            "*/warn*\nWarn a user\n"
+            "*/filter*\nFilter a word or phrase\n"
+            "*/removefilter*\nRemove a filtered word or phrase\n"
+            "*/filterlist*\nList all filtered words and phrases\n",
+            parse_mode='Markdown'
         )
     
     if msg is not None:
@@ -2110,16 +2136,16 @@ def main() -> None:
     #endregion General Slash Command Handlers
 
     #region Admin Slash Command Handlers
-    # dispatcher.add_handler(CommandHandler("adminhelp", admin_help))
+    dispatcher.add_handler(CommandHandler("adminhelp", admin_help))
     # dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
     # dispatcher.add_handler(CommandHandler('cleargames', cleargames))
     # dispatcher.add_handler(CommandHandler('antiraid', antiraid))
     # dispatcher.add_handler(CommandHandler("mute", mute))
     # dispatcher.add_handler(CommandHandler("unmute", unmute))
     # dispatcher.add_handler(CommandHandler("kick", kick))
-    # dispatcher.add_handler(CommandHandler("filter", filter))
-    # dispatcher.add_handler(CommandHandler("removefilter", remove_filter))
-    # dispatcher.add_handler(CommandHandler("filterlist", filter_list))
+    dispatcher.add_handler(CommandHandler("block", block))
+    dispatcher.add_handler(CommandHandler("removeblock", remove_block))
+    dispatcher.add_handler(CommandHandler("blocklist", blocklist))
     # dispatcher.add_handler(CommandHandler("warn", warn))
     #endregion Admin Slash Command Handlers
     
