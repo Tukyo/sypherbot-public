@@ -1097,7 +1097,7 @@ def delete_blocked_links(update: Update, context: CallbackContext):
 
     for link in found_links:
         normalized_link = link.replace('http://', '').replace('https://', '')
-        if normalized_link not in allowlist_items:
+        if not any(normalized_link.startswith(allowed_item) for allowed_item in allowlist_items):
             try:
                 update.message.delete()
                 print("Deleted a message with unallowed link.")
