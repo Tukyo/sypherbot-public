@@ -57,31 +57,23 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 ### /filterlist - Get a list of filtered words
 #
 
-# with open('config.json') as f:
-#     config = json.load(f)
-
-# Load environment variables from .env file
 load_dotenv()
 
-# Get the Telegram API token from environment variables
 TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 
 VERIFICATION_LETTERS = os.getenv('VERIFICATION_LETTERS') # TODO: Move to firebase
-BASE_ENDPOINT = os.getenv('BASE_ENDPOINT') # TODO: Move to firebase
 
-web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
+# BASE_ENDPOINT = os.getenv('BASE_ENDPOINT') # TODO: Move to firebase
+# web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
 
 eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 telegram_links_pattern = re.compile(r'https://t.me/\S+')
 
-if web3.is_connected():
-    network_id = web3.net.version
-    print(f"Connected to Ethereum node on network {network_id}")
-else:
-    print("Failed to connect")
-
-# Create a contract instance
-# contract = web3.eth.contract(address=contract_address, abi=abi)
+# if web3.is_connected():
+#     network_id = web3.net.version
+#     print(f"Connected to Ethereum node on network {network_id}")
+# else:
+#     print("Failed to connect")
 
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
@@ -115,93 +107,93 @@ db = firestore.client()
 print("Firebase initialized.")
 
 #region Database Slash Commands
-def filter(update, context):
-    if is_user_admin(update, context):
+# def filter(update, context):
+#     if is_user_admin(update, context):
 
-        command_text = update.message.text[len('/filter '):].strip().lower()
+#         command_text = update.message.text[len('/filter '):].strip().lower()
 
-        if not command_text:
-            update.message.reply_text("Please provide some text to filter.")
-            return
+#         if not command_text:
+#             update.message.reply_text("Please provide some text to filter.")
+#             return
         
-        # Create or update the document in the 'filtered-words' collection
-        doc_ref = db.collection('filters').document(command_text)
+#         # Create or update the document in the 'filtered-words' collection
+#         doc_ref = db.collection('filters').document(command_text)
 
-        # Check if document exists
-        doc = doc_ref.get()
-        if doc.exists:
-            update.message.reply_text(f"'{command_text}' is already filtered.")
-        else:
-            # If document does not exist, create it with initial values
-            doc_ref.set({
-                'text': command_text,
-            })
+#         # Check if document exists
+#         doc = doc_ref.get()
+#         if doc.exists:
+#             update.message.reply_text(f"'{command_text}' is already filtered.")
+#         else:
+#             # If document does not exist, create it with initial values
+#             doc_ref.set({
+#                 'text': command_text,
+#             })
 
-            update.message.reply_text(f"'{command_text}' filtered!")
+#             update.message.reply_text(f"'{command_text}' filtered!")
 
-def remove_filter(update, context):
-    if is_user_admin(update, context):
+# def remove_filter(update, context):
+#     if is_user_admin(update, context):
 
-        command_text = update.message.text[len('/removefilter '):].strip().lower()
+#         command_text = update.message.text[len('/removefilter '):].strip().lower()
 
-        if not command_text:
-            update.message.reply_text("Please provide some text to remove.")
-            return
+#         if not command_text:
+#             update.message.reply_text("Please provide some text to remove.")
+#             return
 
-        # Get the document in the 'filtered-words' collection
-        doc_ref = db.collection('filters').document(command_text)
+#         # Get the document in the 'filtered-words' collection
+#         doc_ref = db.collection('filters').document(command_text)
 
-        # Check if document exists
-        doc = doc_ref.get()
-        if doc.exists:
-            # If document exists, delete it
-            doc_ref.delete()
-            update.message.reply_text(f"'{command_text}' removed from filters!")
-        else:
-            update.message.reply_text(f"'{command_text}' is not in the filters.")
+#         # Check if document exists
+#         doc = doc_ref.get()
+#         if doc.exists:
+#             # If document exists, delete it
+#             doc_ref.delete()
+#             update.message.reply_text(f"'{command_text}' removed from filters!")
+#         else:
+#             update.message.reply_text(f"'{command_text}' is not in the filters.")
 
-def filter_list(update, context):
-    if is_user_admin(update, context):
-        docs = db.collection('filters').stream()
+# def filter_list(update, context):
+#     if is_user_admin(update, context):
+#         docs = db.collection('filters').stream()
 
-        filters = [doc.id for doc in docs]
-        message = "\n".join(filters)
+#         filters = [doc.id for doc in docs]
+#         message = "\n".join(filters)
 
-        update.message.reply_text(message)
+#         update.message.reply_text(message)
 
-def warn(update, context):
-    if is_user_admin(update, context):
+# def warn(update, context):
+#     if is_user_admin(update, context):
 
-        user_id = update.message.reply_to_message.from_user.id
+#         user_id = update.message.reply_to_message.from_user.id
 
-        doc_ref = db.collection('warns').document(str(user_id))
+#         doc_ref = db.collection('warns').document(str(user_id))
 
-        doc = doc_ref.get()
-        if doc.exists:
-            warnings = doc.to_dict()['warnings']
-            doc_ref.update({
-                'warnings': warnings + 1,
-            })
-            update.message.reply_text(f"{user_id} has been warned. Total warnings: {warnings + 1}")
-            check_warns(update, context, user_id)
-        else:
-            doc_ref.set({
-                'id': user_id,
-                'warnings': 1,
-            })
-            update.message.reply_text(f"{user_id} has been warned. Total warnings: 1")
+#         doc = doc_ref.get()
+#         if doc.exists:
+#             warnings = doc.to_dict()['warnings']
+#             doc_ref.update({
+#                 'warnings': warnings + 1,
+#             })
+#             update.message.reply_text(f"{user_id} has been warned. Total warnings: {warnings + 1}")
+#             check_warns(update, context, user_id)
+#         else:
+#             doc_ref.set({
+#                 'id': user_id,
+#                 'warnings': 1,
+#             })
+#             update.message.reply_text(f"{user_id} has been warned. Total warnings: 1")
 
-def check_warns(update, context, user_id):
-    doc_ref = db.collection('warns').document(str(user_id))
+# def check_warns(update, context, user_id):
+#     doc_ref = db.collection('warns').document(str(user_id))
 
-    doc = doc_ref.get()
-    if doc.exists:
-        warnings = doc.to_dict()['warnings']
+#     doc = doc_ref.get()
+#     if doc.exists:
+#         warnings = doc.to_dict()['warnings']
 
-        if warnings >= 3:
-            context.bot.kick_chat_member(update.message.chat.id, user_id)
-            update.message.reply_text(f"Goodbye {user_id}!")
-#endregion Database Slash Commands
+#         if warnings >= 3:
+#             context.bot.kick_chat_member(update.message.chat.id, user_id)
+#             update.message.reply_text(f"Goodbye {user_id}!")
+# #endregion Database Slash Commands
 
 #endregion Firebase
 
@@ -328,6 +320,10 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         [
             InlineKeyboardButton("Ethereum", callback_data='setup_ethereum'),
             InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
+        ],
+        [
+            InlineKeyboardButton("Admin", callback_data='setup_admin'),
+            InlineKeyboardButton("Verification", callback_data='setup_verification')
         ],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
@@ -477,6 +473,10 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
             pass
         elif update.message.document:
             handle_ABI(update, context)
+    elif setup_stage == 'setup_password_verification':
+        handle_verification_question(update, context)
+    elif setup_stage == 'verification_question':
+        handle_verification_answer(update, context)
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -520,6 +520,195 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
             'chain': chain,
         })
         context.user_data['setup_stage'] = None
+
+def setup_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_verification':
+        setup_verification(update, context)
+
+def setup_verification(update: Update, context: CallbackContext) -> None:
+    keyboard = [
+        [
+            InlineKeyboardButton("Enable", callback_data='enable_verification'),
+            InlineKeyboardButton("Disable", callback_data='disable_verification')
+        ],
+        [
+            InlineKeyboardButton("Math", callback_data='math_verification'),
+            InlineKeyboardButton("Password", callback_data='password_verification')
+        ],
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Please choose whether to enable or disable verification.\n\nYou may also choose the verification method for your group.\n\nMath will present a random simple math equation to the new user.\n\nIf you choose password, you will be prompted to enter a question, then an answer. The answer must be 5 letters.\n\nExample: "What is a red fruit that falls from a tree? [apple].',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+
+def enable_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'enable_verification':
+        enable_verification(update, context)
+
+def enable_verification(update: Update, context: CallbackContext) -> None:
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification': True,
+        })
+    else:
+        group_doc.update({
+            'verification': True,
+        })
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Verification enabled for this group.'
+    )
+
+def disable_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'disable_verification':
+        disable_verification(update, context)
+
+def disable_verification(update: Update, context: CallbackContext) -> None:
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification': False,
+        })
+    else:
+        group_doc.update({
+            'verification': False,
+        })
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Verification disabled for this group.'
+    )
+
+def math_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'math_verification':
+        math_verification(update, context)
+
+def math_verification(update: Update, context: CallbackContext) -> None:
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification': True,
+            'verification_type': 'math',
+        })
+    else:
+        group_doc.update({
+            'verification': True,
+            'verification_type': 'math',
+        })
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Math verification enabled for this group.'
+    )
+
+def password_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'password_verification':
+        password_verification(update, context)
+
+def password_verification(update: Update, context: CallbackContext) -> None:
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification': True,
+            'verification_type': 'password',
+        })
+    else:
+        group_doc.update({
+            'verification': True,
+            'verification_type': 'password',
+        })
+
+    # Set the state in user_data
+    context.user_data['setup_password_verification'] = 'setup_password_verification'
+
+    # Ask the question for new users
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='What question would you like to use for verification?\n\nThis question will be presented to new users when they join your group.\n\nThey will need to answer the question with your five letter answer to gain access.'
+    )
+    
+def handle_verification_question(update: Update, context: CallbackContext) -> None:
+    # Store the question in user_data
+    context.user_data['verification_question'] = update.message.text
+
+    # Ask for the answer to the question
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='What is the five letter answer to the question?'
+    )
+
+def handle_verification_answer(update: Update, context: CallbackContext) -> None:
+    # Store the answer in user_data
+    context.user_data['verification_answer'] = update.message.text
+
+    # Update the database with the question and answer
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+    group_doc.update({
+        'verification_question': context.user_data['verification_question'],
+        'verification_answer': context.user_data['verification_answer'],
+    })
+
+    # Clear the state in user_data
+    context.user_data['setup_password_verification'] = None
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Password verification setup complete.'
+    )
+
 
 def cancel_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -841,7 +1030,6 @@ def fetch_random_word() -> str:
 
 
 
-
 # def sypher(update: Update, context: CallbackContext) -> None:
 #     msg = None
 #     if rate_limit_check():
@@ -885,6 +1073,10 @@ def fetch_random_word() -> str:
     
 #     if msg is not None:
 #         track_message(msg)
+
+
+
+
 
 def report(update: Update, context: CallbackContext) -> None:
     admins= [
@@ -1332,7 +1524,6 @@ def chart(update: Update, context: CallbackContext) -> None:
     
     if msg is not None:
         track_message(msg)
-
 #endregion Ethereum Slash Commands
 
 #region User Verification
@@ -1490,59 +1681,59 @@ def handle_start_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
 
-def handle_verification_button(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    user_id = query.from_user.id
-    letter = query.data.split('_')[2]  # Get the letter from callback_data
-    query.answer()
+# def handle_verification_button(update: Update, context: CallbackContext) -> None:
+#     query = update.callback_query
+#     user_id = query.from_user.id
+#     letter = query.data.split('_')[2]  # Get the letter from callback_data
+#     query.answer()
 
-    # Update user verification progress
-    if user_id in user_verification_progress:
-        user_verification_progress[user_id]['progress'].append(letter)
+#     # Update user verification progress
+#     if user_id in user_verification_progress:
+#         user_verification_progress[user_id]['progress'].append(letter)
 
-        # Only check the sequence after the fifth button press
-        if len(user_verification_progress[user_id]['progress']) == len(VERIFICATION_LETTERS):
-            if user_verification_progress[user_id]['progress'] == list(VERIFICATION_LETTERS):
-                context.bot.edit_message_text(
-                    chat_id=user_id,
-                    message_id=user_verification_progress[user_id]['verification_message_id'],
-                    text="Verification successful, you may now return to chat!"
-                )
-                print("User successfully verified.")
-                # Unmute the user in the main chat
-                context.bot.restrict_chat_member(
-                    chat_id=CHAT_ID,
-                    user_id=user_id,
-                    permissions=ChatPermissions(
-                        can_send_messages=True,
-                        can_send_media_messages=True,
-                        can_send_other_messages=True,
-                        can_send_videos=True,
-                        can_send_photos=True,
-                        can_send_audios=True
-                    )
-                )
-                current_jobs = context.job_queue.get_jobs_by_name(str(user_id))
-                for job in current_jobs:
-                    job.schedule_removal()
-            else:
-                context.bot.edit_message_text(
-                    chat_id=user_id,
-                    message_id=user_verification_progress[user_id]['verification_message_id'],
-                    text="Verification failed. Please try again.",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Start Verification", callback_data='start_verification')]])
-                )
-                print("User failed verification prompt.")
-            # Reset progress after verification attempt
-            user_verification_progress.pop(user_id)
-    else:
-        context.bot.edit_message_text(
-            chat_id=user_id,
-            message_id=user_verification_progress[user_id]['verification_message_id'],
-            text="Verification failed. Please try again.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Start Verification", callback_data='start_verification')]])
-        )
-        print("User failed verification prompt.")
+#         # Only check the sequence after the fifth button press
+#         if len(user_verification_progress[user_id]['progress']) == len(VERIFICATION_LETTERS):
+#             if user_verification_progress[user_id]['progress'] == list(VERIFICATION_LETTERS):
+#                 context.bot.edit_message_text(
+#                     chat_id=user_id,
+#                     message_id=user_verification_progress[user_id]['verification_message_id'],
+#                     text="Verification successful, you may now return to chat!"
+#                 )
+#                 print("User successfully verified.")
+#                 # Unmute the user in the main chat
+#                 context.bot.restrict_chat_member(
+#                     chat_id=CHAT_ID,
+#                     user_id=user_id,
+#                     permissions=ChatPermissions(
+#                         can_send_messages=True,
+#                         can_send_media_messages=True,
+#                         can_send_other_messages=True,
+#                         can_send_videos=True,
+#                         can_send_photos=True,
+#                         can_send_audios=True
+#                     )
+#                 )
+#                 current_jobs = context.job_queue.get_jobs_by_name(str(user_id))
+#                 for job in current_jobs:
+#                     job.schedule_removal()
+#             else:
+#                 context.bot.edit_message_text(
+#                     chat_id=user_id,
+#                     message_id=user_verification_progress[user_id]['verification_message_id'],
+#                     text="Verification failed. Please try again.",
+#                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Start Verification", callback_data='start_verification')]])
+#                 )
+#                 print("User failed verification prompt.")
+#             # Reset progress after verification attempt
+#             user_verification_progress.pop(user_id)
+#     else:
+#         context.bot.edit_message_text(
+#             chat_id=user_id,
+#             message_id=user_verification_progress[user_id]['verification_message_id'],
+#             text="Verification failed. Please try again.",
+#             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Start Verification", callback_data='start_verification')]])
+#         )
+#         print("User failed verification prompt.")
         
 def verification_timeout(context: CallbackContext) -> None:
     msg = None
@@ -1885,38 +2076,40 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("liquidity", liquidity))
     dispatcher.add_handler(CommandHandler("lp", liquidity))
     dispatcher.add_handler(CommandHandler("volume", volume))
-    dispatcher.add_handler(CommandHandler("report", report))
+    # dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
     #endregion General Slash Command Handlers
 
     #region Admin Slash Command Handlers
-    dispatcher.add_handler(CommandHandler("adminhelp", admin_help))
-    dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
-    dispatcher.add_handler(CommandHandler('cleargames', cleargames))
-    dispatcher.add_handler(CommandHandler('antiraid', antiraid))
-    dispatcher.add_handler(CommandHandler("mute", mute))
-    dispatcher.add_handler(CommandHandler("unmute", unmute))
-    dispatcher.add_handler(CommandHandler("kick", kick))
-    dispatcher.add_handler(CommandHandler("filter", filter))
-    dispatcher.add_handler(CommandHandler("removefilter", remove_filter))
-    dispatcher.add_handler(CommandHandler("filterlist", filter_list))
-    dispatcher.add_handler(CommandHandler("warn", warn))
+    # dispatcher.add_handler(CommandHandler("adminhelp", admin_help))
+    # dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
+    # dispatcher.add_handler(CommandHandler('cleargames', cleargames))
+    # dispatcher.add_handler(CommandHandler('antiraid', antiraid))
+    # dispatcher.add_handler(CommandHandler("mute", mute))
+    # dispatcher.add_handler(CommandHandler("unmute", unmute))
+    # dispatcher.add_handler(CommandHandler("kick", kick))
+    # dispatcher.add_handler(CommandHandler("filter", filter))
+    # dispatcher.add_handler(CommandHandler("removefilter", remove_filter))
+    # dispatcher.add_handler(CommandHandler("filterlist", filter_list))
+    # dispatcher.add_handler(CommandHandler("warn", warn))
     #endregion Admin Slash Command Handlers
     
     # Register the message handler for new users
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
     dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_message))
+    dp.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_verification_question))
+    dp.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_verification_answer))
 
     # Add a handler for deleting service messages
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
 
     # Register the callback query handler for button clicks
-    dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^verify_\d+$'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
-    dispatcher.add_handler(CallbackQueryHandler(help_buttons, pattern='^help_'))
+    # dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^verify_\d+$'))
+    # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
+    # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
+    # dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
+    # dispatcher.add_handler(CallbackQueryHandler(help_buttons, pattern='^help_'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ethereum, pattern='^setup_ethereum$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
@@ -1925,6 +2118,10 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|linea)$'))
+    dispatcher.add_handler(CallbackQueryHandler(enable_verification, pattern='^enable_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(disable_verification, pattern='^disable_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(math_verification, pattern='^math_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(password_verification, pattern='^password_verification$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
