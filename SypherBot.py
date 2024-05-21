@@ -2098,8 +2098,6 @@ def main() -> None:
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
     dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_message))
-    dp.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_verification_question))
-    dp.add_handler(MessageHandler(Filters.text & (~Filters.command), handle_verification_answer))
 
     # Add a handler for deleting service messages
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
