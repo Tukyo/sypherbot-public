@@ -61,12 +61,12 @@ load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 
-# BASE_ENDPOINT = os.getenv('BASE_ENDPOINT') # TODO: Move to firebase
-# web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
-
 eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 domain_pattern = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
+
+# BASE_ENDPOINT = os.getenv('BASE_ENDPOINT') # TODO: Move to firebase
+# web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
 
 # if web3.is_connected():
 #     network_id = web3.net.version
@@ -104,42 +104,6 @@ firebase_admin.initialize_app(cred)
 db = firestore.client()
 
 print("Firebase initialized.")
-
-#region Database Slash Commands
-# def warn(update, context):
-#     if is_user_admin(update, context):
-
-#         user_id = update.message.reply_to_message.from_user.id
-
-#         doc_ref = db.collection('warns').document(str(user_id))
-
-#         doc = doc_ref.get()
-#         if doc.exists:
-#             warnings = doc.to_dict()['warnings']
-#             doc_ref.update({
-#                 'warnings': warnings + 1,
-#             })
-#             update.message.reply_text(f"{user_id} has been warned. Total warnings: {warnings + 1}")
-#             check_warns(update, context, user_id)
-#         else:
-#             doc_ref.set({
-#                 'id': user_id,
-#                 'warnings': 1,
-#             })
-#             update.message.reply_text(f"{user_id} has been warned. Total warnings: 1")
-
-# def check_warns(update, context, user_id):
-#     doc_ref = db.collection('warns').document(str(user_id))
-
-#     doc = doc_ref.get()
-#     if doc.exists:
-#         warnings = doc.to_dict()['warnings']
-
-#         if warnings >= 3:
-#             context.bot.kick_chat_member(update.message.chat.id, user_id)
-#             update.message.reply_text(f"Goodbye {user_id}!")
-# #endregion Database Slash Commands
-
 #endregion Firebase
 
 #region Classes
@@ -220,7 +184,7 @@ def track_message(message):
     bot_messages.append((message.chat.id, message.message_id))
     print(f"Tracked message: {message.message_id}")
 
-#region Main Slash Commands
+#region Bot Logic
 def bot_added_to_group(update, context):
     new_members = update.message.new_chat_members
     if any(member.id != context.bot.id for member in new_members):
@@ -244,6 +208,204 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         group_doc.delete()
         delete_service_messages(update, context)
 
+def rate_limit_check():
+    global last_check_time, command_count
+    current_time = time.time()
+
+    # Reset count if time period has expired
+    if current_time - last_check_time > TIME_PERIOD:
+        command_count = 0
+        last_check_time = current_time
+
+    # Check if the bot is within the rate limit
+    if command_count < RATE_LIMIT:
+        command_count += 1
+        return True
+    else:
+        return False
+
+def is_user_admin(update: Update, context: CallbackContext) -> bool:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    if update.effective_chat.type == 'private':
+        print("User is in a private chat.")
+        return False
+
+    # Check if the user is an admin in this chat
+    chat_admins = context.bot.get_chat_administrators(chat_id)
+    user_is_admin = any(admin.user.id == user_id for admin in chat_admins)
+
+    return user_is_admin
+
+def fetch_group_info(update: Update, context: CallbackContext):
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    try:
+        doc_snapshot = group_doc.get()
+        if doc_snapshot.exists:
+            return doc_snapshot.to_dict()
+        else:
+            update.message.reply_text("Group data not found.")
+    except Exception as e:
+        update.message.reply_text(f"Failed to fetch group info: {str(e)}")
+    
+    return None
+
+def handle_message(update: Update, context: CallbackContext) -> None:
+    
+    delete_blocked_addresses(update, context)
+    delete_blocked_phrases(update, context)
+    delete_blocked_links(update, context)
+
+    handle_guess(update, context)
+
+    handle_setup_inputs_from_user(update, context)
+
+    if is_user_admin(update, context):
+        return
+    
+    user_id = update.message.from_user.id
+    chat_id = update.message.chat.id
+    username = update.message.from_user.username or update.message.from_user.first_name
+    msg = None
+
+    if anti_spam.is_spam(user_id):
+        mute_time = anti_spam.mute_time  # Get the mute time from AntiSpam class
+        msg = update.message.reply_text(f'{username}, you are spamming. You have been muted for {mute_time} seconds.')
+
+        # Mute the user for the mute time
+        until_date = int(time.time() + mute_time)
+        context.bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=user_id,
+            permissions=ChatPermissions(can_send_messages=False),
+            until_date=until_date
+        )
+
+        # Schedule job to unmute the user
+        job_queue = context.job_queue
+        job_queue.run_once(unmute_user, mute_time, context={'chat_id': chat_id, 'user_id': user_id})
+    
+    if msg is not None:
+        track_message(msg)
+
+def delete_blocked_addresses(update: Update, context: CallbackContext):
+    print("Checking message for unallowed addresses...")
+
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return
+    
+    message_text = update.message.text
+    
+    if message_text is None:
+        print("No text in message.")
+        return
+
+    found_addresses = eth_address_pattern.findall(message_text)
+
+    # Retrieve the contract and LP addresses from the fetched group info
+    allowed_addresses = [group_data.get('contract_address', '').lower(), group_data.get('liquidity_address', '').lower()]
+
+    print(f"Found addresses: {found_addresses}")
+    print(f"Allowed addresses: {allowed_addresses}")
+
+    for address in found_addresses:
+        if address.lower() not in allowed_addresses:
+            update.message.delete()
+            print("Deleted a message containing unallowed address.")
+            break
+
+def delete_blocked_links(update: Update, context: CallbackContext):
+    print("Checking message for unallowed links...")
+    message_text = update.message.text
+
+    if message_text is None:
+        print("No text in message.")
+        return
+
+    # Fetch the group-specific allowlist
+    group_info = fetch_group_info(update, context)
+    if not group_info:
+        print("No group info available.")
+        return
+
+    allowlist_field = 'allowlist'
+    allowlist_string = group_info.get(allowlist_field, "")
+    allowlist_items = [item.strip() for item in allowlist_string.split(',') if item.strip()]
+
+    # Regular expression to match all URLs
+    found_links = url_pattern.findall(message_text)
+    
+    # Regular expression to match any word with .[domain]
+    found_domains = domain_pattern.findall(message_text)
+
+    # Combine the found links and domains
+    found_items = found_links + found_domains
+    print(f"Found items: {found_items}")
+
+    for item in found_items:
+        normalized_item = item.replace('http://', '').replace('https://', '')
+        if not any(normalized_item.startswith(allowed_item) for allowed_item in allowlist_items):
+            try:
+                update.message.delete()
+                print("Deleted a message with unallowed item.")
+                return  # Stop further checking if a message is deleted
+            except Exception as e:
+                print(f"Failed to delete message: {e}")
+
+def delete_blocked_phrases(update: Update, context: CallbackContext):
+    if is_user_admin(update, context):
+        # Don't block admin messages
+        return
+
+    print("Checking message for filtered phrases...")
+    message_text = update.message.text
+
+    if message_text is None:
+        print("No text in message.")
+        return
+
+    message_text = message_text.lower()
+
+    # Fetch the group info to get the blocklist
+    group_info = fetch_group_info(update, context)
+    if not group_info:
+        print("No group info available.")
+        return
+
+    # Get the blocklist from the group info
+    blocklist_field = 'blocklist'
+    blocklist_string = group_info.get(blocklist_field, "")
+    blocklist_items = [item.strip() for item in blocklist_string.split(',') if item.strip()]
+
+    # Check each blocked phrase in the group's blocklist
+    for phrase in blocklist_items:
+        if phrase in message_text:
+            print(f"Found blocked phrase: {phrase}")
+            try:
+                update.message.delete()
+                print("Message deleted due to blocked phrase.")
+            except Exception as e:
+                print(f"Error deleting message: {e}")
+            break  # Exit loop after deleting the message to prevent multiple deletions for one message
+
+def delete_service_messages(update, context):
+    non_deletable_message_id = context.chat_data.get('non_deletable_message_id')
+    if update.message.message_id == non_deletable_message_id:
+        return  # Do not delete this message
+
+    if update.message.left_chat_member or update.message.new_chat_members:
+        try:
+            context.bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
+            print(f"Deleted service message in chat {update.message.chat_id}")
+        except Exception as e:
+            print(f"Failed to delete service message: {str(e)}")
+#endregion Bot Logic
+
+#region Bot Setup
 def cancel_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -724,6 +886,7 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
         chat_id=update.effective_chat.id,
         text='Password verification setup complete.'
     )
+#endregion Bot Setup
 
 #region Ethereum
 
@@ -979,187 +1142,6 @@ def unmute_user(context: CallbackContext) -> None:
             )
     )
 
-def handle_message(update: Update, context: CallbackContext) -> None:
-    
-    delete_blocked_addresses(update, context)
-    delete_blocked_phrases(update, context)
-    delete_blocked_links(update, context)
-
-    handle_guess(update, context)
-
-    handle_setup_inputs_from_user(update, context)
-
-    if is_user_admin(update, context):
-        return
-    
-    user_id = update.message.from_user.id
-    chat_id = update.message.chat.id
-    username = update.message.from_user.username or update.message.from_user.first_name
-    msg = None
-
-    if anti_spam.is_spam(user_id):
-        mute_time = anti_spam.mute_time  # Get the mute time from AntiSpam class
-        msg = update.message.reply_text(f'{username}, you are spamming. You have been muted for {mute_time} seconds.')
-
-        # Mute the user for the mute time
-        until_date = int(time.time() + mute_time)
-        context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user_id,
-            permissions=ChatPermissions(can_send_messages=False),
-            until_date=until_date
-        )
-
-        # Schedule job to unmute the user
-        job_queue = context.job_queue
-        job_queue.run_once(unmute_user, mute_time, context={'chat_id': chat_id, 'user_id': user_id})
-    
-    if msg is not None:
-        track_message(msg)
-
-def rate_limit_check():
-    global last_check_time, command_count
-    current_time = time.time()
-
-    # Reset count if time period has expired
-    if current_time - last_check_time > TIME_PERIOD:
-        command_count = 0
-        last_check_time = current_time
-
-    # Check if the bot is within the rate limit
-    if command_count < RATE_LIMIT:
-        command_count += 1
-        return True
-    else:
-        return False
-
-def is_user_admin(update: Update, context: CallbackContext) -> bool:
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    if update.effective_chat.type == 'private':
-        print("User is in a private chat.")
-        return False
-
-    # Check if the user is an admin in this chat
-    chat_admins = context.bot.get_chat_administrators(chat_id)
-    user_is_admin = any(admin.user.id == user_id for admin in chat_admins)
-
-    return user_is_admin
-
-def delete_blocked_addresses(update: Update, context: CallbackContext):
-    print("Checking message for unallowed addresses...")
-
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return
-    
-    message_text = update.message.text
-    
-    if message_text is None:
-        print("No text in message.")
-        return
-
-    found_addresses = eth_address_pattern.findall(message_text)
-
-    # Retrieve the contract and LP addresses from the fetched group info
-    allowed_addresses = [group_data.get('contract_address', '').lower(), group_data.get('liquidity_address', '').lower()]
-
-    print(f"Found addresses: {found_addresses}")
-    print(f"Allowed addresses: {allowed_addresses}")
-
-    for address in found_addresses:
-        if address.lower() not in allowed_addresses:
-            update.message.delete()
-            print("Deleted a message containing unallowed address.")
-            break
-
-def delete_blocked_links(update: Update, context: CallbackContext):
-    print("Checking message for unallowed links...")
-    message_text = update.message.text
-
-    if message_text is None:
-        print("No text in message.")
-        return
-
-    # Fetch the group-specific allowlist
-    group_info = fetch_group_info(update, context)
-    if not group_info:
-        print("No group info available.")
-        return
-
-    allowlist_field = 'allowlist'
-    allowlist_string = group_info.get(allowlist_field, "")
-    allowlist_items = [item.strip() for item in allowlist_string.split(',') if item.strip()]
-
-    # Regular expression to match all URLs
-    found_links = url_pattern.findall(message_text)
-    
-    # Regular expression to match any word with .[domain]
-    found_domains = domain_pattern.findall(message_text)
-
-    # Combine the found links and domains
-    found_items = found_links + found_domains
-    print(f"Found items: {found_items}")
-
-    for item in found_items:
-        normalized_item = item.replace('http://', '').replace('https://', '')
-        if not any(normalized_item.startswith(allowed_item) for allowed_item in allowlist_items):
-            try:
-                update.message.delete()
-                print("Deleted a message with unallowed item.")
-                return  # Stop further checking if a message is deleted
-            except Exception as e:
-                print(f"Failed to delete message: {e}")
-
-def delete_blocked_phrases(update: Update, context: CallbackContext):
-    if is_user_admin(update, context):
-        # Don't block admin messages
-        return
-
-    print("Checking message for filtered phrases...")
-    message_text = update.message.text
-
-    if message_text is None:
-        print("No text in message.")
-        return
-
-    message_text = message_text.lower()
-
-    # Fetch the group info to get the blocklist
-    group_info = fetch_group_info(update, context)
-    if not group_info:
-        print("No group info available.")
-        return
-
-    # Get the blocklist from the group info
-    blocklist_field = 'blocklist'
-    blocklist_string = group_info.get(blocklist_field, "")
-    blocklist_items = [item.strip() for item in blocklist_string.split(',') if item.strip()]
-
-    # Check each blocked phrase in the group's blocklist
-    for phrase in blocklist_items:
-        if phrase in message_text:
-            print(f"Found blocked phrase: {phrase}")
-            try:
-                update.message.delete()
-                print("Message deleted due to blocked phrase.")
-            except Exception as e:
-                print(f"Error deleting message: {e}")
-            break  # Exit loop after deleting the message to prevent multiple deletions for one message
-
-def delete_service_messages(update, context):
-    non_deletable_message_id = context.chat_data.get('non_deletable_message_id')
-    if update.message.message_id == non_deletable_message_id:
-        return  # Do not delete this message
-
-    if update.message.left_chat_member or update.message.new_chat_members:
-        try:
-            context.bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
-            print(f"Deleted service message in chat {update.message.chat_id}")
-        except Exception as e:
-            print(f"Failed to delete service message: {str(e)}")
-
 def block(update: Update, context: CallbackContext):
     if is_user_admin(update, context):
         command_text = update.message.text[len('/block '):].strip().lower()
@@ -1320,23 +1302,10 @@ def allowlist(update: Update, context: CallbackContext):
         except Exception as e:
             update.message.reply_text(f"Failed to retrieve allowlist: {str(e)}")
             print(f"Error retrieving allowlist: {e}")
-
-def fetch_group_info(update: Update, context: CallbackContext):
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    try:
-        doc_snapshot = group_doc.get()
-        if doc_snapshot.exists:
-            return doc_snapshot.to_dict()
-        else:
-            update.message.reply_text("Group data not found.")
-    except Exception as e:
-        update.message.reply_text(f"Failed to fetch group info: {str(e)}")
-    
-    return None
 #endregion Admin Controls
 
+
+# User Controls
 def report(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
 
@@ -1433,76 +1402,6 @@ def save(update: Update, context: CallbackContext):
 
     if msg is not None:
         track_message(msg)
-
-
-
-
-
-
-
-def help(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if rate_limit_check():
-        keyboard = [
-            [InlineKeyboardButton("/play", callback_data='help_play'),
-            InlineKeyboardButton("/endgame", callback_data='help_endgame')],
-            [InlineKeyboardButton("/tukyo", callback_data='help_tukyo'),
-            InlineKeyboardButton("/tukyogames", callback_data='help_tukyogames')],
-            [InlineKeyboardButton("/deSypher", callback_data='help_deSypher'),
-            InlineKeyboardButton("/sypher", callback_data='help_sypher'),
-            InlineKeyboardButton("/website", callback_data='help_website')],
-            [InlineKeyboardButton("/price", callback_data='help_price'),
-            InlineKeyboardButton("/chart", callback_data='help_chart')],
-            [InlineKeyboardButton("/contract", callback_data='help_contract'),
-            InlineKeyboardButton("/liquidity", callback_data='help_liquidity'),
-            InlineKeyboardButton("/volume", callback_data='help_volume')],
-            [InlineKeyboardButton("/whitepaper", callback_data='help_whitepaper'),]
-        ]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        msg = update.message.reply_text('Welcome to Sypher Bot! Below you will find all my commands:', reply_markup=reply_markup)
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-
-def help_buttons(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'help_play':
-        play(update, context)
-    elif query.data == 'help_endgame':
-        end_game(update, context)
-    # elif query.data == 'help_tukyo':
-    #     tukyo(update, context)
-    # elif query.data == 'help_tukyogames':
-    #     tukyogames(update, context)
-    # elif query.data == 'help_deSypher':
-    #     deSypher(update, context)
-    # elif query.data == 'help_whitepaper':
-    #     whitepaper(update, context)
-    # elif query.data == 'help_sypher':
-    #     sypher(update, context)
-    # elif query.data == 'help_contract':
-    #     ca(update, context)
-    # elif query.data == 'help_website':
-    #     website(update, context)
-    # elif query.data == 'help_price':
-    #     price(update, context)
-    # elif query.data == 'help_chart':
-    #     chart(update, context)
-    # elif query.data == 'help_liquidity':
-    #     liquidity(update, context)
-    # elif query.data == 'help_volume':
-    #     volume(update, context)
-
-
-
 
 #region Play Game
 def play(update: Update, context: CallbackContext) -> None:
@@ -1685,8 +1584,108 @@ def fetch_random_word() -> str:
         return random.choice(words)
 #endregion Play Game
 
+#endregion User Controls
 
 
+def warn(update: Update, context: CallbackContext):
+    if is_user_admin(update, context) and update.message.reply_to_message:
+        user_id = str(update.message.reply_to_message.from_user.id)
+        group_id = str(update.effective_chat.id)
+        group_doc = db.collection('groups').document(group_id)
+        
+        try:
+            doc_snapshot = group_doc.get()
+            if doc_snapshot.exists:
+                group_data = doc_snapshot.to_dict()
+                warnings_dict = group_data.get('warnings', {})
+                
+                # Increment the warning count for the user
+                current_warnings = warnings_dict.get(user_id, 0)
+                current_warnings += 1
+                warnings_dict[user_id] = current_warnings
+
+                # Update the group document with the new warnings count
+                group_doc.update({'warnings': warnings_dict})
+                update.message.reply_text(f"{user_id} has been warned. Total warnings: {current_warnings}")
+                
+                # Check if the user has reached the warning limit
+                check_warns(update, context, user_id, current_warnings)
+
+            else:
+                update.message.reply_text("Group data not found.")
+        
+        except Exception as e:
+            update.message.reply_text(f"Failed to update warnings: {str(e)}")
+
+def check_warns(update: Update, context: CallbackContext, user_id: str, warnings: int):
+    if warnings >= 3:
+        try:
+            context.bot.kick_chat_member(update.message.chat.id, int(user_id))
+            update.message.reply_text(f"Goodbye {user_id}!")
+        except Exception as e:
+            update.message.reply_text(f"Failed to kick {user_id}: {str(e)}")
+
+
+
+
+def help(update: Update, context: CallbackContext) -> None:
+    msg = None
+    if rate_limit_check():
+        keyboard = [
+            [
+                InlineKeyboardButton("/play", callback_data='help_play'),
+                InlineKeyboardButton("/endgame", callback_data='help_endgame')
+            ],
+            [
+                InlineKeyboardButton("/website", callback_data='help_website'),
+                InlineKeyboardButton("/contract", callback_data='help_contract')
+            ],
+            [
+                InlineKeyboardButton("/price", callback_data='help_price'),
+                InlineKeyboardButton("/chart", callback_data='help_chart')
+            ],
+            [
+                InlineKeyboardButton("/liquidity", callback_data='help_liquidity'),
+                InlineKeyboardButton("/volume", callback_data='help_volume')
+            ]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        msg = update.message.reply_text('Welcome to Sypher Bot! Below you will find all my commands:', reply_markup=reply_markup)
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+
+def help_buttons(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'help_play':
+        play(update, context)
+    elif query.data == 'help_endgame':
+        end_game(update, context)
+    # elif query.data == 'help_whitepaper':
+    #     whitepaper(update, context)
+    # elif query.data == 'help_contract':
+    #     ca(update, context)
+    # elif query.data == 'help_website':
+    #     website(update, context)
+    # elif query.data == 'help_price':
+    #     price(update, context)
+    # elif query.data == 'help_chart':
+    #     chart(update, context)
+    # elif query.data == 'help_liquidity':
+    #     liquidity(update, context)
+    # elif query.data == 'help_volume':
+    #     volume(update, context)
+
+
+#region Main Slash Commands
 
 # def sypher(update: Update, context: CallbackContext) -> None:
 #     msg = None
@@ -1734,7 +1733,9 @@ def fetch_random_word() -> str:
 
 #endregion Main Slash Commands
 
-#region Ethereum Logic
+
+
+
 def get_token_price_in_weth(contract_address):
     apiUrl = f"https://api.dexscreener.com/latest/dex/tokens/{contract_address}"
     try:
@@ -1842,7 +1843,6 @@ def get_token_price_in_fiat(contract_address, currency):
 #         track_message(msg)
 #endregion Buybot
 
-#endregion Ethereum Logic
 
 #region User Verification
 def handle_new_user(update: Update, context: CallbackContext) -> None:
@@ -2265,7 +2265,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("blocklist", blocklist))
     dispatcher.add_handler(CommandHandler("allow", allow))
     dispatcher.add_handler(CommandHandler("allowlist", allowlist))
-    # dispatcher.add_handler(CommandHandler("warn", warn))
+    dispatcher.add_handler(CommandHandler("warn", warn))
     #endregion Admin Slash Command Handlers
     
     # Register the message handler for new users
