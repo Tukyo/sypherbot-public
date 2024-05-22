@@ -439,13 +439,6 @@ def cancel_callback(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def cancel_end_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    print("User pressed cancel, ending setup.")
-    query.message.delete()
-    context.user_data['setup_stage'] = None
-
 def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
     setup_stage = context.user_data.get('setup_stage')
     print("Checking if user is in setup mode.")
@@ -541,7 +534,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Verification", callback_data='setup_verification'),
             InlineKeyboardButton("Ethereum", callback_data='setup_ethereum')
         ],
-        [InlineKeyboardButton("Cancel", callback_data='cancel_end')]
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
