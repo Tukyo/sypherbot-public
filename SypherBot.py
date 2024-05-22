@@ -1087,10 +1087,16 @@ def password_verification(update: Update, context: CallbackContext) -> None:
 
     menu_change(context, update)
 
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     # Ask the question for new users
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='What question would you like to use for verification?\n\nThis question will be presented to new users when they join your group.\n\nThey will need to answer the question with your five letter answer to gain access.'
+        text='What question would you like to use for verification?\n\nThis question will be presented to new users when they join your group.\n\nThey will need to answer the question with your five letter answer to gain access.',
+        reply_markup=reply_markup
     )
 
     if msg is not None:
@@ -1101,10 +1107,16 @@ def handle_verification_question(update: Update, context: CallbackContext) -> No
     # Store the question in user_data
     context.user_data['verification_question'] = update.message.text
 
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     # Ask for the answer to the question
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='What is the five letter answer to the question?'
+        text='What is the five letter answer to the question?',
+        reply_markup=reply_markup
     )
 
     context.user_data['setup_stage'] = 'setup_verification_question'
@@ -1134,10 +1146,18 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
 
     menu_change(context, update)
 
+    keyboard = [
+        [InlineKeyboardButton("Home", callback_data='setup_home')]
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Password verification setup complete.'
+        text='Password verification setup complete.',
+        reply_markup=reply_markup
     )
+    context.user_data['setup_verification_complete_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
