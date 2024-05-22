@@ -2564,8 +2564,6 @@ def main() -> None:
     # dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^verify_\d+$'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
-    # dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
-    # dispatcher.add_handler(CallbackQueryHandler(help_buttons, pattern='^help_'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ethereum, pattern='^setup_ethereum$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
@@ -2579,6 +2577,8 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(disable_verification, pattern='^disable_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(math_verification, pattern='^math_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(password_verification, pattern='^password_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
+    dispatcher.add_handler(CallbackQueryHandler(help_buttons, pattern='^help_'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
