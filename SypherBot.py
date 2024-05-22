@@ -893,16 +893,20 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
     if group_data is None:
         group_doc.set({
             'group_id': group_id,
-            'verification': True,
+            'verification_info': {
+                'verification': True
+            }
         })
     else:
         group_doc.update({
-            'verification': True,
+            'verification_info': {
+                'verification': True
+            }
         })
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Verification enabled for this group.'
+        text='Verification enabled for this group. Please choose a verification type if you have not already.'
     )
 
     if msg is not None:
@@ -927,13 +931,17 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
     if group_data is None:
         group_doc.set({
             'group_id': group_id,
-            'verification': False,
-            'verification_type': 'none'
+            'verification_info': {
+                'verification': False,
+                'verification_type': 'none'
+            }
         })
     else:
         group_doc.update({
-            'verification': False,
-            'verification_type': 'none'
+            'verification_info': {
+                'verification': False,
+                'verification_type': 'none'
+            }
         })
 
     msg = context.bot.send_message(
@@ -963,15 +971,19 @@ def math_verification(update: Update, context: CallbackContext) -> None:
     if group_data is None:
         group_doc.set({
             'group_id': group_id,
-            'verification': True,
-            'verification_type': 'math',
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'math'
+            }
         })
     else:
         group_doc.update({
-            'verification': True,
-            'verification_type': 'math',
-            'verification_question': 'none',
-            'verification_answer': 'none'
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'math',
+                'verification_question': 'none',
+                'verification_answer': 'none'
+            }
         })
 
     msg = context.bot.send_message(
@@ -1001,13 +1013,17 @@ def password_verification(update: Update, context: CallbackContext) -> None:
     if group_data is None:
         group_doc.set({
             'group_id': group_id,
-            'verification': True,
-            'verification_type': 'password',
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'password'
+            }
         })
     else:
         group_doc.update({
-            'verification': True,
-            'verification_type': 'password',
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'password'
+            }
         })
 
     # Set the state in user_data
@@ -1047,8 +1063,11 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
     group_doc.update({
-        'verification_question': context.user_data['verification_question'],
-        'verification_answer': context.user_data['verification_answer'],
+        'verification_info': {
+            'verification': True,
+            'verification_question': context.user_data['verification_question'],
+            'verification_answer': context.user_data['verification_answer']
+        }
     })
 
     # Clear the state in user_data
