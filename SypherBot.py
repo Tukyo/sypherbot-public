@@ -1246,8 +1246,9 @@ def verification_callback(update: Update, context: CallbackContext) -> None:
     chat_id = query.message.chat_id
     query.answer()
 
-    # Extract user_id from the callback_data
-    _, callback_user_id = callback_data.split('_')
+    # Extract group_id and user_id from the callback_data
+    _, callback_group_id, callback_user_id = callback_data.split('_')
+    callback_group_id = int(callback_group_id)
     callback_user_id = int(callback_user_id)
 
     if user_id != callback_user_id:
@@ -1255,14 +1256,10 @@ def verification_callback(update: Update, context: CallbackContext) -> None:
 
     if is_user_admin(update, context):
         return
-    
-    _, callback_group_id, callback_user_id = callback_data.split('_')
-    callback_group_id = int(callback_group_id)
-    callback_user_id = int(callback_user_id)
-    
+
     # Send a message to the user's DM to start the verification process
     start_verification_dm(callback_group_id, user_id, context)
-    
+
     # Optionally, you can edit the original message to indicate the button was clicked
     verification_started_message = query.edit_message_text(text="A verification message has been sent to your DMs. Please check your messages.")
     verification_started_id = verification_started_message.message_id
