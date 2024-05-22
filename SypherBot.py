@@ -428,11 +428,16 @@ def delete_service_messages(update, context):
 
 #region Bot Setup
 def cancel_callback(update: Update, context: CallbackContext) -> None:
+    msg = None
     query = update.callback_query
     query.answer()
-    print("User pressed cancel, returning to home setup screen.")
-    setup_home(update, context)
+    print("User pressed cancel, exiting setup.")
+    query.message.delete()
+    msg = query.message.reply_text("Setup cancelled.")
     context.user_data['setup_stage'] = None
+
+    if msg is not None:
+        track_message(msg)
 
 def cancel_end_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -1060,6 +1065,7 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
     group_doc.update({
         'verification_info': {
             'verification': True,
+            'verification_type': 'password',
             'verification_question': context.user_data['verification_question'],
             'verification_answer': context.user_data['verification_answer']
         }
@@ -2535,6 +2541,7 @@ def main() -> None:
     #endregion General Slash Command Handlers
 
     #region Admin Slash Command Handlers
+    dispatcher.add_handler(CommandHandler("setup", setup_home_callback))
     dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
     dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
