@@ -570,6 +570,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+#region Ethereum Setup
 def setup_ethereum_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -911,7 +912,9 @@ def complete_token_setup(group_id: str):
     })
 
     print(f"Added token name {token_name} and symbol {token_symbol} to group {group_id}")
+#endregion Ethereum Setup
 
+#regio Verification Setup
 def setup_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1155,6 +1158,7 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
 
     if msg is not None:
         track_message(msg)
+#region Verification Setup
 #endregion Bot Setup
 
 #region Ethereum
