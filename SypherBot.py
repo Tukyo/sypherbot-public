@@ -433,7 +433,7 @@ def cancel_callback(update: Update, context: CallbackContext) -> None:
     query.answer()
     print("User pressed cancel, exiting setup.")
     query.message.delete()
-    msg = query.message.reply_text("Setup cancelled.")
+    msg = context.bot.send_message(chat_id=update.effective_chat.id, text="Setup cancelled.")
     context.user_data['setup_stage'] = None
 
     if msg is not None:
@@ -569,7 +569,7 @@ def setup_ethereum(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("ABI", callback_data='setup_ABI')
         ],
         [
-            InlineKeyboardButton("Cancel", callback_data='cancel')
+            InlineKeyboardButton("Back", callback_data='setup_home')
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -590,7 +590,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        [InlineKeyboardButton("Back", callback_data='setup_ethereum')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -637,7 +637,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
     query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        [InlineKeyboardButton("Back", callback_data='setup_ethereum')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -688,7 +688,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
     query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        [InlineKeyboardButton("Back", callback_data='setup_ethereum')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -753,7 +753,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Harmony", callback_data='harmony'),
             InlineKeyboardButton("Mantle", callback_data='mantle')
         ],
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        [InlineKeyboardButton("Back", callback_data='setup_ethereum')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -851,7 +851,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Math", callback_data='math_verification'),
             InlineKeyboardButton("Password", callback_data='password_verification')
         ],
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
