@@ -27,7 +27,7 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 #
 ## Commands
 ### /start - Start the bot
-### /help - Get a list of commands
+### /commands - Get a list of commands
 ### /play - Start a mini-game of deSypher within Telegram
 ### /endgame - End your current game
 ### /contract /ca - Contract address for the SYPHER token
@@ -43,7 +43,7 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 ### /volume - 24-hour trading volume of the SYPHER token
 #
 ## Admin Commands
-### /adminhelp - Get a list of admin commands
+### /admincommands - Get a list of admin commands
 ### /createcommand - Create a new command
 ### /cleanbot - Clean all bot messages in the chat
 ### /cleargames - Clear all active games in the chat
@@ -64,15 +64,6 @@ TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 domain_pattern = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
-
-# BASE_ENDPOINT = os.getenv('BASE_ENDPOINT') # TODO: Move to firebase
-# web3 = Web3(Web3.HTTPProvider(BASE_ENDPOINT))
-
-# if web3.is_connected():
-#     network_id = web3.net.version
-#     print(f"Connected to Ethereum node on network {network_id}")
-# else:
-#     print("Failed to connect")
 
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
@@ -1078,203 +1069,6 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
 
 #region Ethereum
 
-#region Slash Commands
-def price(update: Update, context: CallbackContext) -> None:
-    # Fetch group-specific contract information
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return  # Early exit if no data found
-    
-    token_data = group_data.get('token')
-    if not token_data:
-        update.message.reply_text("Token data not found for this group.")
-        return
-
-    contract_address = token_data.get('contract_address')
-
-    if not contract_address:
-        update.message.reply_text("Contract address not found for this group.")
-        return
-
-    # Proceed with price fetching
-    currency = context.args[0].lower() if context.args else 'usd'
-    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
-        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
-        return
-
-    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
-    if token_price_in_fiat is not None:
-        formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}") # TODO: Replace 'Sypher' with Token name from group
-    else:
-        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
-
-def ca(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if rate_limit_check():
-        group_data = fetch_group_info(update, context)
-        if group_data is None:
-            return  # Early exit if no data is found
-        
-        token_data = group_data.get('token')
-        if not token_data:
-            update.message.reply_text("Token data not found for this group.")
-            return
-
-        contract_address = token_data.get('contract_address')
-
-        if not contract_address:
-            update.message.reply_text("Contract address not found for this group.")
-            return
-        
-        msg = update.message.reply_text(contract_address)
-
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-
-def liquidity(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return
-
-    token_data = group_data.get('token')
-    if not token_data:
-        update.message.reply_text("Token data not found for this group.")
-        return
-
-    lp_address = token_data.get('liquidity_address')
-    chain = token_data.get('chain')
-
-    if not lp_address or not chain:
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
-
-    if rate_limit_check():
-        liquidity_usd = get_liquidity(chain, lp_address)
-        if liquidity_usd:
-            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
-        else:
-            msg = update.message.reply_text("Failed to fetch liquidity data.")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-
-def get_liquidity(chain, lp_address):
-    try:
-        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        liquidity_usd = data['data']['attributes']['reserve_in_usd']
-        return liquidity_usd
-    except requests.RequestException as e:
-        print(f"Failed to fetch liquidity data: {str(e)}")
-        return None
-    
-def volume(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_data = fetch_group_info(update, context)
-
-    if group_data is None:
-        return
-    
-    token_data = group_data.get('token')
-    if not token_data:
-        update.message.reply_text("Token data not found for this group.")
-        return
-
-    lp_address = token_data.get('liquidity_address')
-    chain = token_data.get('chain')    
-
-    if not lp_address or not chain:
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
-
-    if rate_limit_check():
-        volume_24h_usd = get_volume(chain, lp_address)
-        if volume_24h_usd:
-            msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd}")
-        else:
-            msg = update.message.reply_text("Failed to fetch volume data.")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-    
-def get_volume(chain, lp_address):
-    try:
-        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        volume_24h_usd = data['data']['attributes']['volume_usd']['h24']
-        return volume_24h_usd
-    except requests.RequestException as e:
-        print(f"Failed to fetch volume data: {str(e)}")
-        return None
-
-def chart(update: Update, context: CallbackContext) -> None:
-    args = context.args
-    time_frame = 'minute'  # default to minute if no argument is provided
-    
-    if args:
-        interval_arg = args[0].lower()
-        if interval_arg == 'h':
-            time_frame = 'hour'
-        elif interval_arg == 'd':
-            time_frame = 'day'
-        elif interval_arg == 'm':
-            time_frame = 'minute'
-        else:
-            msg = update.message.reply_text('Invalid time frame specified. Please use /chart with m, h, or d.')
-            return
-        
-    if rate_limit_check():
-        # Fetch group-specific contract information
-        group_data = fetch_group_info(update, context)
-        if group_data is None:
-            return  # Early exit if no data is found
-        
-        token_data = group_data.get('token')
-        if not token_data:
-            update.message.reply_text("Token data not found for this group.")
-            return
-        
-        chain = token_data.get('chain')
-        if not chain:
-            update.message.reply_text("Chain not found for this group.")
-            return
-        liquidity_address = token_data.get('liquidity_address')
-        if not liquidity_address:
-            update.message.reply_text("Contract address not found for this group.")
-            return
-
-        group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
-        ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
-        if ohlcv_data:
-            data_frame = prepare_data_for_chart(ohlcv_data)
-            plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
-            msg = update.message.reply_photo(
-                photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
-                caption=f"\n[Dexscreener](https://dexscreener.com/{chain}/{liquidity_address}) • [Dextools](https://www.dextools.io/app/{chain}/pair-explorer/{liquidity_address})\n",
-                parse_mode='Markdown'
-            )
-        else:
-            msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-#endregion Slash Commands
-
 #region Chart
 def fetch_ohlcv_data(time_frame, chain, liquidity_address):
     now = datetime.now()
@@ -1653,7 +1447,7 @@ def cleanbot(update: Update, context: CallbackContext):
         bot_messages = [(cid, msg_id) for cid, msg_id in bot_messages if cid != chat_id]
 #endregion Admin Controls
 
-# User Controls
+#region User Controls
 def report(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
 
@@ -1932,6 +1726,224 @@ def fetch_random_word() -> str:
         return random.choice(words)
 #endregion Play Game
 
+def price(update: Update, context: CallbackContext) -> None:
+    # Fetch group-specific contract information
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return  # Early exit if no data found
+    
+    token_data = group_data.get('token')
+    if not token_data:
+        update.message.reply_text("Token data not found for this group.")
+        return
+
+    contract_address = token_data.get('contract_address')
+
+    if not contract_address:
+        update.message.reply_text("Contract address not found for this group.")
+        return
+
+    # Proceed with price fetching
+    currency = context.args[0].lower() if context.args else 'usd'
+    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
+        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
+        return
+
+    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
+    if token_price_in_fiat is not None:
+        formatted_price = format(token_price_in_fiat, '.4f')
+        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}") # TODO: Replace 'Sypher' with Token name from group
+    else:
+        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
+
+def ca(update: Update, context: CallbackContext) -> None:
+    msg = None
+    if rate_limit_check():
+        group_data = fetch_group_info(update, context)
+        if group_data is None:
+            return  # Early exit if no data is found
+        
+        token_data = group_data.get('token')
+        if not token_data:
+            update.message.reply_text("Token data not found for this group.")
+            return
+
+        contract_address = token_data.get('contract_address')
+
+        if not contract_address:
+            update.message.reply_text("Contract address not found for this group.")
+            return
+        
+        msg = update.message.reply_text(contract_address)
+
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+
+def liquidity(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return
+
+    token_data = group_data.get('token')
+    if not token_data:
+        update.message.reply_text("Token data not found for this group.")
+        return
+
+    lp_address = token_data.get('liquidity_address')
+    chain = token_data.get('chain')
+
+    if not lp_address or not chain:
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    if rate_limit_check():
+        liquidity_usd = get_liquidity(chain, lp_address)
+        if liquidity_usd:
+            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
+        else:
+            msg = update.message.reply_text("Failed to fetch liquidity data.")
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+
+def get_liquidity(chain, lp_address):
+    try:
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        liquidity_usd = data['data']['attributes']['reserve_in_usd']
+        return liquidity_usd
+    except requests.RequestException as e:
+        print(f"Failed to fetch liquidity data: {str(e)}")
+        return None
+    
+def volume(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_data = fetch_group_info(update, context)
+
+    if group_data is None:
+        return
+    
+    token_data = group_data.get('token')
+    if not token_data:
+        update.message.reply_text("Token data not found for this group.")
+        return
+
+    lp_address = token_data.get('liquidity_address')
+    chain = token_data.get('chain')    
+
+    if not lp_address or not chain:
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    if rate_limit_check():
+        volume_24h_usd = get_volume(chain, lp_address)
+        if volume_24h_usd:
+            msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd}")
+        else:
+            msg = update.message.reply_text("Failed to fetch volume data.")
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+    
+def get_volume(chain, lp_address):
+    try:
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        volume_24h_usd = data['data']['attributes']['volume_usd']['h24']
+        return volume_24h_usd
+    except requests.RequestException as e:
+        print(f"Failed to fetch volume data: {str(e)}")
+        return None
+
+def chart(update: Update, context: CallbackContext) -> None:
+    args = context.args
+    time_frame = 'minute'  # default to minute if no argument is provided
+    
+    if args:
+        interval_arg = args[0].lower()
+        if interval_arg == 'h':
+            time_frame = 'hour'
+        elif interval_arg == 'd':
+            time_frame = 'day'
+        elif interval_arg == 'm':
+            time_frame = 'minute'
+        else:
+            msg = update.message.reply_text('Invalid time frame specified. Please use /chart with m, h, or d.')
+            return
+        
+    if rate_limit_check():
+        # Fetch group-specific contract information
+        group_data = fetch_group_info(update, context)
+        if group_data is None:
+            return  # Early exit if no data is found
+        
+        token_data = group_data.get('token')
+        if not token_data:
+            update.message.reply_text("Token data not found for this group.")
+            return
+        
+        chain = token_data.get('chain')
+        if not chain:
+            update.message.reply_text("Chain not found for this group.")
+            return
+        liquidity_address = token_data.get('liquidity_address')
+        if not liquidity_address:
+            update.message.reply_text("Contract address not found for this group.")
+            return
+
+        group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
+        ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
+        if ohlcv_data:
+            data_frame = prepare_data_for_chart(ohlcv_data)
+            plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
+            msg = update.message.reply_photo(
+                photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
+                caption=f"\n[Dexscreener](https://dexscreener.com/{chain}/{liquidity_address}) • [Dextools](https://www.dextools.io/app/{chain}/pair-explorer/{liquidity_address})\n",
+                parse_mode='Markdown'
+            )
+        else:
+            msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+
+def website(update: Update, context: CallbackContext) -> None:
+    msg = None
+    if rate_limit_check():
+        group_data = fetch_group_info(update, context)
+        if group_data is None:
+            return  # Early exit if no data is found
+        
+        group_info = group_data.get('group_info')
+
+        if group_info is None:
+            msg = update.message.reply_text("Group info not found.")
+            return
+        
+        group_website = group_info.get('group_website')
+
+        if group_website is None:
+            msg = update.message.reply_text("Group link not found.")
+            return
+        
+        msg = update.message.reply_text(f"{group_website}")
+    
+    if msg is not None:
+        track_message(msg)
 #endregion User Controls
 
 
@@ -1964,7 +1976,7 @@ def unmute_user(context: CallbackContext) -> None:
 
 
 
-def admin_help(update: Update, context: CallbackContext) -> None:
+def admin_commands(update: Update, context: CallbackContext) -> None:
     msg = None
     if is_user_admin(update, context):
         msg = update.message.reply_text(
@@ -2066,25 +2078,25 @@ def unmute(update: Update, context: CallbackContext) -> None:
 
 
 
-def help(update: Update, context: CallbackContext) -> None:
+def commands(update: Update, context: CallbackContext) -> None:
     msg = None
     if rate_limit_check():
         keyboard = [
             [
-                InlineKeyboardButton("/play", callback_data='help_play'),
-                InlineKeyboardButton("/endgame", callback_data='help_endgame')
+                InlineKeyboardButton("/play", callback_data='commands_play'),
+                InlineKeyboardButton("/endgame", callback_data='commands_endgame')
             ],
             [
-                InlineKeyboardButton("/website", callback_data='help_website'),
-                InlineKeyboardButton("/contract", callback_data='help_contract')
+                InlineKeyboardButton("/website", callback_data='commands_website'),
+                InlineKeyboardButton("/contract", callback_data='commands_contract')
             ],
             [
-                InlineKeyboardButton("/price", callback_data='help_price'),
-                InlineKeyboardButton("/chart", callback_data='help_chart')
+                InlineKeyboardButton("/price", callback_data='commands_price'),
+                InlineKeyboardButton("/chart", callback_data='commands_chart')
             ],
             [
-                InlineKeyboardButton("/liquidity", callback_data='help_liquidity'),
-                InlineKeyboardButton("/volume", callback_data='help_volume')
+                InlineKeyboardButton("/liquidity", callback_data='commands_liquidity'),
+                InlineKeyboardButton("/volume", callback_data='commands_volume')
             ]
         ]
 
@@ -2097,34 +2109,31 @@ def help(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def help_buttons(update: Update, context: CallbackContext) -> None:
+def command_buttons(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
     update = Update(update.update_id, message=query.message)
 
-    if query.data == 'help_play':
+    if query.data == 'commands_play':
         play(update, context)
-    elif query.data == 'help_endgame':
+    elif query.data == 'commands_endgame':
         end_game(update, context)
-    # elif query.data == 'help_whitepaper':
-    #     whitepaper(update, context)
-    # elif query.data == 'help_contract':
-    #     ca(update, context)
-    # elif query.data == 'help_website':
-    #     website(update, context)
-    # elif query.data == 'help_price':
-    #     price(update, context)
-    # elif query.data == 'help_chart':
-    #     chart(update, context)
-    # elif query.data == 'help_liquidity':
-    #     liquidity(update, context)
-    # elif query.data == 'help_volume':
-    #     volume(update, context)
+    elif query.data == 'commands_contract':
+        ca(update, context)
+    elif query.data == 'commands_website':
+        website(update, context)
+    elif query.data == 'commands_price':
+        price(update, context)
+    elif query.data == 'commands_chart':
+        chart(update, context)
+    elif query.data == 'commands_liquidity':
+        liquidity(update, context)
+    elif query.data == 'commands_volume':
+        volume(update, context)
 
 
 #region Main Slash Commands
-
 # def sypher(update: Update, context: CallbackContext) -> None:
 #     msg = None
 #     if rate_limit_check():
@@ -2146,29 +2155,6 @@ def help_buttons(update: Update, context: CallbackContext) -> None:
     
 #     if msg is not None:
 #         track_message(msg)
-
-# def whitepaper(update: Update, context: CallbackContext) -> None:
-#     if rate_limit_check():
-#         msg = update.message.reply_text(
-#         'https://desypher.net/whitepaper.html\n'
-#         )
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     track_message(msg)
-
-# def website(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     if rate_limit_check():
-#         msg = update.message.reply_text(
-#             'https://desypher.net/\n'
-#         )
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
-
 #endregion Main Slash Commands
 
 
@@ -2521,7 +2507,7 @@ def main() -> None:
     
     #region General Slash Command Handlers
     dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("help", help))
+    dispatcher.add_handler(CommandHandler("commands", commands))
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
     dispatcher.add_handler(CommandHandler("contract", ca))
@@ -2536,7 +2522,7 @@ def main() -> None:
     #endregion General Slash Command Handlers
 
     #region Admin Slash Command Handlers
-    dispatcher.add_handler(CommandHandler("adminhelp", admin_help))
+    dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
     dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
     # dispatcher.add_handler(CommandHandler('antiraid', antiraid))
@@ -2578,7 +2564,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(math_verification, pattern='^math_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(password_verification, pattern='^password_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
-    dispatcher.add_handler(CallbackQueryHandler(help_buttons, pattern='^help_'))
+    dispatcher.add_handler(CallbackQueryHandler(command_buttons, pattern='^commands_'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
