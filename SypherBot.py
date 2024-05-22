@@ -261,8 +261,6 @@ def fetch_group_info(update: Update, context: CallbackContext):
         doc_snapshot = group_doc.get()
         if doc_snapshot.exists:
             return doc_snapshot.to_dict()
-        else:
-            update.message.reply_text("Group data not found.")
     except Exception as e:
         update.message.reply_text(f"Failed to fetch group info: {str(e)}")
     
@@ -1305,13 +1303,9 @@ def handle_start_verification(update: Update, context: CallbackContext) -> None:
 def generate_verification_buttons(update: Update, context: CallbackContext) -> InlineKeyboardMarkup:
     # Get the group_id from the user_verification_progress dictionary
     user_id = update.effective_user.id
-    group_id = user_verification_progress[user_id]['group_id']
-    group_doc = db.collection('groups').document(str(group_id))
+    group_id = user_verification_progress['group_id']
+    group_doc = db.collection('groups').document(group_id)
     group_data = group_doc.get().to_dict()
-
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return 
     
     verification_info = group_data.get('verification_info')
     if not verification_info:
