@@ -426,6 +426,34 @@ def delete_service_messages(update, context):
             print(f"Deleted service message in chat {update.message.chat_id}")
         except Exception as e:
             print(f"Failed to delete service message: {str(e)}")
+
+def menu_change(context: CallbackContext, update: Update):
+    messages_to_delete = [
+        'initialize_bot_message',
+        'setup_home_message',
+        'setup_bot_message',
+        'setup_ethereum_message',
+        'setup_liquidity_message',
+        'setup_ABI_message',
+        'setup_chain_message',
+        'setup_verification_message',
+        'setup_enable_verification_message',
+        'setup_disable_verification_message',
+        'setup_math_verification_message',
+        'setup_password_verification_message',
+        'setup_verification_question_message',
+        'setup_verification_answer_message'
+    ]
+
+    for message_to_delete in messages_to_delete:
+        if message_to_delete in context.user_data:
+            try:
+                context.bot.delete_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=context.user_data[message_to_delete]
+                )
+            except Exception as e:
+                print(f"Failed to delete message: {e}")
 #endregion Bot Logic
 
 #region Bot Setup
@@ -541,23 +569,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if 'initialize_bot_message' in context.user_data:
-        try:
-            context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=context.user_data['initialize_bot_message']  # Delete the setup home message
-            )
-        except Exception as e:
-            print(f"Failed to delete message: {e}")
-
-    if 'setup_ethereum_message' in context.user_data:
-        try:
-            context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
-            )
-        except Exception as e:
-            print(f"Failed to delete message: {e}")
+    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -597,23 +609,7 @@ def setup_ethereum(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    messages_to_delete = [
-        'setup_bot_message',
-        'setup_contract_message',
-        'setup_liquidity_message',
-        'setup_ABI_message',
-        'setup_chain_message'
-        ]
-
-    for message_to_delete in messages_to_delete:
-        if message_to_delete in context.user_data:
-            try:
-                context.bot.delete_message(
-                    chat_id=update.effective_chat.id,
-                    message_id=context.user_data[message_to_delete]
-                )
-            except Exception as e:
-                print(f"Failed to delete message: {e}")
+    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -939,12 +935,15 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    menu_change(context, update)
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please choose whether to enable or disable verification.\n\nYou may also choose the verification method for your group.\n\nMath will present a random simple math equation to the new user.\n\nIf you choose password, you will be prompted to enter a question, then an answer. The answer must be 5 letters.\n\nExample: "What is a red fruit that falls from a tree? [apple].',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
+    context.user_data['setup_verification_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
