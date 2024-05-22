@@ -478,6 +478,8 @@ def start(update: Update, context: CallbackContext) -> None:
             )
         else:
             msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    else:
+        msg = update.message.reply_text('This command can only be used in DM.')
     
     if msg is not None:
         track_message(msg)
@@ -798,8 +800,6 @@ def complete_token_setup(group_id: str):
     if abi is None:
         print(f"ABI not found in group {group_id}, token setup incomplete.")
         return
-    else:
-        abi = json.loads(abi)
     chain = token_data.get('chain')
     if chain is None:
         print(f"Chain not found in group {group_id}, token setup incomplete.")
