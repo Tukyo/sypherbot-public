@@ -1225,26 +1225,15 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def start_verification_dm(group_id: int, user_id: int, context: CallbackContext) -> None:
-    print("Sending verification message to user's DM.")
-    verification_message = "Welcome to the SypherBot verification process! Please click the button to begin verification."
-    keyboard = [[InlineKeyboardButton("Start Verification", callback_data='start_verification')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    message = context.bot.send_message(chat_id=user_id, text=verification_message, reply_markup=reply_markup)
-
-    user_verification_progress[user_id] = {
-        'group_id': group_id,
-        'verification_message_id': message.message_id
-    }
-    return message.message_id
-
 def verification_callback(update: Update, context: CallbackContext) -> None:
+    print("Verification callback triggered.")
     query = update.callback_query
     callback_data = query.data
     user_id = query.from_user.id
     chat_id = query.message.chat_id
     query.answer()
+
+    print(f"Callback Data: {callback_data}")
 
     # Extract group_id and user_id from the callback_data
     _, callback_group_id, callback_user_id = callback_data.split('_')
@@ -1266,6 +1255,20 @@ def verification_callback(update: Update, context: CallbackContext) -> None:
 
     job_queue = context.job_queue
     job_queue.run_once(delete_verification_message, 30, context={'chat_id': chat_id, 'message_id': verification_started_id})
+
+def start_verification_dm(group_id: int, user_id: int, context: CallbackContext) -> None:
+    print("Sending verification message to user's DM.")
+    verification_message = "Welcome to the SypherBot verification process! Please click the button to begin verification."
+    keyboard = [[InlineKeyboardButton("Start Verification", callback_data='start_verification')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    message = context.bot.send_message(chat_id=user_id, text=verification_message, reply_markup=reply_markup)
+
+    user_verification_progress[user_id] = {
+        'group_id': group_id,
+        'verification_message_id': message.message_id
+    }
+    return message.message_id
 
 def delete_verification_message(context: CallbackContext) -> None:
     job = context.job
