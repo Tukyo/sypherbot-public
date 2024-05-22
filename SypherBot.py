@@ -596,14 +596,23 @@ def setup_ethereum(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if 'setup_bot_message' in context.user_data:
-        try:
-            context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=context.user_data['setup_bot_message']  # Delete the setup home message
-            )
-        except Exception as e:
-            print(f"Failed to delete message: {e}")
+    messages_to_delete = [
+        'setup_bot_message',
+        'setup_contract_message',
+        'setup_liquidity_message',
+        'setup_ABI_message',
+        'setup_chain_message'
+        ]
+
+    for message_to_delete in messages_to_delete:
+        if message_to_delete in context.user_data:
+            try:
+                context.bot.delete_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=context.user_data[message_to_delete]
+                )
+            except Exception as e:
+                print(f"Failed to delete message: {e}")
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -626,6 +635,15 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    if 'setup_ethereum_message' in context.user_data:
+        try:
+            context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
+            )
+        except Exception as e:
+            print(f"Failed to delete message: {e}")
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please respond with your contract address.',
@@ -633,6 +651,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     )
     context.user_data['setup_stage'] = 'contract'
     print("Requesting contract address.")
+    context.user_data['setup_contract_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -673,12 +692,22 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    if 'setup_ethereum_message' in context.user_data:
+        try:
+            context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
+            )
+        except Exception as e:
+            print(f"Failed to delete message: {e}")
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please respond with your liquidity address.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = 'liquidity'
+    context.user_data['setup_liquidity_message'] = msg.message_id
     print("Requesting liquidity address.")
 
     if msg is not None:
@@ -724,12 +753,22 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    if 'setup_ethereum_message' in context.user_data:
+        try:
+            context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
+            )
+        except Exception as e:
+            print(f"Failed to delete message: {e}")
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please upload your ABI as a JSON file.\n\nExample file structure: ["function1(uint256)", "function2(string)"]',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = 'ABI'
+    context.user_data['setup_ABI_message'] = msg.message_id
     print("Requesting ABI file.")
 
     if msg is not None:
@@ -789,12 +828,22 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    if 'setup_ethereum_message' in context.user_data:
+        try:
+            context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
+            )
+        except Exception as e:
+            print(f"Failed to delete message: {e}")
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please choose your chain from the list.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = 'chain'
+    context.user_data['setup_chain_message'] = msg.message_id
     print("Requesting Chain.")
 
     if msg is not None:
@@ -1177,9 +1226,6 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Ethereum
 
 #region Admin Controls
-def setup_bot(update: Update, context: CallbackContext) -> None:
-    setup_home_callback(update, context)
-
 def warn(update: Update, context: CallbackContext):
     msg = None
     if is_user_admin(update, context) and update.message.reply_to_message:
