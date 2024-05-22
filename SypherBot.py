@@ -1177,6 +1177,9 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Ethereum
 
 #region Admin Controls
+def setup_bot(update: Update, context: CallbackContext) -> None:
+    setup_home_callback(update, context)
+
 def warn(update: Update, context: CallbackContext):
     msg = None
     if is_user_admin(update, context) and update.message.reply_to_message:
@@ -2566,7 +2569,7 @@ def main() -> None:
     #endregion General Slash Command Handlers
 
     #region Admin Slash Command Handlers
-    dispatcher.add_handler(CommandHandler("setup", setup_home_callback))
+    dispatcher.add_handler(CommandHandler("setup", setup_home))
     dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
     dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
