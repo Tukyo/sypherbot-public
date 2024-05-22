@@ -1207,7 +1207,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
         keyboard = [
             [InlineKeyboardButton("Initialize Bot", url=f"https://t.me/sypher_robot?start={user_id}")],
-            [InlineKeyboardButton("Click Here to Verify", callback_data=f'verify_{chat_id}_{user_id}')]
+            [InlineKeyboardButton("Click Here to Verify", callback_data=f'poop_{chat_id}_{user_id}')]
         ]
         
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2712,7 +2712,7 @@ def main() -> None:
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
 
     # Register the callback query handler for button clicks
-    dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^verify_\d+_\d+$'))
+    dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^poop'))
     dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
     dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
