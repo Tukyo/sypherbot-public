@@ -420,6 +420,24 @@ def cancel_end_callback(update: Update, context: CallbackContext) -> None:
     query.message.delete()
     context.user_data['setup_stage'] = None
 
+def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
+    setup_stage = context.user_data.get('setup_stage')
+    print("Checking if user is in setup mode.")
+    if setup_stage == 'contract':
+        handle_contract_address(update, context)
+    elif setup_stage == 'liquidity':
+        handle_liquidity_address(update, context)
+    elif setup_stage == 'ABI':
+        if update.message.text:
+            update.message.reply_text("Please upload the ABI as a JSON file.")
+            pass
+        elif update.message.document:
+            handle_ABI(update, context)
+    elif setup_stage == 'setup_password_verification':
+        handle_verification_question(update, context)
+    elif setup_stage == 'setup_verification_question':
+        handle_verification_answer(update, context)
+
 def start(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_type = update.effective_chat.type
@@ -537,7 +555,9 @@ def setup_ethereum(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Chain", callback_data='setup_chain'),
             InlineKeyboardButton("ABI", callback_data='setup_ABI')
         ],
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        [
+            InlineKeyboardButton("Cancel", callback_data='cancel')
+        ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -629,6 +649,8 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
             })
             context.user_data['setup_stage'] = None
             msg = update.message.reply_text("Liquidity address added successfully!")
+
+            complete_token_setup(group_id)
         else:
             msg = update.message.reply_text("Please send a valid Liquidity Address!")
 
@@ -673,29 +695,14 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
                 })
                 context.user_data['setup_stage'] = None
                 msg = update.message.reply_text("ABI has been successfully saved.")
+
+                complete_token_setup(group_id)
         else:
             msg = update.message.reply_text("Please make sure the file is a JSON file.")
+        
 
     if msg is not None:
         track_message(msg)
-
-def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
-    setup_stage = context.user_data.get('setup_stage')
-    print("Checking if user is in setup mode.")
-    if setup_stage == 'contract':
-        handle_contract_address(update, context)
-    elif setup_stage == 'liquidity':
-        handle_liquidity_address(update, context)
-    elif setup_stage == 'ABI':
-        if update.message.text:
-            update.message.reply_text("Please upload the ABI as a JSON file.")
-            pass
-        elif update.message.document:
-            handle_ABI(update, context)
-    elif setup_stage == 'setup_password_verification':
-        handle_verification_question(update, context)
-    elif setup_stage == 'setup_verification_question':
-        handle_verification_answer(update, context)
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -705,18 +712,23 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
     keyboard = [
         [
             InlineKeyboardButton("Ethereum", callback_data='ethereum'),
+            InlineKeyboardButton("Base", callback_data='base')
+
+        ],
+        [
             InlineKeyboardButton("Arbitrum", callback_data='arbitrum'),
-            InlineKeyboardButton("Polygon", callback_data='polygon'),
-        ],
-        [
-            InlineKeyboardButton("Base", callback_data='base'),
             InlineKeyboardButton("Optimism", callback_data='optimism'),
-            InlineKeyboardButton("Fantom", callback_data='fantom'),
+            InlineKeyboardButton("Polygon", callback_data='polygon')
         ],
         [
+            InlineKeyboardButton("Fantom", callback_data='fantom'),
             InlineKeyboardButton("Avalanche", callback_data='avalanche'),
-            InlineKeyboardButton("Binance", callback_data='binance'),
-            InlineKeyboardButton("Linea", callback_data='linea'),
+            InlineKeyboardButton("Binance", callback_data='binance')
+        ],
+        [
+            InlineKeyboardButton("Aptos", callback_data='aptos'),
+            InlineKeyboardButton("Harmony", callback_data='harmony'),
+            InlineKeyboardButton("Mantle", callback_data='mantle')
         ],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
@@ -743,6 +755,57 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
             'chain': chain,
         })
         context.user_data['setup_stage'] = None
+
+        complete_token_setup(group_id)
+
+def complete_token_setup(group_id: str):
+    # Fetch the group data from Firestore
+    group_doc = db.collection('groups').document(str(group_id))
+    group_data = group_doc.get().to_dict()
+
+    # Get the contract address, ABI, and chain from the group data
+    contract_address = group_data['contract_address']
+    if contract_address is None:
+        print(f"Contract address not found in group {group_id}, token setup incomplete.")
+        return
+    abi = json.loads(group_data['abi'])
+    if abi is None:
+        print(f"ABI not found in group {group_id}, token setup incomplete.")
+        return
+    chain = group_data.get('chain')
+    if chain is None:
+        print(f"Chain not found in group {group_id}, token setup incomplete.")
+        return
+
+    # Determine the provider URL based on the chain
+    provider_url = os.getenv(f'{chain.upper()}_ENDPOINT')
+    if provider_url is None:
+        print(f"Provider URL for chain {chain} not found in environment variables")
+        return
+
+    # Connect to the Ethereum network
+    web3 = Web3(Web3.HTTPProvider(provider_url))
+
+    # Create a contract object
+    contract = web3.eth.contract(address=contract_address, abi=abi)
+
+    # Call the name and symbol functions
+    try:
+        token_name = contract.functions.name().call()
+        token_symbol = contract.functions.symbol().call()
+    except Exception as e:
+        print(f"Failed to get token name and symbol: {e}")
+        return
+
+    # Update the Firestore document with the token name and symbol
+    group_doc.update({
+        'token': {
+            'name': token_name,
+            'symbol': token_symbol,
+        }
+    })
+
+    print(f"Added token name {token_name} and symbol {token_symbol} to group {group_id}")
 
 def setup_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -990,7 +1053,7 @@ def price(update: Update, context: CallbackContext) -> None:
     token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
     if token_price_in_fiat is not None:
         formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}")
+        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}") # TODO: Replace 'Sypher' with Token name from group
     else:
         update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
 
@@ -2437,7 +2500,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|linea)$'))
+    dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|aptos|harmony|mantle)$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_verification, pattern='^setup_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_verification, pattern='^enable_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(disable_verification, pattern='^disable_verification$'))
