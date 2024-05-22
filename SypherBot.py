@@ -1286,7 +1286,6 @@ def handle_start_verification(update: Update, context: CallbackContext) -> None:
         'main_message_id': query.message.message_id,
         'chat_id': query.message.chat_id,
         'verification_message_id': query.message.message_id,
-        'group_id': query.message.chat_id
     }
 
     verification_question = "Who is the lead developer at Tukyo Games?"
