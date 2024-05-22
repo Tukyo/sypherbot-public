@@ -176,7 +176,7 @@ def track_message(message):
     print(f"Tracked message: {message.message_id}")
 
 #region Bot Logic
-def bot_added_to_group(update, context):
+def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     new_members = update.message.new_chat_members
     if any(member.id != context.bot.id for member in new_members):
         return
@@ -187,6 +187,28 @@ def bot_added_to_group(update, context):
         group_doc.set({
             'group_id': group_id,
         })
+
+        bot_member = context.bot.get_chat_member(group_id, context.bot.id)  # Get bot's member info
+
+        if bot_member.status == "administrator":
+            # Bot is admin, send the "Thank you" message
+            setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
+            setup_markup = InlineKeyboardMarkup(setup_keyboard)
+            msg = update.message.reply_text(
+                "Thank you for adding me to your group! Please click 'Setup' to continue.",
+                reply_markup=setup_markup
+            )
+        else:
+            # Bot is not admin, send the "Give me admin perms" message
+            setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
+            setup_markup = InlineKeyboardMarkup(setup_keyboard)
+            msg = update.message.reply_text(
+                "Hey, please give me admin permissions, then click 'Setup' to get started.",
+                reply_markup=setup_markup
+            )
+ 
+        if msg is not None:
+            track_message(msg)
 
 def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
     left_member = update.message.left_chat_member
@@ -456,28 +478,6 @@ def start(update: Update, context: CallbackContext) -> None:
             )
         else:
             msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-            
-    elif chat_type in ["group", "supergroup"]:
-            bot_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)  # Get bot's member info
-
-            if bot_member.status == "administrator":
-                # Bot is admin, send the "Thank you" message
-                setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
-                setup_markup = InlineKeyboardMarkup(setup_keyboard)
-                msg = update.message.reply_text(
-                    "Thank you for adding me to your group! Please click 'Setup' to continue.",
-                    reply_markup=setup_markup
-                )
-            else:
-                # Bot is not admin, send the "Give me admin perms" message
-                setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
-                setup_markup = InlineKeyboardMarkup(setup_keyboard)
-                msg = update.message.reply_text(
-                    "Hey, please give me admin permissions, then click 'Setup' to get started.",
-                    reply_markup=setup_markup
-                )
-    else:
-        update.message.reply_text('That command only works in DM!')
     
     if msg is not None:
         track_message(msg)
