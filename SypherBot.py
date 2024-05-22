@@ -827,10 +827,8 @@ def complete_token_setup(group_id: str):
 
     # Update the Firestore document with the token name and symbol
     group_doc.update({
-        'token': {
-            'name': token_name,
-            'symbol': token_symbol,
-        }
+        'token.name': token_name,
+        'token.symbol': token_symbol
     })
 
     print(f"Added token name {token_name} and symbol {token_symbol} to group {group_id}")
