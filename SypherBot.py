@@ -604,11 +604,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
             group_id = update.effective_chat.id
             print(f"Adding contract address {contract_address} to group {group_id}")
             group_doc = db.collection('groups').document(str(group_id))
-            group_doc.update({
-                'token': {
-                    'contract_address': contract_address,
-                }
-            })
+            group_doc.update({'token.contract_address': contract_address})
             context.user_data['setup_stage'] = None
 
             if update.message is not None:
@@ -655,11 +651,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
             group_id = update.effective_chat.id
             print(f"Adding liquidity address {liquidity_address} to group {group_id}")
             group_doc = db.collection('groups').document(str(group_id))
-            group_doc.update({
-                'token': {
-                    'liquidity_address': liquidity_address
-                }
-            })
+            group_doc.update({'token.liquidity_address': liquidity_address})
             context.user_data['setup_stage'] = None
 
             # Check if update.message is not None before using it
@@ -712,11 +704,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
                 group_id = update.effective_chat.id
                 print(f"Adding ABI to group {group_id}")
                 group_doc = db.collection('groups').document(str(group_id))
-                group_doc.update({
-                    'token': {
-                        'abi': abi
-                    }
-                })
+                group_doc.update({'token.abi': abi})
                 context.user_data['setup_stage'] = None
                 msg = update.message.reply_text("ABI has been successfully saved.")
 
@@ -775,11 +763,7 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
         group_id = update.effective_chat.id
         print(f"Adding chain {chain} to group {group_id}")
         group_doc = db.collection('groups').document(str(group_id))
-        group_doc.update({
-            'token': {
-                'chain': chain,
-            }
-        })
+        group_doc.update({'token.chain': chain})
         context.user_data['setup_stage'] = None
 
         complete_token_setup(group_id)
@@ -894,19 +878,21 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
         group_doc.set({
             'group_id': group_id,
             'verification_info': {
-                'verification': True
+                'verification': True,
+                'verification_type': 'none'
             }
         })
     else:
         group_doc.update({
             'verification_info': {
-                'verification': True
+                'verification': True,
+                'verification_type': 'none'
             }
         })
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Verification enabled for this group. Please choose a verification type if you have not already.'
+        text='Verification enabled for this group. Please choose a verification type.'
     )
 
     if msg is not None:
