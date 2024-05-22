@@ -508,8 +508,10 @@ def setup_home(update: Update, context: CallbackContext) -> None:
 
     # Update the group document
     group_doc.update({
-        'group_link': group_link,
-        'group_username': group_username,
+        'group_info': {
+            'group_link': group_link,
+            'group_username': group_username,
+        }
     })
 
     keyboard = [
@@ -603,7 +605,9 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
             print(f"Adding contract address {contract_address} to group {group_id}")
             group_doc = db.collection('groups').document(str(group_id))
             group_doc.update({
-                'contract_address': contract_address,
+                'token': {
+                    'contract_address': contract_address,
+                }
             })
             context.user_data['setup_stage'] = None
 
