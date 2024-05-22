@@ -652,7 +652,9 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
             print(f"Adding liquidity address {liquidity_address} to group {group_id}")
             group_doc = db.collection('groups').document(str(group_id))
             group_doc.update({
-                'liquidity_address': liquidity_address,
+                'token': {
+                    'liquidity_address': liquidity_address
+                }
             })
             context.user_data['setup_stage'] = None
 
@@ -707,7 +709,9 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
                 print(f"Adding ABI to group {group_id}")
                 group_doc = db.collection('groups').document(str(group_id))
                 group_doc.update({
-                    'abi': abi,
+                    'token': {
+                        'abi': abi
+                    }
                 })
                 context.user_data['setup_stage'] = None
                 msg = update.message.reply_text("ABI has been successfully saved.")
@@ -768,7 +772,9 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
         print(f"Adding chain {chain} to group {group_id}")
         group_doc = db.collection('groups').document(str(group_id))
         group_doc.update({
-            'chain': chain,
+            'token': {
+                'chain': chain,
+            }
         })
         context.user_data['setup_stage'] = None
 
@@ -779,18 +785,23 @@ def complete_token_setup(group_id: str):
     group_doc = db.collection('groups').document(str(group_id))
     group_data = group_doc.get().to_dict()
 
+    token_data = group_data.get('token')
+    if not token_data:
+        print("Token data not found for this group.")
+        return
+
     # Get the contract address, ABI, and chain from the group data
-    contract_address = group_data['contract_address']
+    contract_address = token_data['contract_address']
     if contract_address is None:
         print(f"Contract address not found in group {group_id}, token setup incomplete.")
         return
-    abi = group_data.get('abi')
+    abi = token_data.get('abi')
     if abi is None:
         print(f"ABI not found in group {group_id}, token setup incomplete.")
         return
     else:
         abi = json.loads(abi)
-    chain = group_data.get('chain')
+    chain = token_data.get('chain')
     if chain is None:
         print(f"Chain not found in group {group_id}, token setup incomplete.")
         return
@@ -1056,8 +1067,14 @@ def price(update: Update, context: CallbackContext) -> None:
     group_data = fetch_group_info(update, context)
     if group_data is None:
         return  # Early exit if no data found
+    
+    token_data = group_data.get('token')
+    if not token_data:
+        update.message.reply_text("Token data not found for this group.")
+        return
 
-    contract_address = group_data.get('contract_address')
+    contract_address = token_data.get('contract_address')
+
     if not contract_address:
         update.message.reply_text("Contract address not found for this group.")
         return
@@ -1081,8 +1098,14 @@ def ca(update: Update, context: CallbackContext) -> None:
         group_data = fetch_group_info(update, context)
         if group_data is None:
             return  # Early exit if no data is found
+        
+        token_data = group_data.get('token')
+        if not token_data:
+            update.message.reply_text("Token data not found for this group.")
+            return
 
-        contract_address = group_data.get('contract_address')
+        contract_address = token_data.get('contract_address')
+
         if not contract_address:
             update.message.reply_text("Contract address not found for this group.")
             return
@@ -1101,8 +1124,13 @@ def liquidity(update: Update, context: CallbackContext) -> None:
     if group_data is None:
         return
 
-    lp_address = group_data.get('liquidity_address')
-    chain = group_data.get('chain')
+    token_data = group_data.get('token')
+    if not token_data:
+        update.message.reply_text("Token data not found for this group.")
+        return
+
+    lp_address = token_data.get('liquidity_address')
+    chain = token_data.get('chain')
 
     if not lp_address or not chain:
         update.message.reply_text("Liquidity address or chain not found for this group.")
@@ -1138,9 +1166,14 @@ def volume(update: Update, context: CallbackContext) -> None:
 
     if group_data is None:
         return
+    
+    token_data = group_data.get('token')
+    if not token_data:
+        update.message.reply_text("Token data not found for this group.")
+        return
 
-    lp_address = group_data.get('liquidity_address')
-    chain = group_data.get('chain')    
+    lp_address = token_data.get('liquidity_address')
+    chain = token_data.get('chain')    
 
     if not lp_address or not chain:
         update.message.reply_text("Liquidity address or chain not found for this group.")
@@ -1192,11 +1225,16 @@ def chart(update: Update, context: CallbackContext) -> None:
         if group_data is None:
             return  # Early exit if no data is found
         
-        chain = group_data.get('chain')
+        token_data = group_data.get('token')
+        if not token_data:
+            update.message.reply_text("Token data not found for this group.")
+            return
+        
+        chain = token_data.get('chain')
         if not chain:
             update.message.reply_text("Chain not found for this group.")
             return
-        liquidity_address = group_data.get('liquidity_address')
+        liquidity_address = token_data.get('liquidity_address')
         if not liquidity_address:
             update.message.reply_text("Contract address not found for this group.")
             return
