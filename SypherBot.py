@@ -454,14 +454,13 @@ def start(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def setup_home_callback(update: Update, context: CallbackContext) -> None:
-    msg = None
     query = update.callback_query
     query.answer()
 
     # Check if the bot is an admin
     chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)
     if not chat_member.can_invite_users:
-        msg = context.bot.send_message(
+        context.bot.send_message(
             chat_id=update.effective_chat.id,
             text='Please give me admin permissions first!'
         )
@@ -471,9 +470,6 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
 
     if query.data == 'setup_home':
         setup_home(update, context)
-
-    if msg is not None:
-        track_message(msg)
 
 def setup_home(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -577,16 +573,25 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
+    msg = None
     if context.user_data.get('setup_stage') == 'contract':
-        contract_address = update.message.text
-        if eth_address_pattern.match(contract_address):
+        eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
+        contract_address = update.message.text.strip()
+
+        if eth_address_pattern.fullmatch(contract_address):
             group_id = update.effective_chat.id
             print(f"Adding contract address {contract_address} to group {group_id}")
             group_doc = db.collection('groups').document(str(group_id))
             group_doc.update({
                 'contract_address': contract_address,
             })
-        context.user_data['setup_stage'] = None
+            context.user_data['setup_stage'] = None
+            msg = update.message.reply_text("Contract address added successfully!")
+        else:
+            msg = update.message.reply_text("Please send a valid Contract Address!")
+
+    if msg is not None:
+        track_message(msg)
 
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -610,16 +615,25 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
+    msg = None
     if context.user_data.get('setup_stage') == 'liquidity':
-        liquidity_address = update.message.text
-        if eth_address_pattern.match(liquidity_address):
+        eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
+        liquidity_address = update.message.text.strip()
+
+        if eth_address_pattern.fullmatch(liquidity_address):
             group_id = update.effective_chat.id
             print(f"Adding liquidity address {liquidity_address} to group {group_id}")
             group_doc = db.collection('groups').document(str(group_id))
             group_doc.update({
                 'liquidity_address': liquidity_address,
             })
-        context.user_data['setup_stage'] = None
+            context.user_data['setup_stage'] = None
+            msg = update.message.reply_text("Liquidity address added successfully!")
+        else:
+            msg = update.message.reply_text("Please send a valid Liquidity Address!")
+
+    if msg is not None:
+        track_message(msg)
 
 def setup_ABI(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -818,10 +832,12 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
         group_doc.set({
             'group_id': group_id,
             'verification': False,
+            'verification_type': 'none'
         })
     else:
         group_doc.update({
             'verification': False,
+            'verification_type': 'none'
         })
 
     msg = context.bot.send_message(
