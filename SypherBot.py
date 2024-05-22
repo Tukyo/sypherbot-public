@@ -1098,6 +1098,7 @@ def password_verification(update: Update, context: CallbackContext) -> None:
         text='What question would you like to use for verification?\n\nThis question will be presented to new users when they join your group.\n\nThey will need to answer the question with your five letter answer to gain access.',
         reply_markup=reply_markup
     )
+    context.user_data['setup_verification_question_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1118,6 +1119,7 @@ def handle_verification_question(update: Update, context: CallbackContext) -> No
         text='What is the five letter answer to the question?',
         reply_markup=reply_markup
     )
+    context.user_data['setup_verification_answer_message'] = msg.message_id
 
     context.user_data['setup_stage'] = 'setup_verification_question'
 
