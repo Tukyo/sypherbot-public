@@ -1309,11 +1309,24 @@ def generate_verification_buttons(update: Update, context: CallbackContext) -> I
     group_doc = db.collection('groups').document(str(group_id))
     group_data = group_doc.get().to_dict()
 
-    if group_data is None or 'verification_info' not in group_data or 'verification_answer' not in group_data['verification_info']:
-        print("Verification answer not found in group data.")
-        return None
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        return 
+    
+    verification_info = group_data.get('verification_info')
+    if not verification_info:
+        update.message.reply_text("Verification info not found for this group.")
+        return
+    
+    verification_answer = verification_info.get('verification_answer')
 
-    required_letters = list(group_data['verification_info']['verification_answer'].upper())
+    if not verification_answer:
+        update.message.reply_text("Verification answer not found for this group.")
+        return
+    
+    print(f"Verification answer: {verification_answer}")
+
+    required_letters = list(verification_answer.upper())
     all_letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
     for letter in required_letters:
