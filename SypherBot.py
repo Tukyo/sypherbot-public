@@ -2276,6 +2276,9 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
         user_id = member.id
         chat_id = update.message.chat.id
 
+        if user_id == context.bot.id:
+            return
+
         # Mute the new user
         context.bot.restrict_chat_member(
             chat_id=chat_id,
