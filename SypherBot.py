@@ -179,12 +179,18 @@ def track_message(message):
 def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     new_members = update.message.new_chat_members
     inviter = update.message.from_user
-    owner_id = inviter.id
-    owner_username = inviter.username
+
     if any(member.id != context.bot.id for member in new_members):
-        return
-    if any(member.id == context.bot.id for member in new_members):
-        group_id = update.effective_chat.id
+        return  # Bot wasn't added
+
+    group_id = update.effective_chat.id
+    admins = context.bot.get_chat_administrators(group_id)  
+    inviter_is_admin = any(admin.user.id == inviter.id for admin in admins)
+
+    if inviter_is_admin:
+        # Store group info only if the inviter is an admin
+        owner_id = inviter.id
+        owner_username = inviter.username
         print(f"Adding group {group_id} to database with owner {owner_id} ({owner_username})")
         group_doc = db.collection('groups').document(str(group_id))
         group_doc.set({
@@ -216,6 +222,10 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
  
         if msg is not None:
             track_message(msg)
+    else:
+        # Inviter is not an admin, leave the group
+        print(f"Leaving group {group_id} because the bot was not added by an admin.")
+        context.bot.leave_chat(group_id)
 
 def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
     left_member = update.message.left_chat_member
