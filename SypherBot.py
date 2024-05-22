@@ -433,6 +433,7 @@ def menu_change(context: CallbackContext, update: Update):
         'setup_home_message',
         'setup_bot_message',
         'setup_ethereum_message',
+        'setup_contract_message',
         'setup_liquidity_message',
         'setup_ABI_message',
         'setup_chain_message',
@@ -453,7 +454,8 @@ def menu_change(context: CallbackContext, update: Update):
                     message_id=context.user_data[message_to_delete]
                 )
             except Exception as e:
-                print(f"Failed to delete message: {e}")
+                if str(e) != "Message to delete not found":
+                    print(f"Failed to delete message: {e}")
 #endregion Bot Logic
 
 #region Bot Setup
@@ -632,14 +634,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if 'setup_ethereum_message' in context.user_data:
-        try:
-            context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
-            )
-        except Exception as e:
-            print(f"Failed to delete message: {e}")
+    menu_change(context, update) 
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -689,14 +684,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if 'setup_ethereum_message' in context.user_data:
-        try:
-            context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
-            )
-        except Exception as e:
-            print(f"Failed to delete message: {e}")
+    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -750,14 +738,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if 'setup_ethereum_message' in context.user_data:
-        try:
-            context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
-            )
-        except Exception as e:
-            print(f"Failed to delete message: {e}")
+    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -825,14 +806,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if 'setup_ethereum_message' in context.user_data:
-        try:
-            context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
-            )
-        except Exception as e:
-            print(f"Failed to delete message: {e}")
+    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -980,6 +954,8 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
             }
         })
 
+    menu_change(context, update)
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Verification enabled for this group. Please choose a verification type.'
@@ -1019,6 +995,8 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
                 'verification_type': 'none'
             }
         })
+
+    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1062,6 +1040,8 @@ def math_verification(update: Update, context: CallbackContext) -> None:
             }
         })
 
+    menu_change(context, update)
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Math verification enabled for this group.'
@@ -1104,6 +1084,8 @@ def password_verification(update: Update, context: CallbackContext) -> None:
 
     # Set the state in user_data
     context.user_data['setup_stage'] = 'setup_password_verification'
+
+    menu_change(context, update)
 
     # Ask the question for new users
     msg = context.bot.send_message(
@@ -1149,6 +1131,8 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
 
     # Clear the state in user_data
     context.user_data['setup_stage'] = None
+
+    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
