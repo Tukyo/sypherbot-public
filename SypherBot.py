@@ -2710,8 +2710,8 @@ def main() -> None:
 
     # Register the callback query handler for button clicks
     dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^authenticate$'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
+    # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
+    # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_crypto, pattern='^setup_crypto$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
