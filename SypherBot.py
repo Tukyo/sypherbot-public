@@ -432,7 +432,7 @@ def menu_change(context: CallbackContext, update: Update):
         'initialize_bot_message',
         'setup_home_message',
         'setup_bot_message',
-        'setup_ethereum_message',
+        'setup_crypto_message',
         'setup_contract_message',
         'setup_liquidity_message',
         'setup_ABI_message',
@@ -565,7 +565,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         ],
         [
             InlineKeyboardButton("Verification", callback_data='setup_verification'),
-            InlineKeyboardButton("Ethereum", callback_data='setup_ethereum')
+            InlineKeyboardButton("Ethereum", callback_data='setup_crypto')
         ],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
@@ -585,16 +585,16 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 #region Ethereum Setup
-def setup_ethereum_callback(update: Update, context: CallbackContext) -> None:
+def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
     update = Update(update.update_id, message=query.message)
 
-    if query.data == 'setup_ethereum':
-        setup_ethereum(update, context)
+    if query.data == 'setup_crypto':
+        setup_crypto(update, context)
 
-def setup_ethereum(update: Update, context: CallbackContext) -> None:
+def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
         [
@@ -615,11 +615,11 @@ def setup_ethereum(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='This is the ethereum setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work.',
+        text='This is the crypto setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_ethereum_message'] = msg.message_id
+    context.user_data['setup_crypto_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -630,7 +630,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_ethereum')]
+        [InlineKeyboardButton("Back", callback_data='setup_crypto')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -680,7 +680,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
     query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_ethereum')]
+        [InlineKeyboardButton("Back", callback_data='setup_crypto')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -734,7 +734,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
     query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_ethereum')]
+        [InlineKeyboardButton("Back", callback_data='setup_crypto')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -802,7 +802,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Harmony", callback_data='harmony'),
             InlineKeyboardButton("Mantle", callback_data='mantle')
         ],
-        [InlineKeyboardButton("Back", callback_data='setup_ethereum')]
+        [InlineKeyboardButton("Back", callback_data='setup_crypto')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -884,7 +884,7 @@ def complete_token_setup(group_id: str):
     print(f"Added token name {token_name} and symbol {token_symbol} to group {group_id}")
 #endregion Ethereum Setup
 
-#regio Verification Setup
+#region Verification Setup
 def setup_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1163,8 +1163,259 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
 
     if msg is not None:
         track_message(msg)
-#region Verification Setup
+#endregion Verification Setup
+
 #endregion Bot Setup
+
+#region User Verification
+def handle_new_user(update: Update, context: CallbackContext) -> None:
+    bot_added_to_group(update, context)
+    msg = None
+    for member in update.message.new_chat_members:
+        user_id = member.id
+        chat_id = update.message.chat.id
+
+        if user_id == context.bot.id:
+            return
+
+        # Mute the new user
+        context.bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=user_id,
+            permissions=ChatPermissions(can_send_messages=False)
+        )
+
+        if anti_raid.is_raid():
+            msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
+            
+            # Get the user_id of the user that just joined
+            user_id = update.message.new_chat_members[0].id
+
+            # Kick the user that just joined
+            context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
+            return
+        
+        print("Allowing new user to join, antiraid is not active.")
+
+        # Send the welcome message with the verification button
+        welcome_message = (
+            "Welcome to Tukyo Games!\n\n"
+            "⚠️ Admins will NEVER DM YOU FIRST ⚠️\n\n"
+            "To start verification, please click Initialize Bot, then send the bot a /start command in DM.\n\n"
+            "After initializing the bot, return to the main chat and press 'Click Here to Verify'.\n"
+        )
+
+        keyboard = [
+            [InlineKeyboardButton("Initialize Bot", url=f"https://t.me/deSypher_bot?start={user_id}")],
+            [InlineKeyboardButton("Click Here to Verify", callback_data=f'verify_{chat_id}_{user_id}')]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        welcomeMessage = context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
+        welcome_message_id = welcomeMessage.message_id
+        context.chat_data['non_deletable_message_id'] = welcomeMessage.message_id
+
+        # Start a verification timeout job
+        job_queue = context.job_queue
+        job_queue.run_once(verification_timeout, 600, context={'chat_id': chat_id, 'user_id': user_id, 'welcome_message_id': welcome_message_id}, name=str(user_id))
+
+        update.message.delete()
+
+    if msg is not None:
+        track_message(msg)
+
+def start_verification_dm(group_id: int, user_id: int, context: CallbackContext) -> None:
+    print("Sending verification message to user's DM.")
+    verification_message = "Welcome to the SypherBot verification process! Please click the button to begin verification."
+    keyboard = [[InlineKeyboardButton("Start Verification", callback_data='start_verification')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    message = context.bot.send_message(chat_id=user_id, text=verification_message, reply_markup=reply_markup)
+
+    user_verification_progress[user_id] = {
+        'group_id': group_id,
+        'verification_message_id': message.message_id
+    }
+    return message.message_id
+
+def verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    callback_data = query.data
+    user_id = query.from_user.id
+    chat_id = query.message.chat_id
+    query.answer()
+
+    # Extract user_id from the callback_data
+    _, callback_user_id = callback_data.split('_')
+    callback_user_id = int(callback_user_id)
+
+    if user_id != callback_user_id:
+        return  # Do not process if the callback user ID does not match the button user ID
+
+    if is_user_admin(update, context):
+        return
+    
+    _, callback_group_id, callback_user_id = callback_data.split('_')
+    callback_group_id = int(callback_group_id)
+    callback_user_id = int(callback_user_id)
+    
+    # Send a message to the user's DM to start the verification process
+    start_verification_dm(callback_group_id, user_id, context)
+    
+    # Optionally, you can edit the original message to indicate the button was clicked
+    verification_started_message = query.edit_message_text(text="A verification message has been sent to your DMs. Please check your messages.")
+    verification_started_id = verification_started_message.message_id
+
+    job_queue = context.job_queue
+    job_queue.run_once(delete_verification_message, 30, context={'chat_id': chat_id, 'message_id': verification_started_id})
+
+def delete_verification_message(context: CallbackContext) -> None:
+    job = context.job
+    context.bot.delete_message(
+        chat_id=job.context['chat_id'],
+        message_id=job.context['message_id']
+    )
+
+def handle_start_verification(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    user_id = query.from_user.id
+    query.answer()
+
+    # Initialize user verification progress
+    user_verification_progress[user_id] = {
+        'progress': [],
+        'main_message_id': query.message.message_id,
+        'chat_id': query.message.chat_id,
+        'verification_message_id': query.message.message_id
+    }
+
+    verification_question = "Who is the lead developer at Tukyo Games?"
+    reply_markup = generate_verification_buttons()
+
+    # Edit the initial verification prompt
+    context.bot.edit_message_text(
+        chat_id=user_id,
+        message_id=user_verification_progress[user_id]['verification_message_id'],
+        text=verification_question,
+        reply_markup=reply_markup
+    )
+
+
+
+def generate_verification_buttons(update: Update, context: CallbackContext) -> InlineKeyboardMarkup:
+    # Get the group_id from the user_verification_progress dictionary
+    user_id = update.effective_user.id
+    group_id = user_verification_progress[user_id]['group_id']
+    group_doc = db.collection('groups').document(str(group_id))
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None or 'verification_info' not in group_data or 'verification_answer' not in group_data['verification_info']:
+        print("Verification answer not found in group data.")
+        return None
+
+    required_letters = list(group_data['verification_info']['verification_answer'].upper())
+    all_letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+    for letter in required_letters:
+        if letter in all_letters:
+            all_letters.remove(letter)
+
+    # Shuffle the remaining letters
+    random.shuffle(all_letters)
+
+    # Randomly select 11 letters from the shuffled list
+    selected_random_letters = all_letters[:11]
+
+    # Combine required letters with the random letters
+    final_letters = required_letters + selected_random_letters
+
+    # Shuffle the final list of 16 letters
+    random.shuffle(final_letters)
+
+    buttons = []
+    row = []
+    for i, letter in enumerate(final_letters):
+        row.append(InlineKeyboardButton(letter, callback_data=f'verify_letter_{letter}'))
+        if (i + 1) % 4 == 0:
+            buttons.append(row)
+            row = []
+
+    if row:
+        buttons.append(row)
+
+    return InlineKeyboardMarkup(buttons)
+
+def handle_verification_button(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    user_id = query.from_user.id
+    letter = query.data.split('_')[2]  # Get the letter from callback_data
+    query.answer()
+
+    # # Update user verification progress
+    # if user_id in user_verification_progress:
+    #     user_verification_progress[user_id]['progress'].append(letter)
+
+    #     # Only check the sequence after the fifth button press
+    #     if len(user_verification_progress[user_id]['progress']) == len(VERIFICATION_LETTERS):
+    #         if user_verification_progress[user_id]['progress'] == list(VERIFICATION_LETTERS):
+    #             context.bot.edit_message_text(
+    #                 chat_id=user_id,
+    #                 message_id=user_verification_progress[user_id]['verification_message_id'],
+    #                 text="Verification successful, you may now return to chat!"
+    #             )
+    #             print("User successfully verified.")
+    #             # Unmute the user in the main chat
+    #             context.bot.restrict_chat_member(
+    #                 chat_id=CHAT_ID,
+    #                 user_id=user_id,
+    #                 permissions=ChatPermissions(
+    #                     can_send_messages=True,
+    #                     can_send_media_messages=True,
+    #                     can_send_other_messages=True,
+    #                     can_send_videos=True,
+    #                     can_send_photos=True,
+    #                     can_send_audios=True
+    #                 )
+    #             )
+    #             current_jobs = context.job_queue.get_jobs_by_name(str(user_id))
+    #             for job in current_jobs:
+    #                 job.schedule_removal()
+    #         else:
+    #             context.bot.edit_message_text(
+    #                 chat_id=user_id,
+    #                 message_id=user_verification_progress[user_id]['verification_message_id'],
+    #                 text="Verification failed. Please try again.",
+    #                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Start Verification", callback_data='start_verification')]])
+    #             )
+    #             print("User failed verification prompt.")
+    #         # Reset progress after verification attempt
+    #         user_verification_progress.pop(user_id)
+    # else:
+    #     context.bot.edit_message_text(
+    #         chat_id=user_id,
+    #         message_id=user_verification_progress[user_id]['verification_message_id'],
+    #         text="Verification failed. Please try again.",
+    #         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Start Verification", callback_data='start_verification')]])
+    #     )
+    #     print("User failed verification prompt.")
+
+def verification_timeout(context: CallbackContext) -> None:
+    msg = None
+    job = context.job
+    context.bot.kick_chat_member(
+        chat_id=job.context['chat_id'],
+        user_id=job.context['user_id']
+    )
+    
+    context.bot.delete_message(
+        chat_id=job.context['chat_id'],
+        message_id=job.context['welcome_message_id']
+    )
+
+    if msg is not None:
+        track_message(msg)
+#endregion User Verification
 
 #region Ethereum
 
@@ -2367,234 +2618,45 @@ def get_token_price_in_fiat(contract_address, currency):
 #endregion Buybot
 
 
-#region User Verification
-def handle_new_user(update: Update, context: CallbackContext) -> None:
-    bot_added_to_group(update, context)
-    msg = None
-    for member in update.message.new_chat_members:
-        user_id = member.id
-        chat_id = update.message.chat.id
 
-        if user_id == context.bot.id:
-            return
 
-        # Mute the new user
-        context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user_id,
-            permissions=ChatPermissions(can_send_messages=False)
-        )
 
-        if anti_raid.is_raid():
-            msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
-            
-            # Get the user_id of the user that just joined
-            user_id = update.message.new_chat_members[0].id
 
-            # Kick the user that just joined
-            context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
-            return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         
-        print("Allowing new user to join, antiraid is not active.")
 
-        # Send the welcome message with the verification button
-        welcome_message = (
-            "Welcome to Tukyo Games!\n\n"
-            "⚠️ Admins will NEVER DM YOU FIRST ⚠️\n\n"
-            "To start verification, please click Initialize Bot, then send the bot a /start command in DM.\n\n"
-            "After initializing the bot, return to the main chat and press 'Click Here to Verify'.\n"
-        )
-
-        keyboard = [
-            [InlineKeyboardButton("Initialize Bot", url=f"https://t.me/deSypher_bot?start={user_id}")],
-            [InlineKeyboardButton("Click Here to Verify", callback_data=f'verify_{user_id}')]
-        ]
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        welcomeMessage = context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
-        welcome_message_id = welcomeMessage.message_id
-        context.chat_data['non_deletable_message_id'] = welcomeMessage.message_id
-
-        # Start a verification timeout job
-        job_queue = context.job_queue
-        job_queue.run_once(verification_timeout, 600, context={'chat_id': chat_id, 'user_id': user_id, 'welcome_message_id': welcome_message_id}, name=str(user_id))
-
-        update.message.delete()
-
-    if msg is not None:
-        track_message(msg)
-
-# def start_verification_dm(user_id: int, context: CallbackContext) -> None:
-#     print("Sending verification message to user's DM.")
-#     verification_message = "Welcome to Tukyo Games! Please click the button to begin verification."
-#     keyboard = [[InlineKeyboardButton("Start Verification", callback_data='start_verification')]]
-#     reply_markup = InlineKeyboardMarkup(keyboard)
-
-#     message = context.bot.send_message(chat_id=user_id, text=verification_message, reply_markup=reply_markup)
-#     return message.message_id
-
-# def verification_callback(update: Update, context: CallbackContext) -> None:
-#     query = update.callback_query
-#     callback_data = query.data
-#     user_id = query.from_user.id
-#     chat_id = query.message.chat_id
-#     query.answer()
-
-#     # Extract user_id from the callback_data
-#     _, callback_user_id = callback_data.split('_')
-#     callback_user_id = int(callback_user_id)
-
-#     if user_id != callback_user_id:
-#         return  # Do not process if the callback user ID does not match the button user ID
-
-#     if is_user_admin(update, context):
-#         return
-    
-#     # Send a message to the user's DM to start the verification process
-#     start_verification_dm(user_id, context)
-    
-#     # Optionally, you can edit the original message to indicate the button was clicked
-#     verification_started_message = query.edit_message_text(text="A verification message has been sent to your DMs. Please check your messages.")
-#     verification_started_id = verification_started_message.message_id
-
-#     job_queue = context.job_queue
-#     job_queue.run_once(delete_verification_message, 30, context={'chat_id': chat_id, 'message_id': verification_started_id})
-
-# def delete_verification_message(context: CallbackContext) -> None:
-#     job = context.job
-#     context.bot.delete_message(
-#         chat_id=job.context['chat_id'],
-#         message_id=job.context['message_id']
-#     )
-
-# def generate_verification_buttons() -> InlineKeyboardMarkup:
-#     all_letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-#     required_letters = list(VERIFICATION_LETTERS)
-    
-#     for letter in required_letters:
-#         if letter in all_letters:
-#             all_letters.remove(letter)
-    
-#     # Shuffle the remaining letters
-#     random.shuffle(all_letters)
-    
-#     # Randomly select 11 letters from the shuffled list
-#     selected_random_letters = all_letters[:11]
-    
-#     # Combine required letters with the random letters
-#     final_letters = required_letters + selected_random_letters
-    
-#     # Shuffle the final list of 16 letters
-#     random.shuffle(final_letters)
-    
-#     buttons = []
-#     row = []
-#     for i, letter in enumerate(final_letters):
-#         row.append(InlineKeyboardButton(letter, callback_data=f'verify_letter_{letter}'))
-#         if (i + 1) % 4 == 0:
-#             buttons.append(row)
-#             row = []
-
-#     if row:
-#         buttons.append(row)
-
-#     return InlineKeyboardMarkup(buttons)
-
-# def handle_start_verification(update: Update, context: CallbackContext) -> None:
-#     query = update.callback_query
-#     user_id = query.from_user.id
-#     query.answer()
-
-#     # Initialize user verification progress
-#     user_verification_progress[user_id] = {
-#         'progress': [],
-#         'main_message_id': query.message.message_id,
-#         'chat_id': query.message.chat_id,
-#         'verification_message_id': query.message.message_id
-#     }
-
-#     verification_question = "Who is the lead developer at Tukyo Games?"
-#     reply_markup = generate_verification_buttons()
-
-#     # Edit the initial verification prompt
-#     context.bot.edit_message_text(
-#         chat_id=user_id,
-#         message_id=user_verification_progress[user_id]['verification_message_id'],
-#         text=verification_question,
-#         reply_markup=reply_markup
-#     )
-
-# def handle_verification_button(update: Update, context: CallbackContext) -> None:
-#     query = update.callback_query
-#     user_id = query.from_user.id
-#     letter = query.data.split('_')[2]  # Get the letter from callback_data
-#     query.answer()
-
-#     # Update user verification progress
-#     if user_id in user_verification_progress:
-#         user_verification_progress[user_id]['progress'].append(letter)
-
-#         # Only check the sequence after the fifth button press
-#         if len(user_verification_progress[user_id]['progress']) == len(VERIFICATION_LETTERS):
-#             if user_verification_progress[user_id]['progress'] == list(VERIFICATION_LETTERS):
-#                 context.bot.edit_message_text(
-#                     chat_id=user_id,
-#                     message_id=user_verification_progress[user_id]['verification_message_id'],
-#                     text="Verification successful, you may now return to chat!"
-#                 )
-#                 print("User successfully verified.")
-#                 # Unmute the user in the main chat
-#                 context.bot.restrict_chat_member(
-#                     chat_id=CHAT_ID,
-#                     user_id=user_id,
-#                     permissions=ChatPermissions(
-#                         can_send_messages=True,
-#                         can_send_media_messages=True,
-#                         can_send_other_messages=True,
-#                         can_send_videos=True,
-#                         can_send_photos=True,
-#                         can_send_audios=True
-#                     )
-#                 )
-#                 current_jobs = context.job_queue.get_jobs_by_name(str(user_id))
-#                 for job in current_jobs:
-#                     job.schedule_removal()
-#             else:
-#                 context.bot.edit_message_text(
-#                     chat_id=user_id,
-#                     message_id=user_verification_progress[user_id]['verification_message_id'],
-#                     text="Verification failed. Please try again.",
-#                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Start Verification", callback_data='start_verification')]])
-#                 )
-#                 print("User failed verification prompt.")
-#             # Reset progress after verification attempt
-#             user_verification_progress.pop(user_id)
-#     else:
-#         context.bot.edit_message_text(
-#             chat_id=user_id,
-#             message_id=user_verification_progress[user_id]['verification_message_id'],
-#             text="Verification failed. Please try again.",
-#             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Start Verification", callback_data='start_verification')]])
-#         )
-#         print("User failed verification prompt.")
-        
-def verification_timeout(context: CallbackContext) -> None:
-    msg = None
-    job = context.job
-    context.bot.kick_chat_member(
-        chat_id=job.context['chat_id'],
-        user_id=job.context['user_id']
-    )
-    
-    context.bot.delete_message(
-        chat_id=job.context['chat_id'],
-        message_id=job.context['welcome_message_id']
-    )
-
-    if msg is not None:
-        track_message(msg)
-#endregion User Verification
 
 
 
@@ -2650,11 +2712,11 @@ def main() -> None:
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
 
     # Register the callback query handler for button clicks
-    # dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^verify_\d+$'))
-    # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
-    # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
+    dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^verify_\d+$'))
+    dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
+    dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_ethereum, pattern='^setup_ethereum$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_crypto, pattern='^setup_crypto$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
