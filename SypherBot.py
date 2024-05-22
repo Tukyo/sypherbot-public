@@ -292,6 +292,10 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
+    if is_user_admin(update, context):
+        # Don't block admin messages
+        return
+    
     print("Checking message for unallowed addresses...")
 
     group_data = fetch_group_info(update, context)
@@ -319,6 +323,10 @@ def delete_blocked_addresses(update: Update, context: CallbackContext):
             break
 
 def delete_blocked_links(update: Update, context: CallbackContext):
+    if is_user_admin(update, context):
+        # Don't block admin messages
+        return
+    
     print("Checking message for unallowed links...")
     message_text = update.message.text
 
@@ -700,7 +708,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
             file = context.bot.getFile(document.file_id)
             file.download('temp_abi.json')
             with open('temp_abi.json', 'r') as file:
-                abi = file.read()
+                abi = json.load(file)  # Parse the ABI
                 group_id = update.effective_chat.id
                 print(f"Adding ABI to group {group_id}")
                 group_doc = db.collection('groups').document(str(group_id))
