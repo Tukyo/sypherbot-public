@@ -456,14 +456,26 @@ def start(update: Update, context: CallbackContext) -> None:
             )
         else:
             msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+            
     elif chat_type in ["group", "supergroup"]:
-        if is_user_admin(update, context):
-            setup_keyboard = [
-                [InlineKeyboardButton("Setup", callback_data='setup_home')]
-            ]
-            setup_markup = InlineKeyboardMarkup(setup_keyboard)
+            bot_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)  # Get bot's member info
 
-            msg = update.message.reply_text("Hey, please give me admin perms, then click the setup button below to get started.", reply_markup=setup_markup)
+            if bot_member.status == "administrator":
+                # Bot is admin, send the "Thank you" message
+                setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
+                setup_markup = InlineKeyboardMarkup(setup_keyboard)
+                msg = update.message.reply_text(
+                    "Thank you for adding me to your group! Please click 'Setup' to continue.",
+                    reply_markup=setup_markup
+                )
+            else:
+                # Bot is not admin, send the "Give me admin perms" message
+                setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
+                setup_markup = InlineKeyboardMarkup(setup_keyboard)
+                msg = update.message.reply_text(
+                    "Hey, please give me admin permissions, then click 'Setup' to get started.",
+                    reply_markup=setup_markup
+                )
     else:
         update.message.reply_text('That command only works in DM!')
     
