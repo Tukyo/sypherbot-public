@@ -606,9 +606,16 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
                 'contract_address': contract_address,
             })
             context.user_data['setup_stage'] = None
-            msg = update.message.reply_text("Contract address added successfully!")
+
+            if update.message is not None:
+                msg = update.message.reply_text("Contract address added successfully!")
+            elif update.callback_query is not None:
+                msg = update.callback_query.message.reply_text("Contract address added successfully!")
+        
+            complete_token_setup(group_id)
         else:
             msg = update.message.reply_text("Please send a valid Contract Address!")
+            
 
     if msg is not None:
         track_message(msg)
@@ -648,11 +655,20 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
                 'liquidity_address': liquidity_address,
             })
             context.user_data['setup_stage'] = None
-            msg = update.message.reply_text("Liquidity address added successfully!")
+
+            # Check if update.message is not None before using it
+            if update.message is not None:
+                msg = update.message.reply_text("Liquidity address added successfully!")
+            elif update.callback_query is not None:
+                msg = update.callback_query.message.reply_text("Liquidity address added successfully!")
 
             complete_token_setup(group_id)
         else:
-            msg = update.message.reply_text("Please send a valid Liquidity Address!")
+            # Check if update.message is not None before using it
+            if update.message is not None:
+                msg = update.message.reply_text("Please send a valid Liquidity Address!")
+            elif update.callback_query is not None:
+                msg = update.callback_query.message.reply_text("Please send a valid Liquidity Address!")
 
     if msg is not None:
         track_message(msg)
@@ -768,10 +784,12 @@ def complete_token_setup(group_id: str):
     if contract_address is None:
         print(f"Contract address not found in group {group_id}, token setup incomplete.")
         return
-    abi = json.loads(group_data['abi'])
+    abi = group_data.get('abi')
     if abi is None:
         print(f"ABI not found in group {group_id}, token setup incomplete.")
         return
+    else:
+        abi = json.loads(abi)
     chain = group_data.get('chain')
     if chain is None:
         print(f"Chain not found in group {group_id}, token setup incomplete.")
