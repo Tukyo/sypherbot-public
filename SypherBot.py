@@ -178,14 +178,19 @@ def track_message(message):
 #region Bot Logic
 def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     new_members = update.message.new_chat_members
+    inviter = update.message.from_user
+    owner_id = inviter.id
+    owner_username = inviter.username
     if any(member.id != context.bot.id for member in new_members):
         return
     if any(member.id == context.bot.id for member in new_members):
         group_id = update.effective_chat.id
-        print(f"Adding group {group_id} to database.")
+        print(f"Adding group {group_id} to database with owner {owner_id} ({owner_username})")
         group_doc = db.collection('groups').document(str(group_id))
         group_doc.set({
             'group_id': group_id,
+            'owner_id': owner_id,
+            'owner_username': owner_username
         })
 
         bot_member = context.bot.get_chat_member(group_id, context.bot.id)  # Get bot's member info
