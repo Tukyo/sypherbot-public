@@ -198,6 +198,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 "Thank you for adding me to your group! Please click 'Setup' to continue.",
                 reply_markup=setup_markup
             )
+            context.user_data['initialize_bot_message'] = msg.message_id
         else:
             # Bot is not admin, send the "Give me admin perms" message
             setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
@@ -206,6 +207,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 "Hey, please give me admin permissions, then click 'Setup' to get started.",
                 reply_markup=setup_markup
             )
+            context.user_data['initialize_bot_message'] = msg.message_id
  
         if msg is not None:
             track_message(msg)
@@ -489,8 +491,9 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
     # Check if the bot is an admin
     chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)
     if not chat_member.can_invite_users:
-        context.bot.send_message(
+        context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
+            message_id=context.user_data['initialize_bot_message'],
             text='Please give me admin permissions first!'
         )
         return
@@ -538,12 +541,31 @@ def setup_home(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    if 'initialize_bot_message' in context.user_data:
+        try:
+            context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=context.user_data['initialize_bot_message']  # Delete the setup home message
+            )
+        except Exception as e:
+            print(f"Failed to delete message: {e}")
+
+    if 'setup_ethereum_message' in context.user_data:
+        try:
+            context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=context.user_data['setup_ethereum_message']  # Delete the setup home message
+            )
+        except Exception as e:
+            print(f"Failed to delete message: {e}")
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -574,12 +596,22 @@ def setup_ethereum(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    if 'setup_bot_message' in context.user_data:
+        try:
+            context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=context.user_data['setup_bot_message']  # Delete the setup home message
+            )
+        except Exception as e:
+            print(f"Failed to delete message: {e}")
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='This is the ethereum setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
+    context.user_data['setup_ethereum_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
