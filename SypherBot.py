@@ -421,6 +421,7 @@ def cancel_end_callback(update: Update, context: CallbackContext) -> None:
     context.user_data['setup_stage'] = None
 
 def start(update: Update, context: CallbackContext) -> None:
+    msg = None
     chat_type = update.effective_chat.type
     user_id = update.effective_user.id
 
@@ -431,13 +432,13 @@ def start(update: Update, context: CallbackContext) -> None:
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            update.message.reply_text(
+            msg = update.message.reply_text(
                 'Hello! I am Sypher Bot. If you are here to verify, now you may return to main chat.\n\n'
                 'If you want me to manage you group, get started with the button below.',
                 reply_markup=reply_markup
             )
         else:
-            update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+            msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     elif chat_type in ["group", "supergroup"]:
         if is_user_admin(update, context):
             setup_keyboard = [
@@ -445,19 +446,22 @@ def start(update: Update, context: CallbackContext) -> None:
             ]
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
 
-            update.message.reply_text("Hey, please give me admin perms, then click the setup button below to get started.", reply_markup=setup_markup)
-            # context.bot.send_message(user_id, "I have been added to your group. Please proceed with setup in the main chat!")
+            msg = update.message.reply_text("Hey, please give me admin perms, then click the setup button below to get started.", reply_markup=setup_markup)
     else:
         update.message.reply_text('That command only works in DM!')
+    
+    if msg is not None:
+        track_message(msg)
 
 def setup_home_callback(update: Update, context: CallbackContext) -> None:
+    msg = None
     query = update.callback_query
     query.answer()
 
     # Check if the bot is an admin
     chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)
     if not chat_member.can_invite_users:
-        context.bot.send_message(
+        msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text='Please give me admin permissions first!'
         )
@@ -468,7 +472,11 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
     if query.data == 'setup_home':
         setup_home(update, context)
 
+    if msg is not None:
+        track_message(msg)
+
 def setup_home(update: Update, context: CallbackContext) -> None:
+    msg = None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
@@ -503,12 +511,15 @@ def setup_home(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
+
+    if msg is not None:
+        track_message(msg)
 
 def setup_ethereum_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -520,6 +531,7 @@ def setup_ethereum_callback(update: Update, context: CallbackContext) -> None:
         setup_ethereum(update, context)
 
 def setup_ethereum(update: Update, context: CallbackContext) -> None:
+    msg = None
     keyboard = [
         [
             InlineKeyboardButton("Contract", callback_data='setup_contract'),
@@ -533,14 +545,18 @@ def setup_ethereum(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='This is the ethereum setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
 
+    if msg is not None:
+        track_message(msg)
+
 def setup_contract(update: Update, context: CallbackContext) -> None:
+    msg = None
     query = update.callback_query
     query.answer()
 
@@ -549,13 +565,16 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please respond with your contract address.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = 'contract'
     print("Requesting contract address.")
+
+    if msg is not None:
+        track_message(msg)
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('setup_stage') == 'contract':
@@ -570,6 +589,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
         context.user_data['setup_stage'] = None
 
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
+    msg = None
     query = update.callback_query
     query.answer()
 
@@ -578,13 +598,16 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please respond with your liquidity address.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = 'liquidity'
     print("Requesting liquidity address.")
+
+    if msg is not None:
+        track_message(msg)
 
 def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('setup_stage') == 'liquidity':
@@ -599,6 +622,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
         context.user_data['setup_stage'] = None
 
 def setup_ABI(update: Update, context: CallbackContext) -> None:
+    msg = None
     query = update.callback_query
     query.answer()
 
@@ -607,7 +631,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please upload your ABI as a JSON file.\n\nExample file structure: ["function1(uint256)", "function2(string)"]',
         reply_markup=reply_markup
@@ -615,7 +639,11 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
     context.user_data['setup_stage'] = 'ABI'
     print("Requesting ABI file.")
 
+    if msg is not None:
+        track_message(msg)
+
 def handle_ABI(update: Update, context: CallbackContext) -> None:
+    msg = None
     if context.user_data.get('setup_stage') == 'ABI':
         document = update.message.document
         if document.mime_type == 'application/json':
@@ -630,9 +658,12 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
                     'abi': abi,
                 })
                 context.user_data['setup_stage'] = None
-                update.message.reply_text("ABI has been successfully saved.")
+                msg = update.message.reply_text("ABI has been successfully saved.")
         else:
-            update.message.reply_text("Please make sure the file is a JSON file.")
+            msg = update.message.reply_text("Please make sure the file is a JSON file.")
+
+    if msg is not None:
+        track_message(msg)
 
 def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
     setup_stage = context.user_data.get('setup_stage')
@@ -653,6 +684,7 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
         handle_verification_answer(update, context)
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
+    msg = None
     query = update.callback_query
     query.answer()
 
@@ -676,13 +708,16 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please choose your chain from the list.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = 'chain'
     print("Requesting Chain.")
+
+    if msg is not None:
+        track_message(msg)
 
 def handle_chain(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('setup_stage') == 'chain':
@@ -705,6 +740,7 @@ def setup_verification_callback(update: Update, context: CallbackContext) -> Non
         setup_verification(update, context)
 
 def setup_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
     keyboard = [
         [
             InlineKeyboardButton("Enable", callback_data='enable_verification'),
@@ -718,12 +754,15 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Please choose whether to enable or disable verification.\n\nYou may also choose the verification method for your group.\n\nMath will present a random simple math equation to the new user.\n\nIf you choose password, you will be prompted to enter a question, then an answer. The answer must be 5 letters.\n\nExample: "What is a red fruit that falls from a tree? [apple].',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
+
+    if msg is not None:
+        track_message(msg)
 
 def enable_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -735,6 +774,7 @@ def enable_verification_callback(update: Update, context: CallbackContext) -> No
         enable_verification(update, context)
 
 def enable_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
@@ -750,10 +790,13 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
             'verification': True,
         })
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Verification enabled for this group.'
     )
+
+    if msg is not None:
+        track_message(msg)
 
 def disable_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -765,6 +808,7 @@ def disable_verification_callback(update: Update, context: CallbackContext) -> N
         disable_verification(update, context)
 
 def disable_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
@@ -780,10 +824,13 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
             'verification': False,
         })
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Verification disabled for this group.'
     )
+
+    if msg is not None:
+        track_message(msg)
 
 def math_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -795,6 +842,7 @@ def math_verification_callback(update: Update, context: CallbackContext) -> None
         math_verification(update, context)
 
 def math_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
@@ -814,10 +862,13 @@ def math_verification(update: Update, context: CallbackContext) -> None:
             'verification_answer': 'none'
         })
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Math verification enabled for this group.'
     )
+
+    if msg is not None:
+        track_message(msg)
 
 def password_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -829,6 +880,7 @@ def password_verification_callback(update: Update, context: CallbackContext) -> 
         password_verification(update, context)
 
 def password_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
@@ -850,24 +902,32 @@ def password_verification(update: Update, context: CallbackContext) -> None:
     context.user_data['setup_stage'] = 'setup_password_verification'
 
     # Ask the question for new users
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='What question would you like to use for verification?\n\nThis question will be presented to new users when they join your group.\n\nThey will need to answer the question with your five letter answer to gain access.'
     )
+
+    if msg is not None:
+        track_message(msg)
     
 def handle_verification_question(update: Update, context: CallbackContext) -> None:
+    msg = None
     # Store the question in user_data
     context.user_data['verification_question'] = update.message.text
 
     # Ask for the answer to the question
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='What is the five letter answer to the question?'
     )
 
     context.user_data['setup_stage'] = 'setup_verification_question'
 
+    if msg is not None:
+        track_message(msg)
+
 def handle_verification_answer(update: Update, context: CallbackContext) -> None:
+    msg = None
     # Store the answer in user_data
     context.user_data['verification_answer'] = update.message.text
 
@@ -882,10 +942,13 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
     # Clear the state in user_data
     context.user_data['setup_stage'] = None
 
-    context.bot.send_message(
+    msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Password verification setup complete.'
     )
+
+    if msg is not None:
+        track_message(msg)
 #endregion Bot Setup
 
 #region Ethereum
@@ -1127,27 +1190,109 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Ethereum
 
 #region Admin Controls
-def unmute_user(context: CallbackContext) -> None:
-    job = context.job
-    context.bot.restrict_chat_member(
-        chat_id=job.context['chat_id'],
-        user_id=job.context['user_id'],
-        permissions=ChatPermissions(
-            can_send_messages=True,
-            can_send_media_messages=True,
-            can_send_other_messages=True,
-            can_send_videos=True,
-            can_send_photos=True,
-            can_send_audios=True
-            )
-    )
+def warn(update: Update, context: CallbackContext):
+    msg = None
+    if is_user_admin(update, context) and update.message.reply_to_message:
+        user_id = str(update.message.reply_to_message.from_user.id)
+        group_id = str(update.effective_chat.id)
+        group_doc = db.collection('groups').document(group_id)
+        
+        try:
+            doc_snapshot = group_doc.get()
+            if doc_snapshot.exists:
+                group_data = doc_snapshot.to_dict()
+                warnings_dict = group_data.get('warnings', {})
+                
+                # Increment the warning count for the user
+                current_warnings = warnings_dict.get(user_id, 0)
+                current_warnings += 1
+                warnings_dict[user_id] = current_warnings
+
+                # Update the group document with the new warnings count
+                group_doc.update({'warnings': warnings_dict})
+                msg = update.message.reply_text(f"{user_id} has been warned. Total warnings: {current_warnings}")
+                
+                # Check if the user has reached the warning limit
+                process_warns(update, context, user_id, current_warnings)
+
+            else:
+                msg = update.message.reply_text("Group data not found.")
+        
+        except Exception as e:
+            msg = update.message.reply_text(f"Failed to update warnings: {str(e)}")
+
+    if msg is not None:
+        track_message(msg)
+
+def process_warns(update: Update, context: CallbackContext, user_id: str, warnings: int):
+    msg = None
+    if warnings >= 3:
+        try:
+            context.bot.kick_chat_member(update.message.chat.id, int(user_id))
+            msg = update.message.reply_text(f"Goodbye {user_id}!")
+        except Exception as e:
+            msg = update.message.reply_text(f"Failed to kick {user_id}: {str(e)}")
+        
+    if msg is not None:
+        track_message(msg)
+
+def check_warnings(update: Update, context: CallbackContext):
+    msg = None
+    if is_user_admin(update, context) and update.message.reply_to_message:
+        user_id = str(update.message.reply_to_message.from_user.id)
+        group_id = str(update.effective_chat.id)
+        group_doc = db.collection('groups').document(group_id)
+
+        try:
+            doc_snapshot = group_doc.get()
+            if doc_snapshot.exists:
+                group_data = doc_snapshot.to_dict()
+                warnings_dict = group_data.get('warnings', {})
+
+                # Get the warning count for the user
+                current_warnings = warnings_dict.get(user_id, 0)
+
+                msg = update.message.reply_text(f"{user_id} has {current_warnings} warnings.")
+
+            else:
+                msg = update.message.reply_text("Group data not found.")
+
+        except Exception as e:
+            msg = update.message.reply_text(f"Failed to check warnings: {str(e)}")
+
+    if msg is not None:
+        track_message(msg)
+
+def kick(update: Update, context: CallbackContext) -> None:
+    msg = None
+    chat_id = update.effective_chat.id
+
+    if is_user_admin(update, context):
+        if update.message.reply_to_message is None:
+            msg = update.message.reply_text("This command must be used in response to another message!")
+            if msg is not None:
+                track_message(msg)
+            return
+        reply_to_message = update.message.reply_to_message
+        if reply_to_message:
+            user_id = reply_to_message.from_user.id
+            username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
+
+        context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
+        msg = update.message.reply_text(f"User {username} has been kicked.")
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
+    
+    if msg is not None:
+        track_message(msg)
 
 def block(update: Update, context: CallbackContext):
+    msg = None
     if is_user_admin(update, context):
         command_text = update.message.text[len('/block '):].strip().lower()
 
         if not command_text:
-            update.message.reply_text("Please provide some text to block.")
+            msg = update.message.reply_text("Please provide some text to block.")
             return
 
         group_id = str(update.effective_chat.id)
@@ -1164,25 +1309,29 @@ def block(update: Update, context: CallbackContext):
 
                 # Update the blocklist in the group's document
                 group_doc.update({blocklist_field: new_blocklist})
-                update.message.reply_text(f"'{command_text}' added to blocklist!")
+                msg = update.message.reply_text(f"'{command_text}' added to blocklist!")
                 print("Updated blocklist:", new_blocklist)
 
             else:
                 # If no blocklist exists, create it with the current command text
                 group_doc.set({blocklist_field: command_text + ", "})
-                update.message.reply_text(f"'{command_text}' blocked!")
+                msg = update.message.reply_text(f"'{command_text}' blocked!")
                 print("Created new blocklist with:", command_text)
 
         except Exception as e:
-            update.message.reply_text(f"Failed to update blocklist: {str(e)}")
+            msg = update.message.reply_text(f"Failed to update blocklist: {str(e)}")
             print(f"Error updating blocklist: {e}")
 
+    if msg is not None:
+        track_message(msg)
+
 def remove_block(update: Update, context: CallbackContext):
+    msg = None
     if is_user_admin(update, context):
         command_text = update.message.text[len('/removeblock '):].strip().lower()
 
         if not command_text:
-            update.message.reply_text("Please provide some text to remove.")
+            msg = update.message.reply_text("Please provide some text to remove.")
             return
 
         group_id = str(update.effective_chat.id)
@@ -1202,19 +1351,23 @@ def remove_block(update: Update, context: CallbackContext):
                     new_blocklist = ', '.join(blocklist_items)
                     # Update the blocklist in the group's document
                     group_doc.update({blocklist_field: new_blocklist})
-                    update.message.reply_text(f"'{command_text}' removed from blocklist!")
+                    msg = update.message.reply_text(f"'{command_text}' removed from blocklist!")
                     print("Updated blocklist after removal:", new_blocklist)
                 else:
-                    update.message.reply_text(f"'{command_text}' is not in the blocklist.")
+                    msg = update.message.reply_text(f"'{command_text}' is not in the blocklist.")
 
             else:
-                update.message.reply_text("No blocklist found for this group.")
+                msg = update.message.reply_text("No blocklist found for this group.")
 
         except Exception as e:
-            update.message.reply_text(f"Failed to remove from blocklist: {str(e)}")
+            msg = update.message.reply_text(f"Failed to remove from blocklist: {str(e)}")
             print(f"Error removing from blocklist: {e}")
 
+    if msg is not None:
+        track_message(msg)
+
 def blocklist(update: Update, context: CallbackContext):
+    msg = None
     if is_user_admin(update, context):
         group_id = str(update.effective_chat.id)
         group_doc = db.collection('groups').document(group_id)
@@ -1232,15 +1385,19 @@ def blocklist(update: Update, context: CallbackContext):
                     message = "\n".join(blocklist_items)
                     update.message.reply_text(message)
                 else:
-                    update.message.reply_text("The blocklist is currently empty.")
+                    msg = update.message.reply_text("The blocklist is currently empty.")
             else:
-                update.message.reply_text("No blocklist found for this group.")
+                msg = update.message.reply_text("No blocklist found for this group.")
         
         except Exception as e:
-            update.message.reply_text(f"Failed to retrieve blocklist: {str(e)}")
+            msg = update.message.reply_text(f"Failed to retrieve blocklist: {str(e)}")
             print(f"Error retrieving blocklist: {e}")
 
+    if msg is not None:
+        track_message(msg)
+
 def allow(update: Update, context: CallbackContext):
+    msg = None
     if is_user_admin(update, context):
         command_text = update.message.text[len('/allow '):].strip()
 
@@ -1264,20 +1421,24 @@ def allow(update: Update, context: CallbackContext):
 
                 # Update the allowlist in the group's document
                 group_doc.update({allowlist_field: new_allowlist})
-                update.message.reply_text(f"'{command_text}' added to allowlist!")
+                msg = update.message.reply_text(f"'{command_text}' added to allowlist!")
                 print("Updated allowlist:", new_allowlist)
 
             else:
                 # If no allowlist exists, create it with the current command text
                 group_doc.set({allowlist_field: command_text + ", "})
-                update.message.reply_text(f"'{command_text}' allowlisted!")
+                msg = update.message.reply_text(f"'{command_text}' allowlisted!")
                 print("Created new allowlist with:", command_text)
 
         except Exception as e:
-            update.message.reply_text(f"Failed to update allowlist: {str(e)}")
+            msg = update.message.reply_text(f"Failed to update allowlist: {str(e)}")
             print(f"Error updating allowlist: {e}")
 
+    if msg is not None:
+        track_message(msg)
+
 def allowlist(update: Update, context: CallbackContext):
+    msg = None
     if is_user_admin(update, context):
         group_id = str(update.effective_chat.id)
         group_doc = db.collection('groups').document(group_id)
@@ -1295,15 +1456,50 @@ def allowlist(update: Update, context: CallbackContext):
                     message = "\n".join(allowlist_items)
                     update.message.reply_text(message)
                 else:
-                    update.message.reply_text("The allowlist is currently empty.")
+                    msg = update.message.reply_text("The allowlist is currently empty.")
             else:
-                update.message.reply_text("No allowlist found for this group.")
+                msg = update.message.reply_text("No allowlist found for this group.")
         
         except Exception as e:
-            update.message.reply_text(f"Failed to retrieve allowlist: {str(e)}")
+            msg = update.message.reply_text(f"Failed to retrieve allowlist: {str(e)}")
             print(f"Error retrieving allowlist: {e}")
-#endregion Admin Controls
 
+    if msg is not None:
+        track_message(msg)
+
+def cleargames(update: Update, context: CallbackContext) -> None:
+    msg = None
+    chat_id = update.effective_chat.id
+
+    if is_user_admin(update, context):
+        keys_to_delete = [key for key in context.chat_data.keys() if key.startswith(f"{chat_id}_")]
+        for key in keys_to_delete:
+            del context.chat_data[key]
+            print(f"Deleted key: {key}")
+    
+        msg = update.message.reply_text("All active games have been cleared.")
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
+        print(f"User {update.effective_user.id} tried to clear games but is not an admin in chat {update.effective_chat.id}.")
+    
+    if msg is not None:
+        track_message(msg)
+
+def cleanbot(update: Update, context: CallbackContext):
+    global bot_messages
+    if is_user_admin(update, context):
+        chat_id = update.effective_chat.id
+
+        messages_to_delete = [msg_id for cid, msg_id in bot_messages if cid == chat_id]
+
+        for msg_id in messages_to_delete:
+            try:
+                context.bot.delete_message(chat_id, msg_id)
+            except Exception as e:
+                print(f"Failed to delete message {msg_id}: {str(e)}")  # Handle errors
+
+        bot_messages = [(cid, msg_id) for cid, msg_id in bot_messages if cid != chat_id]
+#endregion Admin Controls
 
 # User Controls
 def report(update: Update, context: CallbackContext) -> None:
@@ -1587,44 +1783,134 @@ def fetch_random_word() -> str:
 #endregion User Controls
 
 
-def warn(update: Update, context: CallbackContext):
-    if is_user_admin(update, context) and update.message.reply_to_message:
-        user_id = str(update.message.reply_to_message.from_user.id)
-        group_id = str(update.effective_chat.id)
-        group_doc = db.collection('groups').document(group_id)
-        
-        try:
-            doc_snapshot = group_doc.get()
-            if doc_snapshot.exists:
-                group_data = doc_snapshot.to_dict()
-                warnings_dict = group_data.get('warnings', {})
-                
-                # Increment the warning count for the user
-                current_warnings = warnings_dict.get(user_id, 0)
-                current_warnings += 1
-                warnings_dict[user_id] = current_warnings
 
-                # Update the group document with the new warnings count
-                group_doc.update({'warnings': warnings_dict})
-                update.message.reply_text(f"{user_id} has been warned. Total warnings: {current_warnings}")
-                
-                # Check if the user has reached the warning limit
-                check_warns(update, context, user_id, current_warnings)
 
+
+
+
+
+
+
+
+
+def unmute_user(context: CallbackContext) -> None:
+    job = context.job
+    context.bot.restrict_chat_member(
+        chat_id=job.context['chat_id'],
+        user_id=job.context['user_id'],
+        permissions=ChatPermissions(
+            can_send_messages=True,
+            can_send_media_messages=True,
+            can_send_other_messages=True,
+            can_send_videos=True,
+            can_send_photos=True,
+            can_send_audios=True
+            )
+    )
+
+
+
+
+
+def admin_help(update: Update, context: CallbackContext) -> None:
+    msg = None
+    if is_user_admin(update, context):
+        msg = update.message.reply_text(
+            "*Admin commands:*\n"
+            "*/cleanbot*\nCleans all bot messages\n"
+            "*/cleargames*\nClear all active games\n"
+            "*/antiraid*\nManage anti-raid settings\n"
+            "*/mute*\nMute a user\n"
+            "*/unmute*\nUnmute a user\n"
+            "*/kick*\nKick a user\n"
+            "*/warn*\nWarn a user\n"
+            "*/filter*\nFilter a word or phrase\n"
+            "*/removefilter*\nRemove a filtered word or phrase\n"
+            "*/filterlist*\nList all filtered words and phrases\n",
+            parse_mode='Markdown'
+        )
+    
+    if msg is not None:
+        track_message(msg)
+
+
+def antiraid(update: Update, context: CallbackContext) -> None:
+    msg = None
+    args = context.args
+
+    if is_user_admin(update, context):
+        if not args:
+            msg = update.message.reply_text("Usage: /antiraid end or /antiraid [user_amount] [time_out] [anti_raid_time]")
+            return
+
+        command = args[0]
+        if command == 'end':
+            if anti_raid.is_raid():
+                anti_raid.anti_raid_end_time = 0
+                msg = update.message.reply_text("Anti-raid timer ended. System reset to normal operation.")
+                print("Anti-raid timer ended. System reset to normal operation.")
             else:
-                update.message.reply_text("Group data not found.")
-        
-        except Exception as e:
-            update.message.reply_text(f"Failed to update warnings: {str(e)}")
+                msg = update.message.reply_text("No active anti-raid to end.")
+        else:
+            try:
+                user_amount = int(args[0])
+                time_out = int(args[1])
+                anti_raid_time = int(args[2])
+                anti_raid.user_amount = user_amount
+                anti_raid.time_out = time_out
+                anti_raid.anti_raid_time = anti_raid_time
+                msg = update.message.reply_text(f"Anti-raid settings updated: user_amount={user_amount}, time_out={time_out}, anti_raid_time={anti_raid_time}")
+                print(f"Updated AntiRaid settings to user_amount={user_amount}, time_out={time_out}, anti_raid_time={anti_raid_time}")
+            except (IndexError, ValueError):
+                msg = update.message.reply_text("Invalid arguments. Usage: /antiraid [user_amount] [time_out] [anti_raid_time]")
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
+        print(f"User {update.effective_user.id} tried to use /antiraid but is not an admin in chat {update.effective_chat.id}.")
+    
+    if msg is not None:
+        track_message(msg)
 
-def check_warns(update: Update, context: CallbackContext, user_id: str, warnings: int):
-    if warnings >= 3:
-        try:
-            context.bot.kick_chat_member(update.message.chat.id, int(user_id))
-            update.message.reply_text(f"Goodbye {user_id}!")
-        except Exception as e:
-            update.message.reply_text(f"Failed to kick {user_id}: {str(e)}")
+def toggle_mute(update: Update, context: CallbackContext, mute: bool) -> None:
+    msg = None
+    chat_id = update.effective_chat.id
 
+    if is_user_admin(update, context):
+        if update.message.reply_to_message is None:
+            msg = update.message.reply_text("This command must be used in response to another message!")
+            if msg is not None:
+                track_message(msg)
+            return
+        reply_to_message = update.message.reply_to_message
+        if reply_to_message:
+            user_id = reply_to_message.from_user.id
+            username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
+
+        context.bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=user_id,
+            permissions=ChatPermissions(
+                can_send_messages=not mute,
+                can_send_media_messages=not mute,
+                can_send_other_messages=not mute,
+                can_send_videos=not mute,
+                can_send_photos=not mute,
+                can_send_audios=not mute
+                )
+        )
+
+        action = "muted" if mute else "unmuted"
+        msg = update.message.reply_text(f"User {username} has been {action}.")
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
+    
+    if msg is not None:
+        track_message(msg)
+
+def mute(update: Update, context: CallbackContext) -> None:
+    toggle_mute(update, context, True)
+
+def unmute(update: Update, context: CallbackContext) -> None:
+    toggle_mute(update, context, False)
 
 
 
@@ -2072,162 +2358,7 @@ def verification_timeout(context: CallbackContext) -> None:
 
 
 
-#region Admin Slash Commands
-def admin_help(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if is_user_admin(update, context):
-        msg = update.message.reply_text(
-            "*Admin commands:*\n"
-            "*/cleanbot*\nCleans all bot messages\n"
-            "*/cleargames*\nClear all active games\n"
-            "*/antiraid*\nManage anti-raid settings\n"
-            "*/mute*\nMute a user\n"
-            "*/unmute*\nUnmute a user\n"
-            "*/kick*\nKick a user\n"
-            "*/warn*\nWarn a user\n"
-            "*/filter*\nFilter a word or phrase\n"
-            "*/removefilter*\nRemove a filtered word or phrase\n"
-            "*/filterlist*\nList all filtered words and phrases\n",
-            parse_mode='Markdown'
-        )
-    
-    if msg is not None:
-        track_message(msg)
 
-def cleargames(update: Update, context: CallbackContext) -> None:
-    msg = None
-    chat_id = update.effective_chat.id
-
-    if is_user_admin(update, context):
-        keys_to_delete = [key for key in context.chat_data.keys() if key.startswith(f"{chat_id}_")]
-        for key in keys_to_delete:
-            del context.chat_data[key]
-            print(f"Deleted key: {key}")
-    
-        msg = update.message.reply_text("All active games have been cleared.")
-    else:
-        msg = update.message.reply_text("You must be an admin to use this command.")
-        print(f"User {update.effective_user.id} tried to clear games but is not an admin in chat {update.effective_chat.id}.")
-    
-    if msg is not None:
-        track_message(msg)
-
-def antiraid(update: Update, context: CallbackContext) -> None:
-    msg = None
-    args = context.args
-
-    if is_user_admin(update, context):
-        if not args:
-            msg = update.message.reply_text("Usage: /antiraid end or /antiraid [user_amount] [time_out] [anti_raid_time]")
-            return
-
-        command = args[0]
-        if command == 'end':
-            if anti_raid.is_raid():
-                anti_raid.anti_raid_end_time = 0
-                msg = update.message.reply_text("Anti-raid timer ended. System reset to normal operation.")
-                print("Anti-raid timer ended. System reset to normal operation.")
-            else:
-                msg = update.message.reply_text("No active anti-raid to end.")
-        else:
-            try:
-                user_amount = int(args[0])
-                time_out = int(args[1])
-                anti_raid_time = int(args[2])
-                anti_raid.user_amount = user_amount
-                anti_raid.time_out = time_out
-                anti_raid.anti_raid_time = anti_raid_time
-                msg = update.message.reply_text(f"Anti-raid settings updated: user_amount={user_amount}, time_out={time_out}, anti_raid_time={anti_raid_time}")
-                print(f"Updated AntiRaid settings to user_amount={user_amount}, time_out={time_out}, anti_raid_time={anti_raid_time}")
-            except (IndexError, ValueError):
-                msg = update.message.reply_text("Invalid arguments. Usage: /antiraid [user_amount] [time_out] [anti_raid_time]")
-    else:
-        msg = update.message.reply_text("You must be an admin to use this command.")
-        print(f"User {update.effective_user.id} tried to use /antiraid but is not an admin in chat {update.effective_chat.id}.")
-    
-    if msg is not None:
-        track_message(msg)
-
-def toggle_mute(update: Update, context: CallbackContext, mute: bool) -> None:
-    msg = None
-    chat_id = update.effective_chat.id
-
-    if is_user_admin(update, context):
-        if update.message.reply_to_message is None:
-            msg = update.message.reply_text("This command must be used in response to another message!")
-            if msg is not None:
-                track_message(msg)
-            return
-        reply_to_message = update.message.reply_to_message
-        if reply_to_message:
-            user_id = reply_to_message.from_user.id
-            username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
-
-        context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user_id,
-            permissions=ChatPermissions(
-                can_send_messages=not mute,
-                can_send_media_messages=not mute,
-                can_send_other_messages=not mute,
-                can_send_videos=not mute,
-                can_send_photos=not mute,
-                can_send_audios=not mute
-                )
-        )
-
-        action = "muted" if mute else "unmuted"
-        msg = update.message.reply_text(f"User {username} has been {action}.")
-    else:
-        msg = update.message.reply_text("You must be an admin to use this command.")
-    
-    if msg is not None:
-        track_message(msg)
-
-def mute(update: Update, context: CallbackContext) -> None:
-    toggle_mute(update, context, True)
-
-def unmute(update: Update, context: CallbackContext) -> None:
-    toggle_mute(update, context, False)
-
-def kick(update: Update, context: CallbackContext) -> None:
-    msg = None
-    chat_id = update.effective_chat.id
-
-    if is_user_admin(update, context):
-        if update.message.reply_to_message is None:
-            msg = update.message.reply_text("This command must be used in response to another message!")
-            if msg is not None:
-                track_message(msg)
-            return
-        reply_to_message = update.message.reply_to_message
-        if reply_to_message:
-            user_id = reply_to_message.from_user.id
-            username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
-
-        context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
-        msg = update.message.reply_text(f"User {username} has been kicked.")
-    else:
-        msg = update.message.reply_text("You must be an admin to use this command.")
-    
-    if msg is not None:
-        track_message(msg)
-
-def cleanbot(update: Update, context: CallbackContext):
-    global bot_messages
-    if is_user_admin(update, context):
-        chat_id = update.effective_chat.id
-
-        messages_to_delete = [msg_id for cid, msg_id in bot_messages if cid == chat_id]
-
-        for msg_id in messages_to_delete:
-            try:
-                context.bot.delete_message(chat_id, msg_id)
-            except Exception as e:
-                print(f"Failed to delete message {msg_id}: {str(e)}")  # Handle errors
-
-        bot_messages = [(cid, msg_id) for cid, msg_id in bot_messages if cid != chat_id]
-#endregion Admin Slash Commands
 
 def main() -> None:
     # Create the Updater and pass it your bot's token
@@ -2254,18 +2385,19 @@ def main() -> None:
 
     #region Admin Slash Command Handlers
     dispatcher.add_handler(CommandHandler("adminhelp", admin_help))
-    # dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
-    # dispatcher.add_handler(CommandHandler('cleargames', cleargames))
+    dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
+    dispatcher.add_handler(CommandHandler('cleargames', cleargames))
     # dispatcher.add_handler(CommandHandler('antiraid', antiraid))
     # dispatcher.add_handler(CommandHandler("mute", mute))
     # dispatcher.add_handler(CommandHandler("unmute", unmute))
-    # dispatcher.add_handler(CommandHandler("kick", kick))
+    dispatcher.add_handler(CommandHandler("kick", kick))
     dispatcher.add_handler(CommandHandler("block", block))
     dispatcher.add_handler(CommandHandler("removeblock", remove_block))
     dispatcher.add_handler(CommandHandler("blocklist", blocklist))
     dispatcher.add_handler(CommandHandler("allow", allow))
     dispatcher.add_handler(CommandHandler("allowlist", allowlist))
     dispatcher.add_handler(CommandHandler("warn", warn))
+    dispatcher.add_handler(CommandHandler("warnings", check_warnings))
     #endregion Admin Slash Command Handlers
     
     # Register the message handler for new users
