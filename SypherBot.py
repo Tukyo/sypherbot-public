@@ -1296,7 +1296,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
     if verification_type == 'math':
         challenges = [MATH_0, MATH_1, MATH_2, MATH_3, MATH_4]
         index = random.randint(0, 4)
-        math_challenge = challenges[index]
+        math_challenge = challenges[index]  # Correctly use the selected math challenge
         image_path = f'assets/math_{index}.jpg'
 
         context.bot.send_photo(
@@ -1305,18 +1305,18 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             caption="What is the answer to this math problem?"
         )
 
+        # Correctly store the math challenge using the user_id as a key
         group_doc.update({
-            'authenticating': {
-                'user_id': user_id,
+            f'authenticating.{user_id}': {
                 'type': 'math',
-                'challenge': math_challenge
+                'challenge': math_challenge  # Correct usage of math_challenge variable
             }
-        })
+        }, merge=True)
 
     elif verification_type == 'word':
         challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4]
         index = random.randint(0, 4)
-        word_challenge = challenges[index]
+        word_challenge = challenges[index]  # Correctly use the selected word challenge
         image_path = f'assets/word_{index}.jpg'
 
         context.bot.send_photo(
@@ -1325,19 +1325,20 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             caption="What is the word in this image?"
         )
 
+        # Correctly store the word challenge using the user_id as a key
         group_doc.update({
-            'authenticating': {
-                'user_id': user_id,
+            f'authenticating.{user_id}': {
                 'type': 'word',
-                'challenge': word_challenge
+                'challenge': word_challenge  # Correct usage of word_challenge variable
             }
-        })
+        }, merge=True)
 
     else:
         context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="Invalid verification type. Please try again."
         )
+
 
 def authenticate_user(context, group_id, user_id):
     # Remove the user from the unverified users list
