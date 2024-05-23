@@ -1361,22 +1361,58 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             text="Invalid verification type. Please try again."
         )
 
+def callback_math_response(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()  # Acknowledge the callback query to avoid a loading state on the button
+    
+    # Extract user_id and their response from the callback data
+    _, user_id, response = query.data.split('_')
+    
+    # Convert response to integer to compare with the challenge answer
+    response = int(response)
+
+    # Access the group document and the specific user's authentication challenge
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(group_id)
+    auth_data = group_doc.get().to_dict().get('authenticating', {}).get(user_id, {})
+
+    if 'challenge' in auth_data and response == auth_data['challenge']:
+        # If the response is correct, authenticate the user
+        authenticate_user(context, group_id, user_id)
+
+        # Update the message to show a success message
+        query.edit_message_caption(caption="Authentication successful! You can now participate in the group chat.")
+
+        # Clean up the database by removing the user's entry from the authenticating field
+        group_doc.update({f'authenticating.{user_id}': firestore.DELETE_FIELD})
+    else:
+        # If the response is incorrect, notify the user
+        query.edit_message_caption(caption="Incorrect answer. Please try again or contact an admin for help.")
+
 
 def authenticate_user(context, group_id, user_id):
-    # Remove the user from the unverified users list
     group_doc = db.collection('groups').document(group_id)
-    group_doc.update({'unverified_users': firestore.ArrayRemove([int(user_id)])})
-    
-    # Remove restrictions in the main group chat
+
+    # Update Firestore: Remove the user from 'unverified_users' and delete their 'authenticating' entry
+    group_doc.update({
+        f'unverified_users': firestore.ArrayRemove([int(user_id)]),
+        f'authenticating.{user_id}': firestore.DELETE_FIELD
+    })
+
+    # Lift restrictions in the group chat for the authenticated user
     context.bot.restrict_chat_member(
         chat_id=int(group_id),
         user_id=int(user_id),
-        permissions=ChatPermissions(can_send_messages=True, can_add_web_page_previews=True,
-                                    can_send_media_messages=True, can_send_other_messages=True,
-                                    can_invite_users=True)
+        permissions=ChatPermissions(
+            can_send_messages=True,
+            can_add_web_page_previews=True,
+            can_send_media_messages=True,
+            can_send_other_messages=True,
+            can_invite_users=True
+        )
     )
-    
     print(f"User {user_id} authenticated. Restrictions lifted in group {group_id}")
+
 
 
 
@@ -2887,6 +2923,7 @@ def main() -> None:
 
     # Register the callback query handler for button clicks
     dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
+    dispatcher.add_handler(CallbackQueryHandler(callback_math_response, pattern='^auth_'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
