@@ -677,7 +677,6 @@ def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
         if query.data == 'setup_crypto':
             setup_crypto(update, context)
 
-
 def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
@@ -986,7 +985,6 @@ def setup_verification_callback(update: Update, context: CallbackContext) -> Non
     if is_user_owner(update, context):
         if query.data == 'setup_verification':
             setup_verification(update, context)
-
 
 def setup_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1332,7 +1330,6 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
             chat_id=update.effective_chat.id,
             text=f"Verification timeout set to {timeout_seconds // 60} minutes."
         )
-
 
 def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
     #Sets the verification timeout for a specific group in the Firestore database.
@@ -2917,8 +2914,13 @@ def main() -> None:
     
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
+
+    # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
+    # dispatcher.add_handler(CommandHandler('antiraid', antiraid))
+    # dispatcher.add_handler(CommandHandler("mute", mute))
+    # dispatcher.add_handler(CommandHandler("unmute", unmute))
     
-    #region General Slash Command Handlers
+    # General Slash Command Handlers
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("commands", commands))
     dispatcher.add_handler(CommandHandler("play", play))
@@ -2932,16 +2934,12 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("volume", volume))
     dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
-    #endregion General Slash Command Handlers
 
-    #region Admin Slash Command Handlers
+    # Admin Slash Command Handlers
     dispatcher.add_handler(CommandHandler("setup", setup_home))
     dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
     dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
-    # dispatcher.add_handler(CommandHandler('antiraid', antiraid))
-    # dispatcher.add_handler(CommandHandler("mute", mute))
-    # dispatcher.add_handler(CommandHandler("unmute", unmute))
     dispatcher.add_handler(CommandHandler("kick", kick))
     dispatcher.add_handler(CommandHandler("block", block))
     dispatcher.add_handler(CommandHandler("removeblock", remove_block))
@@ -2950,23 +2948,25 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("allowlist", allowlist))
     dispatcher.add_handler(CommandHandler("warn", warn))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
-    #endregion Admin Slash Command Handlers
+
+    # General Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
+    dispatcher.add_handler(CallbackQueryHandler(command_buttons, pattern='^commands_'))    
     
     # Register the message handler for new users
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
     dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_message))
 
-    # Add a handler for deleting service messages
-    # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
-
-    # Register the callback query handler for button clicks
+    # Authentication Callbacks
     dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
     dispatcher.add_handler(CallbackQueryHandler(callback_math_response, pattern='^mauth_'))
     dispatcher.add_handler(CallbackQueryHandler(callback_word_response, pattern='^wauth_'))
-    # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
-    # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
+    
+    # Setup Callback
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
+    
+    # Setup Crypto Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_crypto_callback, pattern='^setup_crypto$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
@@ -2974,16 +2974,16 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|aptos|harmony|mantle)$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_verification, pattern='^setup_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(enable_verification, pattern='^enable_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(disable_verification, pattern='^disable_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(simple_verification, pattern='^simple_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(math_verification, pattern='^math_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(word_verification, pattern='^word_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(timeout_verification, pattern='^timeout_verification$'))
+
+    # Setup Verification Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(setup_verification_callback, pattern='^setup_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(enable_verification_callback, pattern='^enable_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(disable_verification_callback, pattern='^disable_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(simple_verification_callback, pattern='^simple_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(math_verification_callback, pattern='^math_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(word_verification_callback, pattern='^word_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(timeout_verification_callback, pattern='^timeout_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_timeout_callback, pattern='^vtimeout_'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
-    dispatcher.add_handler(CallbackQueryHandler(command_buttons, pattern='^commands_'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
