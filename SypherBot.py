@@ -1297,7 +1297,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         challenges = [MATH_0, MATH_1, MATH_2, MATH_3, MATH_4]
         index = random.randint(0, 4)
         math_challenge = challenges[index]
-        image_path = f'assets/math_{index}'
+        image_path = f'assets/math_{index}.jpg'
 
         context.bot.send_photo(
             chat_id=update.effective_chat.id,
@@ -1317,7 +1317,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4]
         index = random.randint(0, 4)
         word_challenge = challenges[index]
-        image_path = f'assets/word_{index}'
+        image_path = f'assets/word_{index}.jpg'
 
         context.bot.send_photo(
             chat_id=update.effective_chat.id,
