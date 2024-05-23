@@ -1296,27 +1296,50 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
     if verification_type == 'math':
         challenges = [MATH_0, MATH_1, MATH_2, MATH_3, MATH_4]
         index = random.randint(0, 4)
-        math_challenge = challenges[index]  # Correctly use the selected math challenge
+        math_challenge = challenges[index]
         image_path = f'assets/math_{index}.jpg'
+
+        keyboard = [
+            [
+                InlineKeyboardButton("1", callback_data=f'auth_{user_id}_1'),
+                InlineKeyboardButton("2", callback_data=f'auth_{user_id}_2'),
+                InlineKeyboardButton("3", callback_data=f'auth_{user_id}_3')
+            ],
+            [
+                InlineKeyboardButton("4", callback_data=f'auth_{user_id}_4'),
+                InlineKeyboardButton("5", callback_data=f'auth_{user_id}_5'),
+                InlineKeyboardButton("6", callback_data=f'auth_{user_id}_6')
+            ],
+            [
+                InlineKeyboardButton("7", callback_data=f'auth_{user_id}_7'),
+                InlineKeyboardButton("8", callback_data=f'auth_{user_id}_8'),
+                InlineKeyboardButton("9", callback_data=f'auth_{user_id}_9')
+            ],
+            [
+                InlineKeyboardButton("0", callback_data=f'auth_{user_id}_0')
+            ]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
         context.bot.send_photo(
             chat_id=update.effective_chat.id,
             photo=open(image_path, 'rb'),
-            caption="What is the answer to this math problem?"
+            caption="What is the answer to this math equation?",
+            reply_markup=reply_markup
         )
 
-        # Correctly store the math challenge using the user_id as a key
         group_doc.set({
             f'authenticating.{user_id}': {
                 'type': 'math',
-                'challenge': math_challenge  # Correct usage of math_challenge variable
+                'challenge': math_challenge
             }
         }, merge=True)
 
     elif verification_type == 'word':
         challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4]
         index = random.randint(0, 4)
-        word_challenge = challenges[index]  # Correctly use the selected word challenge
+        word_challenge = challenges[index]
         image_path = f'assets/word_{index}.jpg'
 
         context.bot.send_photo(
@@ -1325,11 +1348,10 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             caption="What is the word in this image?"
         )
 
-        # Correctly store the word challenge using the user_id as a key
         group_doc.set({
             f'authenticating.{user_id}': {
                 'type': 'word',
-                'challenge': word_challenge  # Correct usage of word_challenge variable
+                'challenge': word_challenge
             }
         }, merge=True)
 
