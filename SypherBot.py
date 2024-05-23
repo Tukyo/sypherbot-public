@@ -1404,11 +1404,19 @@ def callback_math_response(update: Update, context: CallbackContext):
 def authenticate_user(context, group_id, user_id):
     group_doc = db.collection('groups').document(group_id)
 
-    # Update Firestore: Remove the user from 'unverified_users' and delete their 'authenticating' entry
-    group_doc.update({
-        f'unverified_users': firestore.ArrayRemove([int(user_id)]),
-        f'authenticating.{user_id}': DELETE_FIELD
-    })
+    # Get the current group document
+    group_data = group_doc.get().to_dict()
+
+    # Remove the user from 'unverified_users'
+    if 'unverified_users' in group_data:
+        group_data['unverified_users'].remove(int(user_id))
+
+    # Delete the 'authenticating.USERID' entry
+    if 'authenticating' in group_data and user_id in group_data['authenticating']:
+        del group_data['authenticating'][user_id]
+
+    # Write the updated group data back to Firestore
+    group_doc.set(group_data)
 
     # Lift restrictions in the group chat for the authenticated user
     context.bot.restrict_chat_member(
