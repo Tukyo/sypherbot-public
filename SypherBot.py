@@ -643,14 +643,14 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
 
     keyboard = [
         [
-            InlineKeyboardButton("Admin", callback_data=f"{user_id}:'setup_admin'"),
-            InlineKeyboardButton("Commands", callback_data=f"{user_id}:'setup_custom_commands'")
+            InlineKeyboardButton("Admin", callback_data='setup_admin'),
+            InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
         ],
         [
-            InlineKeyboardButton("Authentication", callback_data=f"{user_id}:'setup_verification'"),
-            InlineKeyboardButton("Crypto", callback_data=f"{user_id}:'setup_crypto'")
+            InlineKeyboardButton("Authentication", callback_data='setup_verification'),
+            InlineKeyboardButton("Crypto", callback_data='setup_crypto')
         ],
-        [InlineKeyboardButton("Cancel", callback_data=f"{user_id}:'cancel'")]
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -671,16 +671,12 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
 def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
-
-    user_id, _, button_data = query.data.partition(':')
-
-    user_id = int(user_id)
+    user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
 
     if is_user_owner(update, context, user_id):
-        if button_data.strip("'") == 'setup_crypto':
-            setup_crypto(update, context)
+        setup_crypto(update, context)
 
 def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2941,6 +2937,7 @@ def main() -> None:
 
     # Admin Slash Command Handlers
     dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("setup", start))
     dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
     dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
