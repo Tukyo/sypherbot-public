@@ -1183,34 +1183,38 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
     msg = None
     for member in update.message.new_chat_members:
-        user_id = member.id
-        chat_id = update.message.chat.id
+            user_id = member.id
+            chat_id = update.message.chat.id
 
-        if user_id == context.bot.id:
-            return
+            if user_id == context.bot.id:
+                return
 
-        # Mute the new user
-        context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user_id,
-            permissions=ChatPermissions(can_send_messages=False)
-        )
+            # Mute the new user
+            context.bot.restrict_chat_member(
+                chat_id=chat_id,
+                user_id=user_id,
+                permissions=ChatPermissions(can_send_messages=False)
+            )
 
-        if anti_raid.is_raid():
-            msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
-            
-            # Get the user_id of the user that just joined
-            user_id = update.message.new_chat_members[0].id
+            if anti_raid.is_raid():
+                msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
+                
+                # Get the user_id of the user that just joined
+                user_id = update.message.new_chat_members[0].id
 
-            # Kick the user that just joined
-            context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
-            return
-        
-        print("Allowing new user to join, antiraid is not active.")
+                # Kick the user that just joined
+                context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
+                return
+
+            # Add the user_id to the unverified_users array in the group document
+            group_doc = db.collection('groups').document(str(chat_id))
+            group_doc.update({'unverified_users': firestore.ArrayUnion([user_id])})
+
+            print(f"New user {user_id} added to unverified users in group {chat_id}")
 
     if msg is not None:
         track_message(msg)
-        
+            
 
 
 
