@@ -502,26 +502,43 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
 
 def start(update: Update, context: CallbackContext) -> None:
     msg = None
-    chat_type = update.effective_chat.type
+    args = update.message.text.split('_') if update.message.text else []
     user_id = update.effective_user.id
+    chat_type = update.effective_chat.type
 
     if chat_type == "private":
         if rate_limit_check():
-            keyboard = [
-                [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/sypher_robot?startgroup=0")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            if len(args) == 3 and args[0] == 'authenticate':
+                group_id = args[1]
+                user_id_from_link = args[2]
 
-            msg = update.message.reply_text(
-                'Hello! I am Sypher Bot. If you are here to verify, now you may return to main chat.\n\n'
-                'If you want me to manage you group, get started with the button below.',
-                reply_markup=reply_markup
-            )
+                # Verify if user_id_from_link is in the unverified_users array for this group_id
+                group_doc = db.collection('groups').document(group_id)
+                group_data = group_doc.get()
+                if group_data.exists:
+                    unverified_users = group_data.to_dict().get('unverified_users', [])
+                    if int(user_id_from_link) in unverified_users:
+                        # User is unverified, handle the verification process
+                        msg = update.message.reply_text('You are not authenticated.')
+                    else:
+                        msg = update.message.reply_text('You are already verified or not a member.')
+                else:
+                    msg = update.message.reply_text('No such group exists.')
+            else:
+                keyboard = [
+                    [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/sypher_robot?startgroup=0")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                msg = update.message.reply_text(
+                    'Hello! I am Sypher Bot. If you are here to verify, now you may return to the main chat.\n\n'
+                    'If you want me to manage your group, get started with the button below.',
+                    reply_markup=reply_markup
+                )
         else:
             msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     else:
         msg = update.message.reply_text('This command can only be used in DM.')
-    
+
     if msg is not None:
         track_message(msg)
 
@@ -1211,6 +1228,16 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             group_doc.update({'unverified_users': firestore.ArrayUnion([user_id])})
 
             print(f"New user {user_id} added to unverified users in group {chat_id}")
+
+            auth_url = f"https://t.me/your_bot_username?start=authenticate_{chat_id}_{user_id}"
+            keyboard = [
+                [InlineKeyboardButton("Authenticate", url=auth_url)]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            update.message.reply_text(
+                "Welcome to the group! Please press the button below to authenticate.",
+                reply_markup=reply_markup
+            )
 
     if msg is not None:
         track_message(msg)
