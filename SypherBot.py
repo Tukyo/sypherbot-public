@@ -523,9 +523,9 @@ def start(update: Update, context: CallbackContext) -> None:
                 group_doc = db.collection('groups').document(group_id)
                 group_data = group_doc.get()
                 if group_data.exists:
-                    unverified_users = group_data.to_dict().get('unverified_users', [])
+                    unverified_users = group_data.to_dict().get('unverified_users', {})
                     print(f"Unverified users list: {unverified_users}")
-                    if int(user_id_from_link) in unverified_users:
+                    if str(user_id_from_link) in unverified_users:
 
                         keyboard = [[InlineKeyboardButton("Authenticate", callback_data=f'authenticate_{group_id}_{user_id_from_link}')]]
                         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1242,7 +1242,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 return
 
             # Add the user_id to the unverified_users array in the group document
-            group_doc.update({'unverified_users': firestore.ArrayUnion([user_id])})
+            group_doc.update({'unverified_users': {user_id: None}})  # No initial challenge
             print(f"New user {user_id} added to unverified users in group {group_id}")
 
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
@@ -1261,33 +1261,35 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 def authentication_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
-    
-    # Extract group_id and user_id from the callback data
+
     _, group_id, user_id = query.data.split('_')
-    
+
     print(f"Authenticating user {user_id} for group {group_id}")
-    
-    # Fetch the group document to access verification type and unverified users
+
     group_doc = db.collection('groups').document(group_id)
     group_data = group_doc.get().to_dict()
-    
+
     if group_data:
-        unverified_users = group_data.get('unverified_users', [])
+        unverified_users = group_data.get('unverified_users', {})  # Get as dictionary
         verification_info = group_data.get('verification_info', {})
         verification_type = verification_info.get('verification_type', 'simple')
-        
+
         print(f"Verification type: {verification_type}")
 
-        # Check if the user is in the unverified users list
-        if int(user_id) in unverified_users:
+        # Check if the user ID is in the KEYS of the unverified_users mapping
+        if str(user_id) in unverified_users:  
             if verification_type == 'simple':
                 authenticate_user(context, group_id, user_id)
             elif verification_type == 'math' or verification_type == 'word':
-                authentication_challenge(update, context, verification_type, group_id, user_id)
+                authentication_challenge(
+                    update, context, verification_type, group_id, user_id
+                )
             else:
                 query.edit_message_text(text="Invalid verification type configured.")
         else:
-            query.edit_message_text(text="You are already verified or not a member.")
+            query.edit_message_text(
+                text="You are already verified or not a member."
+            )
     else:
         query.edit_message_text(text="No such group exists.")
 
@@ -1330,12 +1332,10 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             reply_markup=reply_markup
         )
 
-        group_doc.set({
-            f'authenticating.{user_id}': {
-                'type': 'math',
-                'challenge': math_challenge
-            }
-        }, merge=True)
+        group_doc.update({
+            f'unverified_users.{user_id}': math_challenge  
+        })
+
 
     elif verification_type == 'word':
         challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4]
@@ -1349,12 +1349,9 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             caption="What is the word in this image?"
         )
 
-        group_doc.set({
-            f'authenticating.{user_id}': {
-                'type': 'word',
-                'challenge': word_challenge
-            }
-        }, merge=True)
+        group_doc.update({
+            f'unverified_users.{user_id}': word_challenge  
+        })
 
     else:
         context.bot.send_message(
@@ -1364,40 +1361,40 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
 
 def callback_math_response(update: Update, context: CallbackContext):
     query = update.callback_query
-    query.answer()  # Acknowledge the callback query to avoid a loading state on the button
-    
-    # Extract user_id, group_id, and their response from the callback data
-    _, user_id, group_id, response = query.data.split('_')
-    user_id = str(user_id)  # Ensure user_id is a string
-    group_id = str(group_id)  # Ensure group_id is a string
-    response = int(response)  # Convert response to integer to compare with the challenge answer
+    query.answer()
 
-    # Access the group document and the specific user's authentication challenge
+    _, user_id, group_id, response = query.data.split('_')
+    user_id = str(user_id)
+    group_id = str(group_id)
+    response = int(response)
+
     group_doc = db.collection('groups').document(group_id)
     group_data = group_doc.get()
 
     if group_data.exists:
         group_data_dict = group_data.to_dict()
-        auth_data_dict = group_data_dict.get(f'authenticating.{user_id}')
 
-        if auth_data_dict:
-            challenge_answer = auth_data_dict.get('challenge')
+        # Check if the user is in the unverified users mapping
+        if str(user_id) in group_data_dict.get('unverified_users', {}):
+            challenge_answer = group_data_dict['unverified_users'][str(user_id)]
 
             if response == challenge_answer:
-                # If the response is correct, authenticate the user
                 authenticate_user(context, group_id, user_id)
-
-                # Update the message to show a success message
-                query.edit_message_caption(caption="Authentication successful! You can now participate in the group chat.")
+                query.edit_message_caption(
+                    caption="Authentication successful! You can now participate in the group chat."
+                )
             else:
-                # If the response is incorrect, notify the user
-                query.edit_message_caption(caption="Incorrect answer. Please try again or contact an admin for help.")
+                query.edit_message_caption(
+                    caption="Incorrect answer. Please try again or contact an admin for help."
+                )
         else:
-            # Handle the case where authentication data doesn't exist
-            query.edit_message_caption(caption="Authentication data not found. Please start over or contact an admin.")
+            query.edit_message_caption(
+                caption="Authentication data not found. Please start over or contact an admin."
+            )
     else:
-        # Handle the case where group data doesn't exist
-        query.edit_message_caption(caption="Group data not found. Please start over or contact an admin.")
+        query.edit_message_caption(
+            caption="Group data not found. Please start over or contact an admin."
+        )
 
 
 
@@ -1407,13 +1404,9 @@ def authenticate_user(context, group_id, user_id):
     # Get the current group document
     group_data = group_doc.get().to_dict()
 
-    # Remove the user from 'unverified_users'
-    if 'unverified_users' in group_data:
-        group_data['unverified_users'].remove(int(user_id))
-
-    # Delete the 'authenticating.USERID' entry
-    if 'authenticating' in group_data and user_id in group_data['authenticating']:
-        del group_data['authenticating'][user_id]
+    group_doc.update({
+        f'unverified_users.{user_id}': firestore.DELETE_FIELD  # Remove the user's entry
+    })
 
     # Write the updated group data back to Firestore
     group_doc.set(group_data)
