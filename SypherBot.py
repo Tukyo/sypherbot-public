@@ -616,7 +616,6 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
         if query.data == 'setup_home':
             setup_home(update, context)
 
-
 def setup_home(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
@@ -648,7 +647,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         ],
         [
             InlineKeyboardButton("Authentication", callback_data='setup_verification'),
-            InlineKeyboardButton("Ethereum", callback_data='setup_crypto')
+            InlineKeyboardButton("Crypto", callback_data='setup_crypto_callback')
         ],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
@@ -667,7 +666,6 @@ def setup_home(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
     
-
 #region Ethereum Setup
 def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -735,7 +733,6 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 
-
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
         msg = None
@@ -763,7 +760,6 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 
-
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
         msg = None
@@ -788,7 +784,6 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
-
 
 def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
@@ -821,7 +816,6 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 
-
 def setup_ABI(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
         msg = None
@@ -847,7 +841,6 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 
-
 def handle_ABI(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
         msg = None
@@ -872,7 +865,6 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
-
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
@@ -919,7 +911,6 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 
-
 def handle_chain(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
         if context.user_data.get('setup_stage') == 'chain':
@@ -931,7 +922,6 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
             context.user_data['setup_stage'] = None
 
             complete_token_setup(group_id)
-
 
 def complete_token_setup(group_id: str):
     # Fetch the group data from Firestore
