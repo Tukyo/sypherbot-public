@@ -1229,7 +1229,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             print(f"New user {user_id} added to unverified users in group {chat_id}")
 
-            auth_url = f"https://t.me/your_bot_username?start=authenticate_{chat_id}_{user_id}"
+            auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
             keyboard = [
                 [InlineKeyboardButton("Authenticate", url=auth_url)]
             ]
