@@ -451,10 +451,9 @@ def menu_change(context: CallbackContext, update: Update):
         'setup_verification_message',
         'setup_enable_verification_message',
         'setup_disable_verification_message',
+        'setup_simple_verification_message',
         'setup_math_verification_message',
-        'setup_password_verification_message',
-        'setup_verification_question_message',
-        'setup_verification_answer_message'
+        'setup_word_verification_message'
     ]
 
     for message_to_delete in messages_to_delete:
@@ -495,10 +494,6 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
             pass
         elif update.message.document:
             handle_ABI(update, context)
-    elif setup_stage == 'setup_password_verification':
-        handle_verification_question(update, context)
-    elif setup_stage == 'setup_verification_question':
-        handle_verification_answer(update, context)
 
 def start(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -547,7 +542,6 @@ def start(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
 
 def setup_home_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -937,8 +931,9 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Disable", callback_data='disable_verification')
         ],
         [
+            InlineKeyboardButton("Simple", callback_data='simple_verification'),
             InlineKeyboardButton("Math", callback_data='math_verification'),
-            InlineKeyboardButton("Password", callback_data='password_verification')
+            InlineKeyboardButton("Word", callback_data='word_verification')
         ],
         [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
@@ -948,7 +943,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Please choose whether to enable or disable verification.\n\nYou may also choose the verification method for your group.\n\nMath will present a random simple math equation to the new user.\n\nIf you choose password, you will be prompted to enter a question, then an answer. The answer must be 5 letters.\n\nExample: "What is a red fruit that falls from a tree? [apple].',
+        text='Please choose whether to enable or disable verification. Also, please choose the verification type.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1041,6 +1036,56 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+def simple_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'simple_verification':
+        simple_verification(update, context)
+
+def simple_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'simple'
+            }
+        })
+    else:
+        group_doc.update({
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'simple'
+            }
+        })
+
+    menu_change(context, update)
+
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Simple verification enabled for this group.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_simple_verification_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
 def math_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1077,24 +1122,33 @@ def math_verification(update: Update, context: CallbackContext) -> None:
 
     menu_change(context, update)
 
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Math verification enabled for this group.'
+        text='Math verification enabled for this group.',
+        reply_markup=reply_markup
     )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_math_verification_message'] = msg.message_id
+
 
     if msg is not None:
         track_message(msg)
 
-def password_verification_callback(update: Update, context: CallbackContext) -> None:
+def word_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
     update = Update(update.update_id, message=query.message)
 
-    if query.data == 'password_verification':
-        password_verification(update, context)
+    if query.data == 'word_verification':
+        word_verification(update, context)
 
-def password_verification(update: Update, context: CallbackContext) -> None:
+def word_verification(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -1106,19 +1160,19 @@ def password_verification(update: Update, context: CallbackContext) -> None:
             'group_id': group_id,
             'verification_info': {
                 'verification': True,
-                'verification_type': 'password'
+                'verification_type': 'Word'
             }
         })
     else:
         group_doc.update({
             'verification_info': {
                 'verification': True,
-                'verification_type': 'password'
+                'verification_type': 'Word'
             }
         })
 
     # Set the state in user_data
-    context.user_data['setup_stage'] = 'setup_password_verification'
+    context.user_data['setup_stage'] = 'setup_word_verification'
 
     menu_change(context, update)
 
@@ -1130,75 +1184,15 @@ def password_verification(update: Update, context: CallbackContext) -> None:
     # Ask the question for new users
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='What question would you like to use for verification?\n\nThis question will be presented to new users when they join your group.\n\nThey will need to answer the question with your five letter answer to gain access.',
+        text='Word verification enabled.',
         reply_markup=reply_markup
     )
-    context.user_data['setup_verification_question_message'] = msg.message_id
-
-    if msg is not None:
-        track_message(msg)
-    
-def handle_verification_question(update: Update, context: CallbackContext) -> None:
-    msg = None
-    # Store the question in user_data
-    context.user_data['verification_question'] = update.message.text
-
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    # Ask for the answer to the question
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='What is the five letter answer to the question?',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_verification_answer_message'] = msg.message_id
-
-    context.user_data['setup_stage'] = 'setup_verification_question'
-
-    if msg is not None:
-        track_message(msg)
-
-def handle_verification_answer(update: Update, context: CallbackContext) -> None:
-    msg = None
-    # Store the answer in user_data
-    context.user_data['verification_answer'] = update.message.text
-
-    # Update the database with the question and answer
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-    group_doc.update({
-        'verification_info': {
-            'verification': True,
-            'verification_type': 'password',
-            'verification_question': context.user_data['verification_question'],
-            'verification_answer': context.user_data['verification_answer']
-        }
-    })
-
-    # Clear the state in user_data
     context.user_data['setup_stage'] = None
+    context.user_data['setup_word_verification_message'] = msg.message_id
 
-    menu_change(context, update)
-
-    keyboard = [
-        [InlineKeyboardButton("Home", callback_data='setup_home')]
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Password verification setup complete.',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_verification_complete_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
-#endregion Verification Setup
 
 #endregion Bot Setup
 
@@ -2817,8 +2811,9 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_verification, pattern='^setup_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_verification, pattern='^enable_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(disable_verification, pattern='^disable_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(simple_verification, pattern='^simple_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(math_verification, pattern='^math_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(password_verification, pattern='^password_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(word_verification, pattern='^word_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
     dispatcher.add_handler(CallbackQueryHandler(command_buttons, pattern='^commands_'))
 
