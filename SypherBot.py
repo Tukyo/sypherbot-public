@@ -1306,7 +1306,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         )
 
         # Correctly store the math challenge using the user_id as a key
-        group_doc.update({
+        group_doc.set({
             f'authenticating.{user_id}': {
                 'type': 'math',
                 'challenge': math_challenge  # Correct usage of math_challenge variable
@@ -1326,7 +1326,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         )
 
         # Correctly store the word challenge using the user_id as a key
-        group_doc.update({
+        group_doc.set({
             f'authenticating.{user_id}': {
                 'type': 'word',
                 'challenge': word_challenge  # Correct usage of word_challenge variable
