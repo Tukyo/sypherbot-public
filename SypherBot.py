@@ -222,10 +222,6 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
  
         if msg is not None:
             track_message(msg)
-    else:
-        # Inviter is not an admin, leave the group
-        print(f"Leaving group {group_id} because the bot was not added by an admin.")
-        context.bot.leave_chat(group_id)
 
 def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
     left_member = update.message.left_chat_member
@@ -1212,102 +1208,18 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
         
         print("Allowing new user to join, antiraid is not active.")
 
-        # Send the welcome message with the verification button
-        welcome_message = (
-            "Welcome to Tukyo Games!\n\n"
-            "⚠️ Admins will NEVER DM YOU FIRST ⚠️\n\n"
-            "To start verification, please click Initialize Bot, then send the bot a /start command in DM.\n\n"
-            "After initializing the bot, return to the main chat and press 'Click Here to Verify'.\n"
-        )
-
-        keyboard = [
-            [InlineKeyboardButton("Initialize Bot", url=f"https://t.me/deSypher_bot?start={user_id}")],
-            [InlineKeyboardButton("Click Here to Verify", callback_data=f'authenticate_{chat_id}_{user_id}')]
-        ]
+    if msg is not None:
+        track_message(msg)
         
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        welcomeMessage = context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
-        welcome_message_id = welcomeMessage.message_id
-        context.chat_data['non_deletable_message_id'] = welcomeMessage.message_id
-
-        # Start a verification timeout job
-        job_queue = context.job_queue
-        job_queue.run_once(verification_timeout, 600, context={'chat_id': chat_id, 'user_id': user_id, 'welcome_message_id': welcome_message_id}, name=str(user_id))
-
-        update.message.delete()
-
-    if msg is not None:
-        track_message(msg)
-
-def verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    callback_data = query.data
-    print(f"Callback data: {callback_data}")
-    user_id = query.from_user.id
-    chat_id = query.message.chat_id
-    query.answer()
-
-    # Extract group_id and user_id from the callback_data
-    _, callback_group_id, callback_user_id = callback_data.split('_')
-    callback_group_id = int(callback_group_id)
-    callback_user_id = int(callback_user_id)
-
-    print(f"User ID: {callback_user_id}, Group ID: {callback_group_id}")
-
-    if user_id != callback_user_id:
-        return  # Do not process if the callback user ID does not match the button user ID
-
-    if is_user_admin(update, context):
-        return
-    
-    # Send a message to the user's DM to start the verification process
-    start_verification_dm(user_id, context)
-    
-    # Optionally, you can edit the original message to indicate the button was clicked
-    verification_started_message = query.edit_message_text(text="A verification message has been sent to your DMs. Please check your messages.")
-    verification_started_id = verification_started_message.message_id
-
-    job_queue = context.job_queue
-    job_queue.run_once(delete_verification_message, 30, context={'chat_id': chat_id, 'message_id': verification_started_id})
-
-
-def start_verification_dm(user_id: int, context: CallbackContext) -> None:
-    print("Sending verification message to user's DM.")
-    verification_message = "Welcome to the SypherBot verification process! Please click the button to begin verification."
-    keyboard = [[InlineKeyboardButton("Start Verification", callback_data='start_verification')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    message = context.bot.send_message(chat_id=user_id, text=verification_message, reply_markup=reply_markup)
-    return message.message_id
 
 
 
 
 
 
-def delete_verification_message(context: CallbackContext) -> None:
-    job = context.job
-    context.bot.delete_message(
-        chat_id=job.context['chat_id'],
-        message_id=job.context['message_id']
-    )
 
-def verification_timeout(context: CallbackContext) -> None:
-    msg = None
-    job = context.job
-    context.bot.kick_chat_member(
-        chat_id=job.context['chat_id'],
-        user_id=job.context['user_id']
-    )
-    
-    context.bot.delete_message(
-        chat_id=job.context['chat_id'],
-        message_id=job.context['welcome_message_id']
-    )
 
-    if msg is not None:
-        track_message(msg)
+
 #endregion User Verification
 
 #region Ethereum
@@ -2200,6 +2112,12 @@ def website(update: Update, context: CallbackContext) -> None:
 
 
 
+
+
+
+
+
+
 def unmute_user(context: CallbackContext) -> None:
     job = context.job
     context.bot.restrict_chat_member(
@@ -2376,6 +2294,23 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
         volume(update, context)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #region Main Slash Commands
 # def sypher(update: Update, context: CallbackContext) -> None:
 #     msg = None
@@ -2513,6 +2448,31 @@ def get_token_price_in_fiat(contract_address, currency):
 
 
 
+#region old shit
+
+
+# def delete_verification_message(context: CallbackContext) -> None:
+#     job = context.job
+#     context.bot.delete_message(
+#         chat_id=job.context['chat_id'],
+#         message_id=job.context['message_id']
+#     )
+
+# def verification_timeout(context: CallbackContext) -> None:
+#     msg = None
+#     job = context.job
+#     context.bot.kick_chat_member(
+#         chat_id=job.context['chat_id'],
+#         user_id=job.context['user_id']
+#     )
+    
+#     context.bot.delete_message(
+#         chat_id=job.context['chat_id'],
+#         message_id=job.context['welcome_message_id']
+#     )
+
+#     if msg is not None:
+#         track_message(msg)
 # def handle_start_verification(update: Update, context: CallbackContext) -> None:
 #     query = update.callback_query
 #     user_id = query.from_user.id
@@ -2644,6 +2604,46 @@ def get_token_price_in_fiat(contract_address, currency):
 
 
 
+# def verification_callback(update: Update, context: CallbackContext) -> None:
+#     query = update.callback_query
+#     callback_data = query.data
+#     print(f"Callback data: {callback_data}")
+#     user_id = query.from_user.id
+#     chat_id = query.message.chat_id
+#     query.answer()
+
+#     # Extract group_id and user_id from the callback_data
+#     _, callback_group_id, callback_user_id = callback_data.split('_')
+#     callback_group_id = int(callback_group_id)
+#     callback_user_id = int(callback_user_id)
+
+#     print(f"User ID: {callback_user_id}, Group ID: {callback_group_id}")
+
+#     if user_id != callback_user_id:
+#         return  # Do not process if the callback user ID does not match the button user ID
+
+#     if is_user_admin(update, context):
+#         return
+    
+#     # Send a message to the user's DM to start the verification process
+#     start_verification_dm(user_id, context)
+    
+#     # Optionally, you can edit the original message to indicate the button was clicked
+#     verification_started_message = query.edit_message_text(text="A verification message has been sent to your DMs. Please check your messages.")
+#     verification_started_id = verification_started_message.message_id
+
+#     job_queue = context.job_queue
+#     job_queue.run_once(delete_verification_message, 30, context={'chat_id': chat_id, 'message_id': verification_started_id})
+
+
+# def start_verification_dm(user_id: int, context: CallbackContext) -> None:
+#     print("Sending verification message to user's DM.")
+#     verification_message = "Welcome to the SypherBot verification process! Please click the button to begin verification."
+#     keyboard = [[InlineKeyboardButton("Start Verification", callback_data='start_verification')]]
+#     reply_markup = InlineKeyboardMarkup(keyboard)
+
+#     message = context.bot.send_message(chat_id=user_id, text=verification_message, reply_markup=reply_markup)
+#     return message.message_id
 
 
 
@@ -2653,8 +2653,7 @@ def get_token_price_in_fiat(contract_address, currency):
 
 
 
-
-
+#endregion old shit
 
 
 
@@ -2724,7 +2723,7 @@ def main() -> None:
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
 
     # Register the callback query handler for button clicks
-    dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^authenticate$'))
+    # dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^authenticate$'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
