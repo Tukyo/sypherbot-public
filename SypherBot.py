@@ -1359,8 +1359,8 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
     
         num_buttons_per_row = 3
         for i in range(0, len(challenges), num_buttons_per_row):
-            row = [InlineKeyboardButton(word, callback_data=f'wauth_{user_id}_{group_id}_{j}') 
-                for j, word in enumerate(challenges[i:i + num_buttons_per_row], start=i)]
+            row = [InlineKeyboardButton(word, callback_data=f'wauth_{user_id}_{group_id}_{word}') 
+                for word in challenges[i:i + num_buttons_per_row]]
             keyboard.append(row)
     
         reply_markup = InlineKeyboardMarkup(keyboard)
