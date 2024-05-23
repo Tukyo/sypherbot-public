@@ -505,26 +505,28 @@ def start(update: Update, context: CallbackContext) -> None:
     args = update.message.text.split('_') if update.message.text else []
     user_id = update.effective_user.id
     chat_type = update.effective_chat.type
+    print(f"Received args: {args} - User ID: {user_id} - Chat Type: {chat_type}")
 
     if chat_type == "private":
         if rate_limit_check():
             if len(args) == 3 and args[0] == 'authenticate':
                 group_id = args[1]
                 user_id_from_link = args[2]
+                print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
 
-                # Verify if user_id_from_link is in the unverified_users array for this group_id
                 group_doc = db.collection('groups').document(group_id)
                 group_data = group_doc.get()
                 if group_data.exists:
                     unverified_users = group_data.to_dict().get('unverified_users', [])
+                    print(f"Unverified users list: {unverified_users}")
                     if int(user_id_from_link) in unverified_users:
-                        # User is unverified, handle the verification process
                         msg = update.message.reply_text('You are not authenticated.')
                     else:
                         msg = update.message.reply_text('You are already verified or not a member.')
                 else:
                     msg = update.message.reply_text('No such group exists.')
             else:
+                # General start command handling when not triggered via deep link
                 keyboard = [
                     [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/sypher_robot?startgroup=0")]
                 ]
@@ -541,6 +543,7 @@ def start(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
+
 
 def setup_home_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
