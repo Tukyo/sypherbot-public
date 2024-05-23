@@ -647,7 +647,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         ],
         [
             InlineKeyboardButton("Authentication", callback_data='setup_verification'),
-            InlineKeyboardButton("Crypto", callback_data='setup_crypto_callback')
+            InlineKeyboardButton("Crypto", callback_data='setup_crypto')
         ],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
