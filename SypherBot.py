@@ -585,7 +585,13 @@ def start(update: Update, context: CallbackContext) -> None:
         else:
             msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     else:
-        msg = update.message.reply_text('This command can only be used in DM.')
+        if is_user_admin(update, context):
+            setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
+            setup_markup = InlineKeyboardMarkup(setup_keyboard)
+            msg = update.message.reply_text(
+                "Click 'Setup' to manage your group.",
+                reply_markup=setup_markup
+            )
 
     if msg is not None:
         track_message(msg)
@@ -2920,7 +2926,6 @@ def main() -> None:
     # dispatcher.add_handler(CommandHandler("unmute", unmute))
     
     # General Slash Command Handlers
-    dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("commands", commands))
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
@@ -2935,7 +2940,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("save", save))
 
     # Admin Slash Command Handlers
-    dispatcher.add_handler(CommandHandler("setup", setup_home_callback))
+    dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
     dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
