@@ -298,6 +298,9 @@ def is_user_owner(update: Update, context: CallbackContext) -> bool:
     # Check if the user is the owner of this group
     user_is_owner = group_data['owner_id'] == user_id
 
+    if not user_is_owner:
+        print("User is not the owner of this group.")
+
     return user_is_owner
 
 def fetch_group_info(update: Update, context: CallbackContext):
@@ -599,8 +602,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
 
         if query.data == 'setup_home':
             setup_home(update, context)
-    else:
-        print("User is not an admin.")
+
 
 def setup_home(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -654,8 +656,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
     
-    else:
-        print("User is not an admin.")
+
 
 #region Ethereum Setup
 def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
@@ -667,8 +668,7 @@ def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
         if query.data == 'setup_crypto':
             setup_crypto(update, context)
-    else:
-        print("User is not an admin.")
+
 
 def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -724,8 +724,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
-    else:
-        print("User is not an admin.")
+
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
@@ -753,8 +752,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
-    else:
-        print("User is not an admin.")
+
 
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
@@ -780,8 +778,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
-    else:
-        print("User is not an admin.")
+
 
 def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
@@ -813,8 +810,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
-    else:
-        print("User is not an admin.")
+
 
 def setup_ABI(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
@@ -840,8 +836,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
-    else:
-        print("User is not an admin.")
+
 
 def handle_ABI(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
@@ -867,8 +862,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
-    else:
-        print("User is not an admin.")
+
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
@@ -914,8 +908,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
-    else:
-        print("User is not an admin.")
+
 
 def handle_chain(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context):
@@ -928,8 +921,7 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
             context.user_data['setup_stage'] = None
 
             complete_token_setup(group_id)
-    else:
-        print("User is not an admin.")
+
 
 def complete_token_setup(group_id: str):
     # Fetch the group data from Firestore
@@ -994,8 +986,7 @@ def setup_verification_callback(update: Update, context: CallbackContext) -> Non
     if is_user_owner(update, context):
         if query.data == 'setup_verification':
             setup_verification(update, context)
-    else:
-        print("User is not an admin.")
+
 
 def setup_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1341,8 +1332,7 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
             chat_id=update.effective_chat.id,
             text=f"Verification timeout set to {timeout_seconds // 60} minutes."
         )
-    else:
-        print("User is not an admin.")
+
 
 def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
     #Sets the verification timeout for a specific group in the Firestore database.
