@@ -11,6 +11,7 @@ import firebase_admin
 import mplfinance as mpf
 from web3 import Web3
 from decimal import Decimal
+from threading import Timer
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from collections import deque, defaultdict
@@ -467,7 +468,8 @@ def menu_change(context: CallbackContext, update: Update):
         'setup_disable_verification_message',
         'setup_simple_verification_message',
         'setup_math_verification_message',
-        'setup_word_verification_message'
+        'setup_word_verification_message',
+        'setup_timeout_verification_message'
     ]
 
     for message_to_delete in messages_to_delete:
@@ -949,6 +951,9 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Math", callback_data='math_verification'),
             InlineKeyboardButton("Word", callback_data='word_verification')
         ],
+        [
+            InlineKeyboardButton("Authentication Timeout", callback_data='timeout_verification')
+        ]
         [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1206,9 +1211,81 @@ def word_verification(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+def timeout_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'timeout_verification':
+        timeout_verification(update, context)
+
+def timeout_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [
+            [InlineKeyboardButton("1 Minute", callback_data='vtimeout_60')],
+            [InlineKeyboardButton("10 Minutes", callback_data='vtimeout_600')]
+        ],
+        [
+            [InlineKeyboardButton("30 Minutes", callback_data='vtimeout_1800')],
+            [InlineKeyboardButton("60 Minutes", callback_data='vtimeout_3600')]
+        ]
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Please choose the verification timeout.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_timeout_verification_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    # Extract the timeout value from the callback_data
+    timeout_seconds = int(query.data.split('_')[1])
+
+    # Call set_verification_timeout with the group_id and timeout_seconds
+    group_id = update.effective_chat.id
+    set_verification_timeout(group_id, timeout_seconds)
+
+    # Send a confirmation message to the user
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=f"Verification timeout set to {timeout_seconds // 60} minutes."
+    )
+
+def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
+    #Sets the verification timeout for a specific group in the Firestore database.
+    try:
+        group_ref = db.collection('groups').document(str(group_id))
+
+        group_ref.update({
+            'verification_info': {
+                'verification_timeout': timeout_seconds
+            }
+        })
+
+        print(f"Verification timeout for group {group_id} set to {timeout_seconds} seconds")
+
+    except Exception as e:
+        print(f"Error setting verification timeout: {e}")
+
+#endregion Verification Setup
+
 #endregion Bot Setup
 
-#region User Verification
+#region User Authentication
 def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
     msg = None
@@ -1254,10 +1331,12 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 [InlineKeyboardButton("Start Authentication", url=auth_url)]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            update.message.reply_text(
+            welcome_message = update.message.reply_text(
                 f"Welcome to {group_name}! Please press the button below to authenticate.",
                 reply_markup=reply_markup
             )
+
+            verification_timer(group_id, user_id, welcome_message.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1411,14 +1490,9 @@ def callback_word_response(update: Update, context: CallbackContext):
 
             if response == challenge_answer:
                 authenticate_user(context, group_id, user_id)
-                query.edit_message_caption(
-                    caption="Authentication successful! You can now participate in the group chat."
-                )
             else:
-                query.edit_message_caption(
-                    authentication_failed(update, context, group_id, user_id),
-                    caption="Incorrect answer. You may attempt the process again by return to the main group and clicking Start Authentication."
-                )
+                authentication_failed(update, context, group_id, user_id)
+
         else:
             query.edit_message_caption(
                 caption="Authentication data not found. Please start over or contact an admin."
@@ -1455,14 +1529,8 @@ def callback_math_response(update: Update, context: CallbackContext):
 
             if response == challenge_answer:
                 authenticate_user(context, group_id, user_id)
-                query.edit_message_caption(
-                    caption="Authentication successful! You can now participate in the group chat."
-                )
             else:
-                query.edit_message_caption(
-                    authentication_failed(update, context, group_id, user_id),
-                    caption="Incorrect answer. You may attempt the process again by return to the main group and clicking Start Authentication."
-                )
+                authentication_failed(update, context, group_id, user_id)
         else:
             query.edit_message_caption(
                 caption="Authentication data not found. Please start over or contact an admin."
@@ -1486,6 +1554,11 @@ def authenticate_user(context, group_id, user_id):
 
     # Write the updated group data back to Firestore
     group_doc.set(group_data)
+
+    context.bot.send_message(
+        chat_id=user_id,
+        text="Authentication successful! You may now participate in the group chat."
+    )
 
     # Lift restrictions in the group chat for the authenticated user
     context.bot.restrict_chat_member(
@@ -1527,7 +1600,24 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
         chat_id=user_id,
         text="Authentication failed. Please start the authentication process again by clicking on the 'Start Authentication' button."
     )
-#endregion User Verification
+
+def verification_timer(group_id, user_id, message_id, timeout=verificationTimeout):
+    def delayed_action():
+        try:
+            group_doc = db.collection('groups').document(str(group_id))
+            group_data = group_doc.get().to_dict()
+
+            if user_id in group_data.get('unverified_users', {}):
+                # If still unverified after timeout:
+                context.bot.delete_message(chat_id=group_id, message_id=message_id)
+                context.bot.ban_chat_member(chat_id=group_id, user_id=user_id) 
+                print(f"Deleted welcome message and kicked unverified user {user_id} in group {group_id}")
+        except Exception as e:
+            print(f"Error in delayed action: {e}")
+
+    timer = Timer(timeout, delayed_action)
+    timer.start()
+#endregion User Authentication
 
 #region Ethereum
 
@@ -2821,6 +2911,8 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(simple_verification, pattern='^simple_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(math_verification, pattern='^math_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(word_verification, pattern='^word_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(timeout_verification, pattern='^timeout_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(handle_timeout_callback, pattern='^vtimeout_'))
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
     dispatcher.add_handler(CallbackQueryHandler(command_buttons, pattern='^commands_'))
 
