@@ -622,54 +622,51 @@ def setup_home(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    if is_user_owner(update, context):
-        # Get the invite link
-        try:
-            group_link = context.bot.export_chat_invite_link(group_id)
-        except Exception as e:
-            print(f"Error getting group link: {e}")
-            group_link = None
+    try:
+        group_link = context.bot.export_chat_invite_link(group_id)
+    except Exception as e:
+        print(f"Error getting group link: {e}")
+        group_link = None
 
-        # Get the group username
-        group_username = update.effective_chat.username
-        if group_username is not None:
-            group_username = "@" + group_username
+    # Get the group username
+    group_username = update.effective_chat.username
+    if group_username is not None:
+        group_username = "@" + group_username
 
-        # Update the group document
-        group_doc.update({
-            'group_info': {
-                'group_link': group_link,
-                'group_username': group_username,
-            }
-        })
+    # Update the group document
+    group_doc.update({
+        'group_info': {
+            'group_link': group_link,
+            'group_username': group_username,
+        }
+    })
 
-        keyboard = [
-            [
-                InlineKeyboardButton("Admin", callback_data='setup_admin'),
-                InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
-            ],
-            [
-                InlineKeyboardButton("Authentication", callback_data='setup_verification'),
-                InlineKeyboardButton("Ethereum", callback_data='setup_crypto')
-            ],
-            [InlineKeyboardButton("Cancel", callback_data='cancel')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = [
+        [
+            InlineKeyboardButton("Admin", callback_data='setup_admin'),
+            InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
+        ],
+        [
+            InlineKeyboardButton("Authentication", callback_data='setup_verification'),
+            InlineKeyboardButton("Ethereum", callback_data='setup_crypto')
+        ],
+        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-        menu_change(context, update)
+    menu_change(context, update)
 
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
-            reply_markup=reply_markup
-        )
-        context.user_data['setup_stage'] = None
-        context.user_data['setup_bot_message'] = msg.message_id
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_bot_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
     
-        if msg is not None:
-            track_message(msg)
-    
-
 
 #region Ethereum Setup
 def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
