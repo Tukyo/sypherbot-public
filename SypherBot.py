@@ -1306,6 +1306,8 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         math_challenge = challenges[index]
         image_path = f'assets/math_{index}.jpg'
 
+        print(f"Math challenge: {math_challenge}")
+
         keyboard = [
             [
                 InlineKeyboardButton("1", callback_data=f'mauth_{user_id}_{group_id}_1'),
@@ -1336,6 +1338,8 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             reply_markup=reply_markup
         )
 
+        print(f"image_path: {image_path}")
+
         group_doc.update({
             f'unverified_users.{user_id}': math_challenge  
         })
@@ -1350,6 +1354,8 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         image_path = f'assets/word_{index}.jpg'
     
         keyboard = []
+
+        print(f"Word challenge: {word_challenge}")
     
         num_buttons_per_row = 3
         for i in range(0, len(challenges), num_buttons_per_row):
@@ -1365,6 +1371,8 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             caption="Identify the correct word in the image:",
             reply_markup=reply_markup
         )
+
+        print(f"image_path: {image_path}")
     
         # Update the challenge information in the database
         group_doc.update({
@@ -1381,9 +1389,13 @@ def callback_word_response(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
 
+    print("Processing word response.")
+
     _, user_id, group_id, response = query.data.split('_')
     user_id = str(user_id)
     group_id = str(group_id)
+
+    print(f"User ID: {user_id} - Group ID: {group_id} - Response: {response}")
 
     group_doc = db.collection('groups').document(group_id)
     group_data = group_doc.get()
@@ -1394,6 +1406,8 @@ def callback_word_response(update: Update, context: CallbackContext):
         # Check if the user is in the unverified users mapping
         if str(user_id) in group_data_dict.get('unverified_users', {}):
             challenge_answer = group_data_dict['unverified_users'][str(user_id)]
+
+            print(f"Challenge answer: {challenge_answer}")
 
             if response == challenge_answer:
                 authenticate_user(context, group_id, user_id)
@@ -1418,10 +1432,14 @@ def callback_math_response(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
 
+    print("Processing math response.")
+
     _, user_id, group_id, response = query.data.split('_')
     user_id = str(user_id)
     group_id = str(group_id)
     response = int(response)
+
+    print(f"User ID: {user_id} - Group ID: {group_id} - Response: {response}")
 
     group_doc = db.collection('groups').document(group_id)
     group_data = group_doc.get()
@@ -1432,6 +1450,8 @@ def callback_math_response(update: Update, context: CallbackContext):
         # Check if the user is in the unverified users mapping
         if str(user_id) in group_data_dict.get('unverified_users', {}):
             challenge_answer = group_data_dict['unverified_users'][str(user_id)]
+
+            print(f"Challenge answer: {challenge_answer}")
 
             if response == challenge_answer:
                 authenticate_user(context, group_id, user_id)
@@ -1452,6 +1472,7 @@ def callback_math_response(update: Update, context: CallbackContext):
         )
 
 def authenticate_user(context, group_id, user_id):
+    print(f"Authenticating user {user_id} in group {group_id}")
     group_doc = db.collection('groups').document(group_id)
 
     # Get the current group document
@@ -1459,6 +1480,8 @@ def authenticate_user(context, group_id, user_id):
 
     if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
         del group_data['unverified_users'][user_id]
+
+    print(f"Removed user {user_id} from unverified users in group {group_id}")
 
     # Write the updated group data back to Firestore
     group_doc.set(group_data)
