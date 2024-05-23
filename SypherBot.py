@@ -737,9 +737,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    user_id = update.message.from_user.id
     
     if is_user_owner(update, context, user_id):
         if context.user_data.get('setup_stage') == 'contract':
@@ -794,9 +792,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
 
 def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    user_id = update.message.from_user.id
 
     if is_user_owner(update, context, user_id):
         msg = None
@@ -856,9 +852,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def handle_ABI(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    user_id = update.message.from_user.id
 
     if is_user_owner(update, context, user_id):
         msg = None
