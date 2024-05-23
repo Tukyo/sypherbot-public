@@ -1114,9 +1114,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'verification_info': {
                 'verification': True,
-                'verification_type': 'math',
-                'verification_question': 'none',
-                'verification_answer': 'none'
+                'verification_type': 'math'
             }
         })
 
@@ -1259,35 +1257,61 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
     
     print(f"Authenticating user {user_id} for group {group_id}")
     
-    # Fetch the group document to access unverified users
+    # Fetch the group document to access verification type and unverified users
     group_doc = db.collection('groups').document(group_id)
-    group_data = group_doc.get()
+    group_data = group_doc.get().to_dict()
     
-    if group_data.exists:
-        unverified_users = group_data.to_dict().get('unverified_users', [])
+    if group_data:
+        unverified_users = group_data.get('unverified_users', [])
+        verification_info = group_data.get('verification_info', {})
+        verification_type = verification_info.get('verification_type', 'simple')
         
+        print(f"Verification type: {verification_type}")
+
         # Check if the user is in the unverified users list
         if int(user_id) in unverified_users:
-            # Remove the user from the unverified users list
-            group_doc.update({'unverified_users': firestore.ArrayRemove([int(user_id)])})
-            
-            # Remove restrictions in the main group chat
-            context.bot.restrict_chat_member(
-                chat_id=int(group_id),
-                user_id=int(user_id),
-                permissions=ChatPermissions(can_send_messages=True, can_add_web_page_previews=True,
-                                            can_send_media_messages=True, can_send_other_messages=True,
-                                            can_invite_users=True)
-            )
-            
-            query.edit_message_text(text="You have been authenticated successfully. Welcome!")
-            print(f"User {user_id} authenticated. Restrictions lifted in group {group_id}")
+            if verification_type == 'simple':
+                authenticate_user(context, group_id, user_id)
+            elif verification_type == 'math' or verification_type == 'word':
+                authentication_challenge(update, context, verification_type, group_id, user_id)
+            else:
+                query.edit_message_text(text="Invalid verification type configured.")
         else:
             query.edit_message_text(text="You are already verified or not a member.")
     else:
         query.edit_message_text(text="No such group exists.")
 
+def authentication_challenge(update: Update, context: CallbackContext, verification_type, group_id, user_id):
+    # Placeholder function for processing specific challenges
+    # Logic to handle 'math' or 'word' challenges goes here
+    if verification_type == 'math':
+        # Add logic for math challenge
+        pass
+    elif verification_type == 'word':
+        # Add logic for word challenge
+        pass
 
+    # Placeholder response for now
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=f"Please complete the {verification_type} verification challenge. (This is a placeholder response)"
+    )
+
+def authenticate_user(context, group_id, user_id):
+    # Remove the user from the unverified users list
+    group_doc = db.collection('groups').document(group_id)
+    group_doc.update({'unverified_users': firestore.ArrayRemove([int(user_id)])})
+    
+    # Remove restrictions in the main group chat
+    context.bot.restrict_chat_member(
+        chat_id=int(group_id),
+        user_id=int(user_id),
+        permissions=ChatPermissions(can_send_messages=True, can_add_web_page_previews=True,
+                                    can_send_media_messages=True, can_send_other_messages=True,
+                                    can_invite_users=True)
+    )
+    
+    print(f"User {user_id} authenticated. Restrictions lifted in group {group_id}")
 
 
 
