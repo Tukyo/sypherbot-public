@@ -585,7 +585,7 @@ def start(update: Update, context: CallbackContext) -> None:
         else:
             msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     else:
-        if is_user_admin(update, context):
+        if is_user_owner(update, context, user_id):
             setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
             msg = update.message.reply_text(
@@ -690,7 +690,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("ABI", callback_data='setup_ABI')
         ],
         [
-            InlineKeyboardButton("Back", callback_data='setup_home')
+            InlineKeyboardButton("Back", callback_data='setup_home_callback')
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -709,13 +709,15 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def setup_contract(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
     if is_user_owner(update, context, user_id):
-        msg = None
-        query = update.callback_query
-        query.answer()
 
         keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto_callback')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -734,8 +736,12 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+    
     if is_user_owner(update, context, user_id):
-        msg = None
         if context.user_data.get('setup_stage') == 'contract':
             eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
             contract_address = update.message.text.strip()
@@ -761,13 +767,14 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+    
     if is_user_owner(update, context, user_id):
-        msg = None
-        query = update.callback_query
-        query.answer()
-
         keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto_callback')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -786,6 +793,11 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
     if is_user_owner(update, context, user_id):
         msg = None
         if context.user_data.get('setup_stage') == 'liquidity':
@@ -817,13 +829,15 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def setup_ABI(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+    
     if is_user_owner(update, context, user_id):
-        msg = None
-        query = update.callback_query
-        query.answer()
 
         keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto_callback')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -842,6 +856,10 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def handle_ABI(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
     if is_user_owner(update, context, user_id):
         msg = None
         if context.user_data.get('setup_stage') == 'ABI':
@@ -867,10 +885,12 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+    
     if is_user_owner(update, context, user_id):
-        msg = None
-        query = update.callback_query
-        query.answer()
 
         keyboard = [
             [
@@ -893,7 +913,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
                 InlineKeyboardButton("Harmony", callback_data='harmony'),
                 InlineKeyboardButton("Mantle", callback_data='mantle')
             ],
-            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto_calback')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -912,6 +932,10 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def handle_chain(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
     if is_user_owner(update, context, user_id):
         if context.user_data.get('setup_stage') == 'chain':
             chain = update.callback_query.data
@@ -1002,7 +1026,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
         [
             InlineKeyboardButton("Authentication Timeout", callback_data='timeout_verification')
         ],
-        [InlineKeyboardButton("Back", callback_data='setup_home')]
+        [InlineKeyboardButton("Back", callback_data='setup_home_callback')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1147,7 +1171,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
     menu_change(context, update)
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        [InlineKeyboardButton("Back", callback_data='setup_verification_callback')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1200,7 +1224,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
     menu_change(context, update)
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        [InlineKeyboardButton("Back", callback_data='setup_verification_callback')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1297,7 +1321,7 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
             [InlineKeyboardButton("30 Minutes", callback_data='vtimeout_1800')],
             [InlineKeyboardButton("60 Minutes", callback_data='vtimeout_3600')]
         ],
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        [InlineKeyboardButton("Back", callback_data='setup_verification_callback')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
