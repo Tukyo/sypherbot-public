@@ -563,20 +563,23 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
-    # Check if the bot is an admin
-    chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)
-    if not chat_member.can_invite_users:
-        context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=context.user_data['initialize_bot_message'],
-            text='Please give me admin permissions first!'
-        )
-        return
+    if is_user_admin(update, context):
+        # Check if the bot is an admin
+        chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)
+        if not chat_member.can_invite_users:
+            context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=context.user_data['initialize_bot_message'],
+                text='Please give me admin permissions first!'
+            )
+            return
 
-    update = Update(update.update_id, message=query.message)
+        update = Update(update.update_id, message=query.message)
 
-    if query.data == 'setup_home':
-        setup_home(update, context)
+        if query.data == 'setup_home':
+            setup_home(update, context)
+    else:
+        query.message.reply_text("You must be an admin to access this feature.")
 
 def setup_home(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -609,7 +612,7 @@ def setup_home(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
         ],
         [
-            InlineKeyboardButton("Verification", callback_data='setup_verification'),
+            InlineKeyboardButton("Authentication", callback_data='setup_verification'),
             InlineKeyboardButton("Ethereum", callback_data='setup_crypto')
         ],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
@@ -978,7 +981,10 @@ def enable_verification_callback(update: Update, context: CallbackContext) -> No
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'enable_verification':
-        enable_verification(update, context)
+        if is_user_admin(update, context):
+            enable_verification(update, context)
+        else:
+            print("User is not an admin.")
 
 def enable_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1020,7 +1026,10 @@ def disable_verification_callback(update: Update, context: CallbackContext) -> N
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'disable_verification':
-        disable_verification(update, context)
+        if is_user_admin(update, context):
+            disable_verification(update, context)
+        else:
+            print("User is not an admin.")
 
 def disable_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1062,7 +1071,10 @@ def simple_verification_callback(update: Update, context: CallbackContext) -> No
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'simple_verification':
-        simple_verification(update, context)
+        if is_user_admin(update, context):
+            simple_verification(update, context)
+        else:
+            print("User is not an admin.")
 
 def simple_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1112,7 +1124,10 @@ def math_verification_callback(update: Update, context: CallbackContext) -> None
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'math_verification':
-        math_verification(update, context)
+        if is_user_admin(update, context):
+            math_verification(update, context)
+        else:
+            print("User is not an admin.")
 
 def math_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1163,7 +1178,10 @@ def word_verification_callback(update: Update, context: CallbackContext) -> None
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'word_verification':
-        word_verification(update, context)
+        if is_user_admin(update, context):
+            word_verification(update, context)
+        else:
+            print("User is not an admin.")
 
 def word_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1218,7 +1236,10 @@ def timeout_verification_callback(update: Update, context: CallbackContext) -> N
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'timeout_verification':
-        timeout_verification(update, context)
+        if is_user_admin(update, context):
+            timeout_verification(update, context)
+        else:
+            print("User is not an admin.")
 
 def timeout_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1252,18 +1273,21 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
-    # Extract the timeout value from the callback_data
-    timeout_seconds = int(query.data.split('_')[1])
+    if is_user_admin(update, context):
+        # Extract the timeout value from the callback_data
+        timeout_seconds = int(query.data.split('_')[1])
 
-    # Call set_verification_timeout with the group_id and timeout_seconds
-    group_id = update.effective_chat.id
-    set_verification_timeout(group_id, timeout_seconds)
+        # Call set_verification_timeout with the group_id and timeout_seconds
+        group_id = update.effective_chat.id
+        set_verification_timeout(group_id, timeout_seconds)
 
-    # Send a confirmation message to the user
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=f"Verification timeout set to {timeout_seconds // 60} minutes."
-    )
+        # Send a confirmation message to the user
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"Verification timeout set to {timeout_seconds // 60} minutes."
+        )
+    else:
+        print("User is not an admin.")
 
 def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
     #Sets the verification timeout for a specific group in the Firestore database.
