@@ -1308,22 +1308,22 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
 
         keyboard = [
             [
-                InlineKeyboardButton("1", callback_data=f'auth_{user_id}_{group_id}_1'),
-                InlineKeyboardButton("2", callback_data=f'auth_{user_id}_{group_id}_2'),
-                InlineKeyboardButton("3", callback_data=f'auth_{user_id}_{group_id}_3')
+                InlineKeyboardButton("1", callback_data=f'mauth_{user_id}_{group_id}_1'),
+                InlineKeyboardButton("2", callback_data=f'mauth_{user_id}_{group_id}_2'),
+                InlineKeyboardButton("3", callback_data=f'mauth_{user_id}_{group_id}_3')
             ],
             [
-                InlineKeyboardButton("4", callback_data=f'auth_{user_id}_{group_id}_4'),
-                InlineKeyboardButton("5", callback_data=f'auth_{user_id}_{group_id}_5'),
-                InlineKeyboardButton("6", callback_data=f'auth_{user_id}_{group_id}_6')
+                InlineKeyboardButton("4", callback_data=f'mauth_{user_id}_{group_id}_4'),
+                InlineKeyboardButton("5", callback_data=f'mauth_{user_id}_{group_id}_5'),
+                InlineKeyboardButton("6", callback_data=f'mauth_{user_id}_{group_id}_6')
             ],
             [
-                InlineKeyboardButton("7", callback_data=f'auth_{user_id}_{group_id}_7'),
-                InlineKeyboardButton("8", callback_data=f'auth_{user_id}_{group_id}_8'),
-                InlineKeyboardButton("9", callback_data=f'auth_{user_id}_{group_id}_9')
+                InlineKeyboardButton("7", callback_data=f'mauth_{user_id}_{group_id}_7'),
+                InlineKeyboardButton("8", callback_data=f'mauth_{user_id}_{group_id}_8'),
+                InlineKeyboardButton("9", callback_data=f'mauth_{user_id}_{group_id}_9')
             ],
             [
-                InlineKeyboardButton("0", callback_data=f'auth_{user_id}_{group_id}_0')
+                InlineKeyboardButton("0", callback_data=f'mauth_{user_id}_{group_id}_0')
             ]
         ]
 
@@ -1353,7 +1353,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
     
         num_buttons_per_row = 3
         for i in range(0, len(challenges), num_buttons_per_row):
-            row = [InlineKeyboardButton(word, callback_data=f'auth_{user_id}_{group_id}_{j}') 
+            row = [InlineKeyboardButton(word, callback_data=f'wauth_{user_id}_{group_id}_{j}') 
                 for j, word in enumerate(challenges[i:i + num_buttons_per_row], start=i)]
             keyboard.append(row)
     
@@ -1376,6 +1376,43 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             chat_id=update.effective_chat.id,
             text="Invalid verification type. Please try again."
         )
+
+def callback_word_response(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()
+
+    _, user_id, group_id, response = query.data.split('_')
+    user_id = str(user_id)
+    group_id = str(group_id)
+
+    group_doc = db.collection('groups').document(group_id)
+    group_data = group_doc.get()
+
+    if group_data.exists:
+        group_data_dict = group_data.to_dict()
+
+        # Check if the user is in the unverified users mapping
+        if str(user_id) in group_data_dict.get('unverified_users', {}):
+            challenge_answer = group_data_dict['unverified_users'][str(user_id)]
+
+            if response == challenge_answer:
+                authenticate_user(context, group_id, user_id)
+                query.edit_message_caption(
+                    caption="Authentication successful! You can now participate in the group chat."
+                )
+            else:
+                query.edit_message_caption(
+                    caption="Incorrect answer. Please try again or contact an admin for help."
+                )
+        else:
+            query.edit_message_caption(
+                caption="Authentication data not found. Please start over or contact an admin."
+            )
+    else:
+        query.edit_message_caption(
+            caption="Group data not found. Please start over or contact an admin."
+        )
+
 
 def callback_math_response(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -2950,7 +2987,8 @@ def main() -> None:
 
     # Register the callback query handler for button clicks
     dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
-    dispatcher.add_handler(CallbackQueryHandler(callback_math_response, pattern='^auth_'))
+    dispatcher.add_handler(CallbackQueryHandler(callback_math_response, pattern='^mauth_'))
+    dispatcher.add_handler(CallbackQueryHandler(callback_word_response, pattern='^wauth_'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
