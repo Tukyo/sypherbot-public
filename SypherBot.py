@@ -1516,6 +1516,12 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
     # Write the updated group data back to Firestore
     group_doc.set(group_data)
 
+    # Delete the original message
+    context.bot.delete_message(
+        chat_id=update.effective_chat.id,
+        message_id=update.callback_query.message.message_id
+    )
+
     # Send a message to the user instructing them to start the authentication process again
     context.bot.send_message(
         chat_id=user_id,
