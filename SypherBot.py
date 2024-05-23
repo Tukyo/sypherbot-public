@@ -537,8 +537,7 @@ def start(update: Update, context: CallbackContext) -> None:
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 msg = update.message.reply_text(
-                    'Hello! I am Sypher Bot. If you are here to verify, now you may return to the main chat.\n\n'
-                    'If you want me to manage your group, get started with the button below.',
+                    'Hello! I am Sypher Bot. Please add me to your group to get started.',
                     reply_markup=reply_markup
                 )
         else:
@@ -2804,7 +2803,7 @@ def main() -> None:
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
 
     # Register the callback query handler for button clicks
-    dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate$'))
+    dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
