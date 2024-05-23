@@ -1396,17 +1396,14 @@ def callback_math_response(update: Update, context: CallbackContext):
             caption="Group data not found. Please start over or contact an admin."
         )
 
-
-
 def authenticate_user(context, group_id, user_id):
     group_doc = db.collection('groups').document(group_id)
 
     # Get the current group document
     group_data = group_doc.get().to_dict()
 
-    group_doc.update({
-        f'unverified_users.{user_id}': firestore.DELETE_FIELD  # Remove the user's entry
-    })
+    if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
+        del group_data['unverified_users'][user_id]
 
     # Write the updated group data back to Firestore
     group_doc.set(group_data)
