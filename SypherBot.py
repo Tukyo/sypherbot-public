@@ -72,6 +72,10 @@ WORD_1 = os.getenv("WORD_1")
 WORD_2 = os.getenv("WORD_2")
 WORD_3 = os.getenv("WORD_3")
 WORD_4 = os.getenv("WORD_4")
+WORD_5 = os.getenv("WORD_5")
+WORD_6 = os.getenv("WORD_6")
+WORD_7 = os.getenv("WORD_7")
+WORD_8 = os.getenv("WORD_8")
 
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
@@ -1338,20 +1342,34 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
 
 
     elif verification_type == 'word':
-        challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4]
-        index = random.randint(0, 4)
+        challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4, WORD_5, WORD_6, WORD_7, WORD_8]
+        random.shuffle(challenges)
+        index = random.randint(0, 8)
         word_challenge = challenges[index]
         image_path = f'assets/word_{index}.jpg'
+
+        keyboard = []
+
+        num_buttons_per_row = 3
+        for i in range(0, len(challenges), num_buttons_per_row):
+            row = [InlineKeyboardButton(word, callback_data=f'auth_{user_id}_{group_id}_{j}') 
+                for j, word in enumerate(challenges[i:i + num_buttons_per_row], start=i)]
+            keyboard.append(row)
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
         context.bot.send_photo(
             chat_id=update.effective_chat.id,
             photo=open(image_path, 'rb'),
-            caption="What is the word in this image?"
+            caption="Identify the correct word in the image:",
+            reply_markup=reply_markup
         )
 
+        # Update the challenge information in the database
         group_doc.update({
             f'unverified_users.{user_id}': word_challenge  
         })
+
 
     else:
         context.bot.send_message(
