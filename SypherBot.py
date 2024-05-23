@@ -1230,7 +1230,7 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
         [
             [InlineKeyboardButton("30 Minutes", callback_data='vtimeout_1800')],
             [InlineKeyboardButton("60 Minutes", callback_data='vtimeout_3600')]
-        ]
+        ],
         [InlineKeyboardButton("Back", callback_data='setup_verification')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
