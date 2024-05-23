@@ -1242,7 +1242,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 return
 
             # Add the user_id to the unverified_users array in the group document
-            group_doc.update({'unverified_users': {user_id: None}})  # No initial challenge
+            group_doc.update({'unverified_users': {str(user_id): None}})  # No initial challenge
             print(f"New user {user_id} added to unverified users in group {group_id}")
 
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
