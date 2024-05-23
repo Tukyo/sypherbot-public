@@ -287,14 +287,8 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
 
     return user_is_admin
 
-def is_user_owner(update: Update, context: CallbackContext) -> bool:
+def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> bool:
     chat_id = update.effective_chat.id
-
-    # Check if the update has a callback_query
-    if update.callback_query:
-        user_id = update.callback_query.from_user.id
-    else:
-        user_id = update.effective_user.id
 
     if update.effective_chat.type == 'private':
         print("User is in a private chat.")
@@ -599,6 +593,7 @@ def start(update: Update, context: CallbackContext) -> None:
 def setup_home_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    user_id = query.from_user.id
 
     if is_user_owner(update, context):
         # Check if the bot is an admin
@@ -614,9 +609,9 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
         update = Update(update.update_id, message=query.message)
 
         if query.data == 'setup_home':
-            setup_home(update, context)
+            setup_home(update, context, user_id)
 
-def setup_home(update: Update, context: CallbackContext) -> None:
+def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     msg = None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -642,14 +637,14 @@ def setup_home(update: Update, context: CallbackContext) -> None:
 
     keyboard = [
         [
-            InlineKeyboardButton("Admin", callback_data='setup_admin'),
-            InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
+            InlineKeyboardButton("Admin", callback_data=f"{user_id}:'setup_admin'"),
+            InlineKeyboardButton("Commands", callback_data=f"{user_id}:'setup_custom_commands'")
         ],
         [
-            InlineKeyboardButton("Authentication", callback_data='setup_verification'),
-            InlineKeyboardButton("Crypto", callback_data='setup_crypto')
+            InlineKeyboardButton("Authentication", callback_data=f"{user_id}:'setup_verification'"),
+            InlineKeyboardButton("Crypto", callback_data=f"{user_id}:'setup_crypto'")
         ],
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        [InlineKeyboardButton("Cancel", callback_data=f"{user_id}:'cancel'")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -671,10 +666,14 @@ def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
+    user_id, _, button_data = query.data.partition(':')
+
+    user_id = int(user_id)
+
     update = Update(update.update_id, message=query.message)
 
-    if is_user_owner(update, context):
-        if query.data == 'setup_crypto':
+    if is_user_owner(update, context, user_id):
+        if button_data.strip("'") == 'setup_crypto':
             setup_crypto(update, context)
 
 def setup_crypto(update: Update, context: CallbackContext) -> None:
