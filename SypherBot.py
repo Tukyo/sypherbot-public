@@ -1336,7 +1336,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 reply_markup=reply_markup
             )
 
-            verification_timer(group_id, user_id, welcome_message.message_id)
+            # verification_timer(group_id, user_id, welcome_message.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1601,22 +1601,22 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
         text="Authentication failed. Please start the authentication process again by clicking on the 'Start Authentication' button."
     )
 
-def verification_timer(group_id, user_id, message_id, timeout=verificationTimeout):
-    def delayed_action():
-        try:
-            group_doc = db.collection('groups').document(str(group_id))
-            group_data = group_doc.get().to_dict()
+# def verification_timer(group_id, user_id, message_id, timeout=verificationTimeout):
+#     def delayed_action():
+#         try:
+#             group_doc = db.collection('groups').document(str(group_id))
+#             group_data = group_doc.get().to_dict()
 
-            if user_id in group_data.get('unverified_users', {}):
-                # If still unverified after timeout:
-                context.bot.delete_message(chat_id=group_id, message_id=message_id)
-                context.bot.ban_chat_member(chat_id=group_id, user_id=user_id) 
-                print(f"Deleted welcome message and kicked unverified user {user_id} in group {group_id}")
-        except Exception as e:
-            print(f"Error in delayed action: {e}")
+#             if user_id in group_data.get('unverified_users', {}):
+#                 # If still unverified after timeout:
+#                 context.bot.delete_message(chat_id=group_id, message_id=message_id)
+#                 context.bot.ban_chat_member(chat_id=group_id, user_id=user_id) 
+#                 print(f"Deleted welcome message and kicked unverified user {user_id} in group {group_id}")
+#         except Exception as e:
+#             print(f"Error in delayed action: {e}")
 
-    timer = Timer(timeout, delayed_action)
-    timer.start()
+#     timer = Timer(timeout, delayed_action)
+#     timer.start()
 #endregion User Authentication
 
 #region Ethereum
