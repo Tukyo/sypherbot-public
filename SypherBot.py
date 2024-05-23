@@ -913,7 +913,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
                 InlineKeyboardButton("Harmony", callback_data='harmony'),
                 InlineKeyboardButton("Mantle", callback_data='mantle')
             ],
-            [InlineKeyboardButton("Back", callback_data='setup_crypto_calback')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto_callback')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -958,18 +958,20 @@ def complete_token_setup(group_id: str):
         return
 
     # Get the contract address, ABI, and chain from the group data
-    contract_address = token_data['contract_address']
-    if contract_address is None:
+    if 'contract_address' not in token_data:
         print(f"Contract address not found in group {group_id}, token setup incomplete.")
         return
-    abi = token_data.get('abi')
-    if abi is None:
+    contract_address = token_data['contract_address']
+
+    if 'abi' not in token_data:
         print(f"ABI not found in group {group_id}, token setup incomplete.")
         return
-    chain = token_data.get('chain')
-    if chain is None:
+    abi = token_data.get('abi')
+
+    if 'chain' not in token_data:
         print(f"Chain not found in group {group_id}, token setup incomplete.")
         return
+    chain = token_data.get('chain')
 
     # Determine the provider URL based on the chain
     provider_url = os.getenv(f'{chain.upper()}_ENDPOINT')
@@ -1004,6 +1006,7 @@ def complete_token_setup(group_id: str):
 def setup_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
 
@@ -1046,6 +1049,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
 def enable_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
 
@@ -1091,6 +1095,7 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
 def disable_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
 
@@ -1136,6 +1141,7 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
 def simple_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
 
@@ -1189,6 +1195,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
 def math_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
 
@@ -1243,6 +1250,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
 def word_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
 
@@ -1301,6 +1309,7 @@ def word_verification(update: Update, context: CallbackContext) -> None:
 def timeout_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
 
@@ -1341,6 +1350,7 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
 def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    user_id = query.from_user.id
 
     if is_user_owner(update, context, user_id):
         # Extract the timeout value from the callback_data
