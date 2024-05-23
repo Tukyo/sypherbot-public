@@ -588,51 +588,55 @@ def setup_home(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    # Get the invite link
-    try:
-        group_link = context.bot.export_chat_invite_link(group_id)
-    except Exception as e:
-        print(f"Error getting group link: {e}")
-        group_link = None
+    if is_user_admin(update, context):
+        # Get the invite link
+        try:
+            group_link = context.bot.export_chat_invite_link(group_id)
+        except Exception as e:
+            print(f"Error getting group link: {e}")
+            group_link = None
 
-    # Get the group username
-    group_username = update.effective_chat.username
-    if group_username is not None:
-        group_username = "@" + group_username
+        # Get the group username
+        group_username = update.effective_chat.username
+        if group_username is not None:
+            group_username = "@" + group_username
 
-    # Update the group document
-    group_doc.update({
-        'group_info': {
-            'group_link': group_link,
-            'group_username': group_username,
-        }
-    })
+        # Update the group document
+        group_doc.update({
+            'group_info': {
+                'group_link': group_link,
+                'group_username': group_username,
+            }
+        })
 
-    keyboard = [
-        [
-            InlineKeyboardButton("Admin", callback_data='setup_admin'),
-            InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
-        ],
-        [
-            InlineKeyboardButton("Authentication", callback_data='setup_verification'),
-            InlineKeyboardButton("Ethereum", callback_data='setup_crypto')
-        ],
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+        keyboard = [
+            [
+                InlineKeyboardButton("Admin", callback_data='setup_admin'),
+                InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
+            ],
+            [
+                InlineKeyboardButton("Authentication", callback_data='setup_verification'),
+                InlineKeyboardButton("Ethereum", callback_data='setup_crypto')
+            ],
+            [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-    menu_change(context, update)
+        menu_change(context, update)
 
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
-
-    if msg is not None:
-        track_message(msg)
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = None
+        context.user_data['setup_bot_message'] = msg.message_id
+    
+        if msg is not None:
+            track_message(msg)
+    
+    else:
+        print("User is not an admin.")
 
 #region Ethereum Setup
 def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
@@ -641,8 +645,11 @@ def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
 
     update = Update(update.update_id, message=query.message)
 
-    if query.data == 'setup_crypto':
-        setup_crypto(update, context)
+    if is_user_admin(update, context):
+        if query.data == 'setup_crypto':
+            setup_crypto(update, context)
+    else:
+        print("User is not an admin.")
 
 def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -675,211 +682,235 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def setup_contract(update: Update, context: CallbackContext) -> None:
-    msg = None
-    query = update.callback_query
-    query.answer()
+    if is_user_admin(update, context):
+        msg = None
+        query = update.callback_query
+        query.answer()
 
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_crypto')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-    menu_change(context, update) 
+        menu_change(context, update) 
 
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Please respond with your contract address.',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = 'contract'
-    print("Requesting contract address.")
-    context.user_data['setup_contract_message'] = msg.message_id
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Please respond with your contract address.',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = 'contract'
+        print("Requesting contract address.")
+        context.user_data['setup_contract_message'] = msg.message_id
 
-    if msg is not None:
-        track_message(msg)
+        if msg is not None:
+            track_message(msg)
+    else:
+        print("User is not an admin.")
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if context.user_data.get('setup_stage') == 'contract':
-        eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
-        contract_address = update.message.text.strip()
+    if is_user_admin(update, context):
+        msg = None
+        if context.user_data.get('setup_stage') == 'contract':
+            eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
+            contract_address = update.message.text.strip()
 
-        if eth_address_pattern.fullmatch(contract_address):
-            group_id = update.effective_chat.id
-            print(f"Adding contract address {contract_address} to group {group_id}")
-            group_doc = db.collection('groups').document(str(group_id))
-            group_doc.update({'token.contract_address': contract_address})
-            context.user_data['setup_stage'] = None
+            if eth_address_pattern.fullmatch(contract_address):
+                group_id = update.effective_chat.id
+                print(f"Adding contract address {contract_address} to group {group_id}")
+                group_doc = db.collection('groups').document(str(group_id))
+                group_doc.update({'token.contract_address': contract_address})
+                context.user_data['setup_stage'] = None
 
-            if update.message is not None:
-                msg = update.message.reply_text("Contract address added successfully!")
-            elif update.callback_query is not None:
-                msg = update.callback_query.message.reply_text("Contract address added successfully!")
-        
-            complete_token_setup(group_id)
-        else:
-            msg = update.message.reply_text("Please send a valid Contract Address!")
+                if update.message is not None:
+                    msg = update.message.reply_text("Contract address added successfully!")
+                elif update.callback_query is not None:
+                    msg = update.callback_query.message.reply_text("Contract address added successfully!")
             
+                complete_token_setup(group_id)
+            else:
+                msg = update.message.reply_text("Please send a valid Contract Address!")
+                
 
-    if msg is not None:
-        track_message(msg)
+        if msg is not None:
+            track_message(msg)
+    else:
+        print("User is not an admin.")
 
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
-    msg = None
-    query = update.callback_query
-    query.answer()
+    if is_user_admin(update, context):
+        msg = None
+        query = update.callback_query
+        query.answer()
 
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_crypto')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-    menu_change(context, update)
+        menu_change(context, update)
 
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Please respond with your liquidity address.',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = 'liquidity'
-    context.user_data['setup_liquidity_message'] = msg.message_id
-    print("Requesting liquidity address.")
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Please respond with your liquidity address.',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = 'liquidity'
+        context.user_data['setup_liquidity_message'] = msg.message_id
+        print("Requesting liquidity address.")
 
-    if msg is not None:
-        track_message(msg)
+        if msg is not None:
+            track_message(msg)
+    else:
+        print("User is not an admin.")
 
 def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if context.user_data.get('setup_stage') == 'liquidity':
-        eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
-        liquidity_address = update.message.text.strip()
+    if is_user_admin(update, context):
+        msg = None
+        if context.user_data.get('setup_stage') == 'liquidity':
+            eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
+            liquidity_address = update.message.text.strip()
 
-        if eth_address_pattern.fullmatch(liquidity_address):
-            group_id = update.effective_chat.id
-            print(f"Adding liquidity address {liquidity_address} to group {group_id}")
-            group_doc = db.collection('groups').document(str(group_id))
-            group_doc.update({'token.liquidity_address': liquidity_address})
-            context.user_data['setup_stage'] = None
-
-            # Check if update.message is not None before using it
-            if update.message is not None:
-                msg = update.message.reply_text("Liquidity address added successfully!")
-            elif update.callback_query is not None:
-                msg = update.callback_query.message.reply_text("Liquidity address added successfully!")
-
-            complete_token_setup(group_id)
-        else:
-            # Check if update.message is not None before using it
-            if update.message is not None:
-                msg = update.message.reply_text("Please send a valid Liquidity Address!")
-            elif update.callback_query is not None:
-                msg = update.callback_query.message.reply_text("Please send a valid Liquidity Address!")
-
-    if msg is not None:
-        track_message(msg)
-
-def setup_ABI(update: Update, context: CallbackContext) -> None:
-    msg = None
-    query = update.callback_query
-    query.answer()
-
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_crypto')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    menu_change(context, update)
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Please upload your ABI as a JSON file.\n\nExample file structure: ["function1(uint256)", "function2(string)"]',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = 'ABI'
-    context.user_data['setup_ABI_message'] = msg.message_id
-    print("Requesting ABI file.")
-
-    if msg is not None:
-        track_message(msg)
-
-def handle_ABI(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if context.user_data.get('setup_stage') == 'ABI':
-        document = update.message.document
-        if document.mime_type == 'application/json':
-            file = context.bot.getFile(document.file_id)
-            file.download('temp_abi.json')
-            with open('temp_abi.json', 'r') as file:
-                abi = json.load(file)  # Parse the ABI
+            if eth_address_pattern.fullmatch(liquidity_address):
                 group_id = update.effective_chat.id
-                print(f"Adding ABI to group {group_id}")
+                print(f"Adding liquidity address {liquidity_address} to group {group_id}")
                 group_doc = db.collection('groups').document(str(group_id))
-                group_doc.update({'token.abi': abi})
+                group_doc.update({'token.liquidity_address': liquidity_address})
                 context.user_data['setup_stage'] = None
-                msg = update.message.reply_text("ABI has been successfully saved.")
+
+                # Check if update.message is not None before using it
+                if update.message is not None:
+                    msg = update.message.reply_text("Liquidity address added successfully!")
+                elif update.callback_query is not None:
+                    msg = update.callback_query.message.reply_text("Liquidity address added successfully!")
 
                 complete_token_setup(group_id)
-        else:
-            msg = update.message.reply_text("Please make sure the file is a JSON file.")
-        
+            else:
+                # Check if update.message is not None before using it
+                if update.message is not None:
+                    msg = update.message.reply_text("Please send a valid Liquidity Address!")
+                elif update.callback_query is not None:
+                    msg = update.callback_query.message.reply_text("Please send a valid Liquidity Address!")
 
-    if msg is not None:
-        track_message(msg)
+        if msg is not None:
+            track_message(msg)
+    else:
+        print("User is not an admin.")
+
+def setup_ABI(update: Update, context: CallbackContext) -> None:
+    if is_user_admin(update, context):
+        msg = None
+        query = update.callback_query
+        query.answer()
+
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        menu_change(context, update)
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Please upload your ABI as a JSON file.\n\nExample file structure: ["function1(uint256)", "function2(string)"]',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = 'ABI'
+        context.user_data['setup_ABI_message'] = msg.message_id
+        print("Requesting ABI file.")
+
+        if msg is not None:
+            track_message(msg)
+    else:
+        print("User is not an admin.")
+
+def handle_ABI(update: Update, context: CallbackContext) -> None:
+    if is_user_admin(update, context):
+        msg = None
+        if context.user_data.get('setup_stage') == 'ABI':
+            document = update.message.document
+            if document.mime_type == 'application/json':
+                file = context.bot.getFile(document.file_id)
+                file.download('temp_abi.json')
+                with open('temp_abi.json', 'r') as file:
+                    abi = json.load(file)  # Parse the ABI
+                    group_id = update.effective_chat.id
+                    print(f"Adding ABI to group {group_id}")
+                    group_doc = db.collection('groups').document(str(group_id))
+                    group_doc.update({'token.abi': abi})
+                    context.user_data['setup_stage'] = None
+                    msg = update.message.reply_text("ABI has been successfully saved.")
+
+                    complete_token_setup(group_id)
+            else:
+                msg = update.message.reply_text("Please make sure the file is a JSON file.")
+            
+
+        if msg is not None:
+            track_message(msg)
+    else:
+        print("User is not an admin.")
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
-    msg = None
-    query = update.callback_query
-    query.answer()
+    if is_user_admin(update, context):
+        msg = None
+        query = update.callback_query
+        query.answer()
 
-    keyboard = [
-        [
-            InlineKeyboardButton("Ethereum", callback_data='ethereum'),
-            InlineKeyboardButton("Base", callback_data='base')
+        keyboard = [
+            [
+                InlineKeyboardButton("Ethereum", callback_data='ethereum'),
+                InlineKeyboardButton("Base", callback_data='base')
 
-        ],
-        [
-            InlineKeyboardButton("Arbitrum", callback_data='arbitrum'),
-            InlineKeyboardButton("Optimism", callback_data='optimism'),
-            InlineKeyboardButton("Polygon", callback_data='polygon')
-        ],
-        [
-            InlineKeyboardButton("Fantom", callback_data='fantom'),
-            InlineKeyboardButton("Avalanche", callback_data='avalanche'),
-            InlineKeyboardButton("Binance", callback_data='binance')
-        ],
-        [
-            InlineKeyboardButton("Aptos", callback_data='aptos'),
-            InlineKeyboardButton("Harmony", callback_data='harmony'),
-            InlineKeyboardButton("Mantle", callback_data='mantle')
-        ],
-        [InlineKeyboardButton("Back", callback_data='setup_crypto')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+            ],
+            [
+                InlineKeyboardButton("Arbitrum", callback_data='arbitrum'),
+                InlineKeyboardButton("Optimism", callback_data='optimism'),
+                InlineKeyboardButton("Polygon", callback_data='polygon')
+            ],
+            [
+                InlineKeyboardButton("Fantom", callback_data='fantom'),
+                InlineKeyboardButton("Avalanche", callback_data='avalanche'),
+                InlineKeyboardButton("Binance", callback_data='binance')
+            ],
+            [
+                InlineKeyboardButton("Aptos", callback_data='aptos'),
+                InlineKeyboardButton("Harmony", callback_data='harmony'),
+                InlineKeyboardButton("Mantle", callback_data='mantle')
+            ],
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-    menu_change(context, update)
+        menu_change(context, update)
 
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Please choose your chain from the list.',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = 'chain'
-    context.user_data['setup_chain_message'] = msg.message_id
-    print("Requesting Chain.")
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Please choose your chain from the list.',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = 'chain'
+        context.user_data['setup_chain_message'] = msg.message_id
+        print("Requesting Chain.")
 
-    if msg is not None:
-        track_message(msg)
+        if msg is not None:
+            track_message(msg)
+    else:
+        print("User is not an admin.")
 
 def handle_chain(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('setup_stage') == 'chain':
-        chain = update.callback_query.data
-        group_id = update.effective_chat.id
-        print(f"Adding chain {chain} to group {group_id}")
-        group_doc = db.collection('groups').document(str(group_id))
-        group_doc.update({'token.chain': chain})
-        context.user_data['setup_stage'] = None
+    if is_user_admin(update, context):
+        if context.user_data.get('setup_stage') == 'chain':
+            chain = update.callback_query.data
+            group_id = update.effective_chat.id
+            print(f"Adding chain {chain} to group {group_id}")
+            group_doc = db.collection('groups').document(str(group_id))
+            group_doc.update({'token.chain': chain})
+            context.user_data['setup_stage'] = None
 
-        complete_token_setup(group_id)
+            complete_token_setup(group_id)
+    else:
+        print("User is not an admin.")
 
 def complete_token_setup(group_id: str):
     # Fetch the group data from Firestore
@@ -2927,7 +2958,7 @@ def main() -> None:
     # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_crypto, pattern='^setup_crypto$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_crypto_callback, pattern='^setup_crypto$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
