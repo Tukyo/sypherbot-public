@@ -1373,28 +1373,33 @@ def callback_math_response(update: Update, context: CallbackContext):
     # Access the group document and the specific user's authentication challenge
     group_id = str(update.effective_chat.id)  # Ensure group_id is a string
     group_doc = db.collection('groups').document(group_id)
-    auth_data_ref = group_doc.collection('authenticating').document(user_id)
-    auth_data = auth_data_ref.get()
+    group_data = group_doc.get()
 
-    if auth_data.exists:
-        auth_data_dict = auth_data.to_dict()
-        challenge_answer = auth_data_dict.get('challenge')
+    if group_data.exists:
+        group_data_dict = group_data.to_dict()
+        auth_data_dict = group_data_dict.get(f'authenticating.{user_id}')
 
-        if response == challenge_answer:
-            # If the response is correct, authenticate the user
-            authenticate_user(context, group_id, user_id)
+        if auth_data_dict:
+            challenge_answer = auth_data_dict.get('challenge')
 
-            # Update the message to show a success message
-            query.edit_message_caption(caption="Authentication successful! You can now participate in the group chat.")
+            if response == challenge_answer:
+                # If the response is correct, authenticate the user
+                authenticate_user(context, group_id, user_id)
 
-            # Clean up the database by removing the user's entry from the authenticating field
-            auth_data_ref.delete()
+                # Update the message to show a success message
+                query.edit_message_caption(caption="Authentication successful! You can now participate in the group chat.")
+
+                # Clean up the database by removing the user's entry from the authenticating field
+                group_doc.update({f'authenticating.{user_id}': firestore.DELETE_FIELD})
+            else:
+                # If the response is incorrect, notify the user
+                query.edit_message_caption(caption="Incorrect answer. Please try again or contact an admin for help.")
         else:
-            # If the response is incorrect, notify the user
-            query.edit_message_caption(caption="Incorrect answer. Please try again or contact an admin for help.")
+            # Handle the case where authentication data doesn't exist
+            query.edit_message_caption(caption="Authentication data not found. Please start over or contact an admin.")
     else:
-        # Handle the case where authentication data doesn't exist
-        query.edit_message_caption(caption="Authentication data not found. Please start over or contact an admin.")
+        # Handle the case where group data doesn't exist
+        query.edit_message_caption(caption="Group data not found. Please start over or contact an admin.")
 
 
 
