@@ -2935,7 +2935,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("save", save))
 
     # Admin Slash Command Handlers
-    dispatcher.add_handler(CommandHandler("setup", setup_home))
+    dispatcher.add_handler(CommandHandler("setup", setup_home_callback))
     dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
     dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
