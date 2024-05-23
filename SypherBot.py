@@ -1301,22 +1301,22 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
 
         keyboard = [
             [
-                InlineKeyboardButton("1", callback_data=f'auth_{user_id}_1'),
-                InlineKeyboardButton("2", callback_data=f'auth_{user_id}_2'),
-                InlineKeyboardButton("3", callback_data=f'auth_{user_id}_3')
+                InlineKeyboardButton("1", callback_data=f'auth_{user_id}_{group_id}_1'),
+                InlineKeyboardButton("2", callback_data=f'auth_{user_id}_{group_id}_2'),
+                InlineKeyboardButton("3", callback_data=f'auth_{user_id}_{group_id}_3')
             ],
             [
-                InlineKeyboardButton("4", callback_data=f'auth_{user_id}_4'),
-                InlineKeyboardButton("5", callback_data=f'auth_{user_id}_5'),
-                InlineKeyboardButton("6", callback_data=f'auth_{user_id}_6')
+                InlineKeyboardButton("4", callback_data=f'auth_{user_id}_{group_id}_4'),
+                InlineKeyboardButton("5", callback_data=f'auth_{user_id}_{group_id}_5'),
+                InlineKeyboardButton("6", callback_data=f'auth_{user_id}_{group_id}_6')
             ],
             [
-                InlineKeyboardButton("7", callback_data=f'auth_{user_id}_7'),
-                InlineKeyboardButton("8", callback_data=f'auth_{user_id}_8'),
-                InlineKeyboardButton("9", callback_data=f'auth_{user_id}_9')
+                InlineKeyboardButton("7", callback_data=f'auth_{user_id}_{group_id}_7'),
+                InlineKeyboardButton("8", callback_data=f'auth_{user_id}_{group_id}_8'),
+                InlineKeyboardButton("9", callback_data=f'auth_{user_id}_{group_id}_9')
             ],
             [
-                InlineKeyboardButton("0", callback_data=f'auth_{user_id}_0')
+                InlineKeyboardButton("0", callback_data=f'auth_{user_id}_{group_id}_0')
             ]
         ]
 
@@ -1365,13 +1365,13 @@ def callback_math_response(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()  # Acknowledge the callback query to avoid a loading state on the button
     
-    # Extract user_id and their response from the callback data
-    _, user_id, response = query.data.split('_')
+    # Extract user_id, group_id, and their response from the callback data
+    _, user_id, group_id, response = query.data.split('_')
     user_id = str(user_id)  # Ensure user_id is a string
+    group_id = str(group_id)  # Ensure group_id is a string
     response = int(response)  # Convert response to integer to compare with the challenge answer
 
     # Access the group document and the specific user's authentication challenge
-    group_id = str(update.effective_chat.id)  # Ensure group_id is a string
     group_doc = db.collection('groups').document(group_id)
     group_data = group_doc.get()
 
