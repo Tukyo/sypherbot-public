@@ -521,7 +521,11 @@ def start(update: Update, context: CallbackContext) -> None:
                     unverified_users = group_data.to_dict().get('unverified_users', [])
                     print(f"Unverified users list: {unverified_users}")
                     if int(user_id_from_link) in unverified_users:
-                        msg = update.message.reply_text('You are not authenticated.')
+
+                        keyboard = [[InlineKeyboardButton("Authenticate", callback_data=f'authenticate_{group_id}_{user_id_from_link}')]]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        msg = update.message.reply_text('Press the button below to start authentication.', reply_markup=reply_markup)
+
                     else:
                         msg = update.message.reply_text('You are already verified or not a member.')
                 else:
@@ -1242,7 +1246,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
             keyboard = [
-                [InlineKeyboardButton("Authenticate", url=auth_url)]
+                [InlineKeyboardButton("Start Authentication", url=auth_url)]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             update.message.reply_text(
@@ -1253,7 +1257,42 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
             
-
+def authentication_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    
+    # Extract group_id and user_id from the callback data
+    _, group_id, user_id = query.data.split('_')
+    
+    print(f"Authenticating user {user_id} for group {group_id}")
+    
+    # Fetch the group document to access unverified users
+    group_doc = db.collection('groups').document(group_id)
+    group_data = group_doc.get()
+    
+    if group_data.exists:
+        unverified_users = group_data.to_dict().get('unverified_users', [])
+        
+        # Check if the user is in the unverified users list
+        if int(user_id) in unverified_users:
+            # Remove the user from the unverified users list
+            group_doc.update({'unverified_users': firestore.ArrayRemove([int(user_id)])})
+            
+            # Remove restrictions in the main group chat
+            context.bot.restrict_chat_member(
+                chat_id=int(group_id),
+                user_id=int(user_id),
+                permissions=ChatPermissions(can_send_messages=True, can_add_web_page_previews=True,
+                                            can_send_media_messages=True, can_send_other_messages=True,
+                                            can_invite_users=True)
+            )
+            
+            query.edit_message_text(text="You have been authenticated successfully. Welcome!")
+            print(f"User {user_id} authenticated. Restrictions lifted in group {group_id}")
+        else:
+            query.edit_message_text(text="You are already verified or not a member.")
+    else:
+        query.edit_message_text(text="No such group exists.")
 
 
 
@@ -2765,7 +2804,7 @@ def main() -> None:
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
 
     # Register the callback query handler for button clicks
-    # dispatcher.add_handler(CallbackQueryHandler(verification_callback, pattern='^authenticate$'))
+    dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate$'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_start_verification, pattern='start_verification'))
     # dispatcher.add_handler(CallbackQueryHandler(handle_verification_button, pattern=r'verify_letter_[A-Z]'))
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
