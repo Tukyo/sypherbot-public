@@ -61,9 +61,16 @@ load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 
-eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
-url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
-domain_pattern = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
+MATH_0 = int(os.getenv("MATH_0"))
+MATH_1 = int(os.getenv("MATH_1"))
+MATH_2 = int(os.getenv("MATH_2"))
+MATH_3 = int(os.getenv("MATH_3"))
+MATH_4 = int(os.getenv("MATH_4"))
+WORD_0 = os.getenv("WORD_0")
+WORD_1 = os.getenv("WORD_1")
+WORD_2 = os.getenv("WORD_2")
+WORD_3 = os.getenv("WORD_3")
+WORD_4 = os.getenv("WORD_4")
 
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
@@ -162,12 +169,14 @@ class AntiRaid:
 anti_spam = AntiSpam(rate_limit=5, time_window=10, mute_time=60)
 anti_raid = AntiRaid(user_amount=25, time_out=30, anti_raid_time=180)
 
+eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
+url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+domain_pattern = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
+
 RATE_LIMIT = 100  # Maximum number of allowed commands
 TIME_PERIOD = 60  # Time period in seconds
 last_check_time = time.time()
 command_count = 0
-
-user_verification_progress = {}
 
 bot_messages = []
 
@@ -1228,7 +1237,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 user_id = update.message.new_chat_members[0].id
 
                 # Kick the user that just joined
-                context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
+                context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
                 return
 
             # Add the user_id to the unverified_users array in the group document
@@ -1282,20 +1291,53 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
         query.edit_message_text(text="No such group exists.")
 
 def authentication_challenge(update: Update, context: CallbackContext, verification_type, group_id, user_id):
-    # Placeholder function for processing specific challenges
-    # Logic to handle 'math' or 'word' challenges goes here
-    if verification_type == 'math':
-        # Add logic for math challenge
-        pass
-    elif verification_type == 'word':
-        # Add logic for word challenge
-        pass
+    group_doc = db.collection('groups').document(group_id)
 
-    # Placeholder response for now
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=f"Please complete the {verification_type} verification challenge. (This is a placeholder response)"
-    )
+    if verification_type == 'math':
+        challenges = [MATH_0, MATH_1, MATH_2, MATH_3, MATH_4]
+        index = random.randint(0, 4)
+        math_challenge = challenges[index]
+        image_path = f'assets/math_{index}'
+
+        context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=open(image_path, 'rb'),
+            caption="What is the answer to this math problem?"
+        )
+
+        group_doc.update({
+            'authenticating': {
+                'user_id': user_id,
+                'type': 'math',
+                'challenge': math_challenge
+            }
+        })
+
+    elif verification_type == 'word':
+        challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4]
+        index = random.randint(0, 4)
+        word_challenge = challenges[index]
+        image_path = f'assets/word_{index}'
+
+        context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=open(image_path, 'rb'),
+            caption="What is the word in this image?"
+        )
+
+        group_doc.update({
+            'authenticating': {
+                'user_id': user_id,
+                'type': 'word',
+                'challenge': word_challenge
+            }
+        })
+
+    else:
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Invalid verification type. Please try again."
+        )
 
 def authenticate_user(context, group_id, user_id):
     # Remove the user from the unverified users list
@@ -1427,7 +1469,7 @@ def process_warns(update: Update, context: CallbackContext, user_id: str, warnin
     msg = None
     if warnings >= 3:
         try:
-            context.bot.kick_chat_member(update.message.chat.id, int(user_id))
+            context.bot.ban_chat_member(update.message.chat.id, int(user_id))
             msg = update.message.reply_text(f"Goodbye {user_id}!")
         except Exception as e:
             msg = update.message.reply_text(f"Failed to kick {user_id}: {str(e)}")
@@ -1477,7 +1519,7 @@ def kick(update: Update, context: CallbackContext) -> None:
             user_id = reply_to_message.from_user.id
             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
 
-        context.bot.kick_chat_member(chat_id=chat_id, user_id=user_id)
+        context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
         msg = update.message.reply_text(f"User {username} has been kicked.")
     else:
         msg = update.message.reply_text("You must be an admin to use this command.")
@@ -2559,7 +2601,7 @@ def get_token_price_in_fiat(contract_address, currency):
 # def verification_timeout(context: CallbackContext) -> None:
 #     msg = None
 #     job = context.job
-#     context.bot.kick_chat_member(
+#     context.bot.ban_chat_member(
 #         chat_id=job.context['chat_id'],
 #         user_id=job.context['user_id']
 #     )
