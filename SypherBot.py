@@ -14,7 +14,7 @@ from decimal import Decimal
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from collections import deque, defaultdict
-from google.cloud.firestore import DELETE_FIELD
+from google.cloud.firestore_v1 import DELETE_FIELD
 from firebase_admin import credentials, firestore
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler, JobQueue
@@ -1407,7 +1407,7 @@ def authenticate_user(context, group_id, user_id):
     # Update Firestore: Remove the user from 'unverified_users' and delete their 'authenticating' entry
     group_doc.update({
         f'unverified_users': firestore.ArrayRemove([int(user_id)]),
-        f'authenticating.{user_id}': firestore.DELETE_FIELD
+        f'authenticating.{user_id}': DELETE_FIELD
     })
 
     # Lift restrictions in the group chat for the authenticated user
