@@ -269,6 +269,12 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
+    # Check if the update has a callback_query
+    if update.callback_query:
+        user_id = update.callback_query.from_user.id
+    else:
+        user_id = update.effective_user.id
+
     if update.effective_chat.type == 'private':
         print("User is in a private chat.")
         return False
@@ -283,7 +289,12 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
 
 def is_user_owner(update: Update, context: CallbackContext) -> bool:
     chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
+
+    # Check if the update has a callback_query
+    if update.callback_query:
+        user_id = update.callback_query.from_user.id
+    else:
+        user_id = update.effective_user.id
 
     if update.effective_chat.type == 'private':
         print("User is in a private chat.")
