@@ -298,6 +298,8 @@ def is_user_owner(update: Update, context: CallbackContext) -> bool:
     # Check if the user is the owner of this group
     user_is_owner = group_data['owner_id'] == user_id
 
+    print(f"UserID: {user_id} - OwnerID: {group_data['owner_id']} - IsOwner: {user_is_owner}")
+
     if not user_is_owner:
         print("User is not the owner of this group.")
 

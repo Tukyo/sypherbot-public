@@ -1,3 +1,4 @@
 .env
 serviceAccountKey.json
 abi.json
+config.json
