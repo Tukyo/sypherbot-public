@@ -272,6 +272,8 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
     if update.effective_chat.type == 'private':
         print("User is in a private chat.")
         return False
+    
+    print(f"Checking if user is admin for chat {chat_id}")
 
     # Check if the user is an admin in this chat
     chat_admins = context.bot.get_chat_administrators(chat_id)
@@ -939,8 +941,11 @@ def setup_verification_callback(update: Update, context: CallbackContext) -> Non
 
     update = Update(update.update_id, message=query.message)
 
-    if query.data == 'setup_verification':
-        setup_verification(update, context)
+    if is_user_admin(update, context):
+        if query.data == 'setup_verification':
+            setup_verification(update, context)
+    else:
+        print("User is not an admin.")
 
 def setup_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1593,7 +1598,7 @@ def authenticate_user(context, group_id, user_id):
             can_add_web_page_previews=True,
             can_send_media_messages=True,
             can_send_other_messages=True,
-            can_invite_users=True
+            can_invite_users=False
         )
     )
     print(f"User {user_id} authenticated. Restrictions lifted in group {group_id}")
