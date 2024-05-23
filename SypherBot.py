@@ -1367,27 +1367,35 @@ def callback_math_response(update: Update, context: CallbackContext):
     
     # Extract user_id and their response from the callback data
     _, user_id, response = query.data.split('_')
-    
-    # Convert response to integer to compare with the challenge answer
-    response = int(response)
+    user_id = str(user_id)  # Ensure user_id is a string
+    response = int(response)  # Convert response to integer to compare with the challenge answer
 
     # Access the group document and the specific user's authentication challenge
-    group_id = update.effective_chat.id
+    group_id = str(update.effective_chat.id)  # Ensure group_id is a string
     group_doc = db.collection('groups').document(group_id)
-    auth_data = group_doc.get().to_dict().get('authenticating', {}).get(user_id, {})
+    auth_data_ref = group_doc.collection('authenticating').document(user_id)
+    auth_data = auth_data_ref.get()
 
-    if 'challenge' in auth_data and response == auth_data['challenge']:
-        # If the response is correct, authenticate the user
-        authenticate_user(context, group_id, user_id)
+    if auth_data.exists:
+        auth_data_dict = auth_data.to_dict()
+        challenge_answer = auth_data_dict.get('challenge')
 
-        # Update the message to show a success message
-        query.edit_message_caption(caption="Authentication successful! You can now participate in the group chat.")
+        if response == challenge_answer:
+            # If the response is correct, authenticate the user
+            authenticate_user(context, group_id, user_id)
 
-        # Clean up the database by removing the user's entry from the authenticating field
-        group_doc.update({f'authenticating.{user_id}': firestore.DELETE_FIELD})
+            # Update the message to show a success message
+            query.edit_message_caption(caption="Authentication successful! You can now participate in the group chat.")
+
+            # Clean up the database by removing the user's entry from the authenticating field
+            auth_data_ref.delete()
+        else:
+            # If the response is incorrect, notify the user
+            query.edit_message_caption(caption="Incorrect answer. Please try again or contact an admin for help.")
     else:
-        # If the response is incorrect, notify the user
-        query.edit_message_caption(caption="Incorrect answer. Please try again or contact an admin for help.")
+        # Handle the case where authentication data doesn't exist
+        query.edit_message_caption(caption="Authentication data not found. Please start over or contact an admin.")
+
 
 
 def authenticate_user(context, group_id, user_id):
