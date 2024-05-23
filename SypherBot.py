@@ -1292,7 +1292,7 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
                 query.edit_message_text(text="Invalid verification type configured.")
         else:
             query.edit_message_text(
-                text="You are already verified or not a member."
+                text="You are already verified, not a member or need to restart verification."
             )
     else:
         query.edit_message_text(text="No such group exists.")
@@ -1509,9 +1509,9 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
     group_data = group_doc.get().to_dict()
 
     if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
-        del group_data['unverified_users'][user_id]
+        group_data['unverified_users'][user_id] = None
 
-    print(f"Removed user {user_id} from unverified users in group {group_id}")
+    print(f"Reset challenge for user {user_id} in group {group_id}")
 
     # Write the updated group data back to Firestore
     group_doc.set(group_data)
