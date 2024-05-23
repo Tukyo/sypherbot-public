@@ -14,6 +14,7 @@ from decimal import Decimal
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from collections import deque, defaultdict
+from google.cloud.firestore import DELETE_FIELD
 from firebase_admin import credentials, firestore
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler, JobQueue
@@ -1388,9 +1389,6 @@ def callback_math_response(update: Update, context: CallbackContext):
 
                 # Update the message to show a success message
                 query.edit_message_caption(caption="Authentication successful! You can now participate in the group chat.")
-
-                # Clean up the database by removing the user's entry from the authenticating field
-                group_doc.update({f'authenticating.{user_id}': firestore.DELETE_FIELD})
             else:
                 # If the response is incorrect, notify the user
                 query.edit_message_caption(caption="Incorrect answer. Please try again or contact an admin for help.")
