@@ -1203,6 +1203,15 @@ def handle_verification_answer(update: Update, context: CallbackContext) -> None
 def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
     msg = None
+    group_id = update.message.chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        group_name = "the group"  # Default text if group name not available
+    else:
+        group_name = group_data.get('group_info', {}).get('group_username', "the group")
+        
     for member in update.message.new_chat_members:
             user_id = member.id
             chat_id = update.message.chat.id
@@ -1228,10 +1237,8 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 return
 
             # Add the user_id to the unverified_users array in the group document
-            group_doc = db.collection('groups').document(str(chat_id))
             group_doc.update({'unverified_users': firestore.ArrayUnion([user_id])})
-
-            print(f"New user {user_id} added to unverified users in group {chat_id}")
+            print(f"New user {user_id} added to unverified users in group {group_id}")
 
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
             keyboard = [
@@ -1239,7 +1246,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             update.message.reply_text(
-                "Welcome to the group! Please press the button below to authenticate.",
+                f"Welcome to {group_name}! Please press the button below to authenticate.",
                 reply_markup=reply_markup
             )
 
