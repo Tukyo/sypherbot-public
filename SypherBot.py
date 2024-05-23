@@ -1172,14 +1172,14 @@ def word_verification(update: Update, context: CallbackContext) -> None:
             'group_id': group_id,
             'verification_info': {
                 'verification': True,
-                'verification_type': 'Word'
+                'verification_type': 'word'
             }
         })
     else:
         group_doc.update({
             'verification_info': {
                 'verification': True,
-                'verification_type': 'Word'
+                'verification_type': 'word'
             }
         })
 
