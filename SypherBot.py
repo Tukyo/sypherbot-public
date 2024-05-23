@@ -1343,34 +1343,34 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
 
     elif verification_type == 'word':
         challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4, WORD_5, WORD_6, WORD_7, WORD_8]
+        original_challenges = challenges.copy()  # Copy the original list before shuffling
         random.shuffle(challenges)
-        index = random.randint(0, 8)
-        word_challenge = challenges[index]
+        word_challenge = challenges[0]  # The word challenge is the first word in the shuffled list
+        index = original_challenges.index(word_challenge)  # Get the index of the word challenge in the original list
         image_path = f'assets/word_{index}.jpg'
-
+    
         keyboard = []
-
+    
         num_buttons_per_row = 3
         for i in range(0, len(challenges), num_buttons_per_row):
             row = [InlineKeyboardButton(word, callback_data=f'auth_{user_id}_{group_id}_{j}') 
                 for j, word in enumerate(challenges[i:i + num_buttons_per_row], start=i)]
             keyboard.append(row)
-
+    
         reply_markup = InlineKeyboardMarkup(keyboard)
-
+    
         context.bot.send_photo(
             chat_id=update.effective_chat.id,
             photo=open(image_path, 'rb'),
             caption="Identify the correct word in the image:",
             reply_markup=reply_markup
         )
-
+    
         # Update the challenge information in the database
         group_doc.update({
             f'unverified_users.{user_id}': word_challenge  
         })
-
-
+    
     else:
         context.bot.send_message(
             chat_id=update.effective_chat.id,
