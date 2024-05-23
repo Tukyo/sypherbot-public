@@ -690,7 +690,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("ABI", callback_data='setup_ABI')
         ],
         [
-            InlineKeyboardButton("Back", callback_data='setup_home_callback')
+            InlineKeyboardButton("Back", callback_data='setup_home')
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1029,7 +1029,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
         [
             InlineKeyboardButton("Authentication Timeout", callback_data='timeout_verification')
         ],
-        [InlineKeyboardButton("Back", callback_data='setup_home_callback')]
+        [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
