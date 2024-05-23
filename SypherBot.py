@@ -281,6 +281,25 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
 
     return user_is_admin
 
+def is_user_owner(update: Update, context: CallbackContext) -> bool:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    if update.effective_chat.type == 'private':
+        print("User is in a private chat.")
+        return False
+    
+    print(f"Checking if user is owner for chat {chat_id}")
+
+    # Retrieve the group document from the database
+    group_doc = db.collection('groups').document(str(chat_id))
+    group_data = group_doc.get().to_dict()
+
+    # Check if the user is the owner of this group
+    user_is_owner = group_data['owner_id'] == user_id
+
+    return user_is_owner
+
 def fetch_group_info(update: Update, context: CallbackContext):
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -565,7 +584,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         # Check if the bot is an admin
         chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)
         if not chat_member.can_invite_users:
@@ -581,14 +600,14 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
         if query.data == 'setup_home':
             setup_home(update, context)
     else:
-        query.message.reply_text("You must be an admin to access this feature.")
+        print("User is not an admin.")
 
 def setup_home(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         # Get the invite link
         try:
             group_link = context.bot.export_chat_invite_link(group_id)
@@ -645,7 +664,7 @@ def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
 
     update = Update(update.update_id, message=query.message)
 
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         if query.data == 'setup_crypto':
             setup_crypto(update, context)
     else:
@@ -682,7 +701,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def setup_contract(update: Update, context: CallbackContext) -> None:
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         msg = None
         query = update.callback_query
         query.answer()
@@ -709,7 +728,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
         print("User is not an admin.")
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         msg = None
         if context.user_data.get('setup_stage') == 'contract':
             eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
@@ -738,7 +757,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
         print("User is not an admin.")
 
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         msg = None
         query = update.callback_query
         query.answer()
@@ -765,7 +784,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
         print("User is not an admin.")
 
 def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         msg = None
         if context.user_data.get('setup_stage') == 'liquidity':
             eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
@@ -798,7 +817,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
         print("User is not an admin.")
 
 def setup_ABI(update: Update, context: CallbackContext) -> None:
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         msg = None
         query = update.callback_query
         query.answer()
@@ -825,7 +844,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
         print("User is not an admin.")
 
 def handle_ABI(update: Update, context: CallbackContext) -> None:
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         msg = None
         if context.user_data.get('setup_stage') == 'ABI':
             document = update.message.document
@@ -852,7 +871,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
         print("User is not an admin.")
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         msg = None
         query = update.callback_query
         query.answer()
@@ -899,7 +918,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
         print("User is not an admin.")
 
 def handle_chain(update: Update, context: CallbackContext) -> None:
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         if context.user_data.get('setup_stage') == 'chain':
             chain = update.callback_query.data
             group_id = update.effective_chat.id
@@ -972,7 +991,7 @@ def setup_verification_callback(update: Update, context: CallbackContext) -> Non
 
     update = Update(update.update_id, message=query.message)
 
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         if query.data == 'setup_verification':
             setup_verification(update, context)
     else:
@@ -1017,7 +1036,7 @@ def enable_verification_callback(update: Update, context: CallbackContext) -> No
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'enable_verification':
-        if is_user_admin(update, context):
+        if is_user_owner(update, context):
             enable_verification(update, context)
         else:
             print("User is not an admin.")
@@ -1062,7 +1081,7 @@ def disable_verification_callback(update: Update, context: CallbackContext) -> N
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'disable_verification':
-        if is_user_admin(update, context):
+        if is_user_owner(update, context):
             disable_verification(update, context)
         else:
             print("User is not an admin.")
@@ -1107,7 +1126,7 @@ def simple_verification_callback(update: Update, context: CallbackContext) -> No
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'simple_verification':
-        if is_user_admin(update, context):
+        if is_user_owner(update, context):
             simple_verification(update, context)
         else:
             print("User is not an admin.")
@@ -1160,7 +1179,7 @@ def math_verification_callback(update: Update, context: CallbackContext) -> None
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'math_verification':
-        if is_user_admin(update, context):
+        if is_user_owner(update, context):
             math_verification(update, context)
         else:
             print("User is not an admin.")
@@ -1214,7 +1233,7 @@ def word_verification_callback(update: Update, context: CallbackContext) -> None
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'word_verification':
-        if is_user_admin(update, context):
+        if is_user_owner(update, context):
             word_verification(update, context)
         else:
             print("User is not an admin.")
@@ -1272,7 +1291,7 @@ def timeout_verification_callback(update: Update, context: CallbackContext) -> N
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'timeout_verification':
-        if is_user_admin(update, context):
+        if is_user_owner(update, context):
             timeout_verification(update, context)
         else:
             print("User is not an admin.")
@@ -1309,7 +1328,7 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
-    if is_user_admin(update, context):
+    if is_user_owner(update, context):
         # Extract the timeout value from the callback_data
         timeout_seconds = int(query.data.split('_')[1])
 
