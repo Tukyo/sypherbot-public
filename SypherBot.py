@@ -502,16 +502,17 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
 
 def start(update: Update, context: CallbackContext) -> None:
     msg = None
-    args = update.message.text.split('_') if update.message.text else []
+    args = update.message.text.split() if update.message.text else []  # Split by space first
+    command_args = args[1].split('_') if len(args) > 1 else []  # Handle parameters after "/start"
     user_id = update.effective_user.id
     chat_type = update.effective_chat.type
-    print(f"Received args: {args} - User ID: {user_id} - Chat Type: {chat_type}")
+    print(f"Received args: {command_args} - User ID: {user_id} - Chat Type: {chat_type}")
 
     if chat_type == "private":
         if rate_limit_check():
-            if len(args) == 3 and args[0] == 'authenticate':
-                group_id = args[1]
-                user_id_from_link = args[2]
+            if len(command_args) == 3 and command_args[0] == 'authenticate':
+                group_id = command_args[1]
+                user_id_from_link = command_args[2]
                 print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
 
                 group_doc = db.collection('groups').document(group_id)
