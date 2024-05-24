@@ -95,7 +95,7 @@ endpoints = {
 web3_instances = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in endpoints.items()}
 
 for network, web3_instance in web3_instances.items():
-    if web3_instance.isConnected():
+    if web3_instance.is_connected():
         print(f"Successfully connected to {network}")
     else:
         print(f"Failed to connect to {network}")
