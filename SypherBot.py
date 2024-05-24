@@ -211,7 +211,8 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
         group_doc.set({
             'group_id': group_id,
             'owner_id': owner_id,
-            'owner_username': owner_username
+            'owner_username': owner_username,
+            'premium': False,
         })
 
         bot_member = context.bot.get_chat_member(group_id, context.bot.id)  # Get bot's member info
@@ -510,7 +511,8 @@ def menu_change(context: CallbackContext, update: Update):
         'setup_allowlist_message',
         'setup_blocklist_message',
         'setup_antiraid_message',
-        'setup_antispam_message'
+        'setup_antispam_message',
+        'setup_customization_message',
     ]
 
     for message_to_delete in messages_to_delete:
@@ -659,6 +661,9 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         [
             InlineKeyboardButton("Authentication", callback_data='setup_verification'),
             InlineKeyboardButton("Crypto", callback_data='setup_crypto')
+        ],
+        [
+            InlineKeyboardButton("Customization", callback_data='setup_customization')
         ],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
@@ -1841,6 +1846,45 @@ def reset_token_details(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 #endregion Ethereum Setup
+
+#region Customization Setup
+def setup_customization_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_customization':
+        if is_user_owner(update, context, user_id):
+            setup_customization(update, context)
+
+def setup_customization(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [
+            InlineKeyboardButton("Welcome Message Header", callback_data='setup_welcome_message_header'),
+            InlineKeyboardButton("Buybot Message Header", callback_data='setup_buybot_message_header')
+        ],
+        [InlineKeyboardButton("Back", callback_data='setup_home')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*🎨 Customization Setup 🎨*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_customization_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+#endregion Customization Setup
 
 #endregion Bot Setup
 
@@ -3527,7 +3571,6 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_antiraid_callback, pattern='^setup_antiraid$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_antispam_callback, pattern='^setup_antispam$'))
     dispatcher.add_handler(CallbackQueryHandler(reset_admin_settings_callback, pattern='^reset_admin_settings$'))
-
     
     # Setup Crypto Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_crypto_callback, pattern='^setup_crypto$'))
@@ -3551,6 +3594,9 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(word_verification_callback, pattern='^word_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(timeout_verification_callback, pattern='^timeout_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_timeout_callback, pattern='^vtimeout_'))
+
+    # Setup Customization Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(setup_customization_callback, pattern='^setup_customization$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
