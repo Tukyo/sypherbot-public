@@ -102,8 +102,6 @@ for network, web3_instance in web3_instances.items():
     else:
         print(f"Failed to connect to {network}")
 
-last_block_checked = None
-
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID')
@@ -2601,13 +2599,17 @@ def plot_candlestick_chart(data_frame, group_id):
 
 #region Buybot
 
-def monitor_transfers(web3_instance, liquidity_address, group_data):
-    global last_block_checked
-
+def monitor_transfers(web3_instance, liquidity_address, group_data, db):
     print(f"Monitoring transfers for group {group_data['group_id']}")
-    if last_block_checked is not None:
+
+    settings_ref = db.collection('settings').document('crypto')
+    settings_doc = settings_ref.get()
+    if settings_doc.exists:
+        last_block_checked = settings_doc.to_dict().get('last_block_checked', None)
         print(f"Last block checked: {last_block_checked}")
-        
+    else:
+        last_block_checked = None
+
     contract_address = group_data['token']['contract_address']
     abi = group_data['token']['abi']
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
@@ -2626,9 +2628,9 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     for event in transfer_filter.get_new_entries():
         handle_transfer_event(event, group_data)
 
-    # Update last_block_checked to the latest block number to prepare for the next check
-    last_block_checked = web3_instance.eth.blockNumber
-    print(f"Last block checked: {last_block_checked}")
+    # Update last_block_checked in the database to the latest block number
+    settings_ref.update({'last_block_checked': web3_instance.eth.blockNumber})
+    print(f"Last block updated to: {web3_instance.eth.blockNumber}")
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
