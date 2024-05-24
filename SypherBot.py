@@ -401,7 +401,7 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
     username = update.message.from_user.username or update.message.from_user.first_name
-    msg = None    
+    msg = None
 
     if anti_spam.is_spam(user_id):
         mute_time = anti_spam.mute_time
@@ -3760,7 +3760,7 @@ def main() -> None:
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
     dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_message))
-    dispatcher.add_handler(MessageHandler(Filters.Image, handle_image))
+    dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
 
     # Authentication Callbacks
     dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
