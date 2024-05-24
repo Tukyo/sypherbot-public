@@ -1983,6 +1983,21 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
                 parse_mode='Markdown'
             )
 
+def setup_buybot_message_header_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_buybot_message_header':
+        if is_user_owner(update, context, user_id):
+            setup_buybot_message_header(update, context)
+        else:
+            print("User is not an admin.")
+
+def setup_buybot_message_header(update: Update, context: CallbackContext) -> None:
+    print("Requesting a Buybot message header.")
 
 #endregion Customization Setup
 
@@ -3706,6 +3721,8 @@ def main() -> None:
 
     # Setup Customization Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_customization_callback, pattern='^setup_customization$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_welcome_message_header_callback, pattern='^setup_welcome_message_header$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_buybot_header_callback, pattern='^setup_buybot_header$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
