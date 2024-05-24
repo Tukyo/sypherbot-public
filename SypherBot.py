@@ -1047,7 +1047,8 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Word", callback_data='word_verification')
         ],
         [
-            InlineKeyboardButton("Authentication Timeout", callback_data='timeout_verification')
+            InlineKeyboardButton("Authentication Timeout", callback_data='timeout_verification'),
+            InlineKeyboardButton("Current Verification Settings", callback_data='check_verification_settings')
         ],
         [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
@@ -1091,14 +1092,16 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
             'group_id': group_id,
             'verification_info': {
                 'verification': True,
-                'verification_type': 'none'
+                'verification_type': 'none',
+                'verification_timeout': 6000
             }
         })
     else:
         group_doc.update({
             'verification_info': {
                 'verification': True,
-                'verification_type': 'none'
+                'verification_type': 'none',
+                'verification_timeout': 6000
             }
         })
 
@@ -1179,7 +1182,8 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
             'group_id': group_id,
             'verification_info': {
                 'verification': True,
-                'verification_type': 'simple'
+                'verification_type': 'simple',
+                'verification_timeout': 6000
             }
         })
     else:
@@ -1233,14 +1237,16 @@ def math_verification(update: Update, context: CallbackContext) -> None:
             'group_id': group_id,
             'verification_info': {
                 'verification': True,
-                'verification_type': 'math'
+                'verification_type': 'math',
+                'verification_timeout': 6000
             }
         })
     else:
         group_doc.update({
             'verification_info': {
                 'verification': True,
-                'verification_type': 'math'
+                'verification_type': 'math',
+                'verification_timeout': 6000
             }
         })
 
@@ -1288,14 +1294,16 @@ def word_verification(update: Update, context: CallbackContext) -> None:
             'group_id': group_id,
             'verification_info': {
                 'verification': True,
-                'verification_type': 'word'
+                'verification_type': 'word',
+                'verification_timeout': 6000
             }
         })
     else:
         group_doc.update({
             'verification_info': {
                 'verification': True,
-                'verification_type': 'word'
+                'verification_type': 'word',
+                'verification_timeout': 6000
             }
         })
 
@@ -1383,20 +1391,60 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
         )
 
 def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
-    #Sets the verification timeout for a specific group in the Firestore database.
+    # Sets the verification timeout for a specific group in the Firestore database.
     try:
         group_ref = db.collection('groups').document(str(group_id))
 
         group_ref.update({
-            'verification_info': {
-                'verification_timeout': timeout_seconds
-            }
+            'verification_info.verification_timeout': timeout_seconds
         })
 
         print(f"Authentication timeout for group {group_id} set to {timeout_seconds} seconds")
 
     except Exception as e:
         print(f"Error setting verification timeout: {e}")
+
+def check_verification_settings_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'check_verification_settings':
+        if is_user_owner(update, context, user_id):
+            check_verification_settings(update, context)
+        else:
+            print("User is not an admin.")
+
+def check_verification_settings(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None:
+        verification_info = group_data.get('verification_info', {})
+        verification = verification_info.get('verification', False)
+        verification_type = verification_info.get('verification_type', 'none')
+        verification_timeout = verification_info.get('verification_timeout', 000)
+
+        menu_change(context, update)
+
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        ]
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"*🔒 Current Verification Settings 🔒*\n\nVerification: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
+            parse_mode='Markdown',
+            keyboard=keyboard
+        )
+
+    if msg is not None:
+        track_message(msg)
 
 #endregion Authentication Setup
 
@@ -3029,6 +3077,7 @@ def main() -> None:
 
     # Setup Authentication Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_verification_callback, pattern='^setup_verification$'))
+    dispatcher.add_handler(CallbackQueryHandler(check_verification_settings_callback, pattern='^check_verification_settings$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_verification_callback, pattern='^enable_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(disable_verification_callback, pattern='^disable_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(simple_verification_callback, pattern='^simple_verification$'))
