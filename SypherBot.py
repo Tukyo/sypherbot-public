@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import pytz
 import json
 import random
 import requests
@@ -318,7 +319,8 @@ def schedule_group_monitoring(group_data):
                 'interval',
                 seconds=30,
                 args=[web3_instance, liquidity_address, group_data],
-                id=str(group_data['group_id'])  # Unique ID for the job
+                id=str(group_data['group_id']),  # Unique ID for the job
+                timezone=pytz.utc  # Use the UTC timezone from the pytz library
             )
 
 def is_user_admin(update: Update, context: CallbackContext) -> bool:
