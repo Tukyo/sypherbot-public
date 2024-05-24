@@ -1997,7 +1997,18 @@ def setup_buybot_message_header_callback(update: Update, context: CallbackContex
             print("User is not an admin.")
 
 def setup_buybot_message_header(update: Update, context: CallbackContext) -> None:
+    msg = None
     print("Requesting a Buybot message header.")
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Please send a jpg image for the buybot message header that is less than 700x250px.",
+        parse_mode='Markdown'
+    )
+    context.user_data['expecting_buybot_header_image'] = True  # Flag to check in the image handler
+
+    if msg is not None:
+        track_message(msg)
 
 #endregion Customization Setup
 
@@ -3722,7 +3733,7 @@ def main() -> None:
     # Setup Customization Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_customization_callback, pattern='^setup_customization$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_welcome_message_header_callback, pattern='^setup_welcome_message_header$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_buybot_header_callback, pattern='^setup_buybot_header$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_buybot_message_header_callback, pattern='^setup_buybot_header$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
