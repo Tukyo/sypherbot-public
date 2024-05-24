@@ -1022,7 +1022,7 @@ def complete_token_setup(group_id: str):
     print(f"Added token name {token_name} and symbol {token_symbol} to group {group_id}")
 #endregion Ethereum Setup
 
-#region Verification Setup
+#region Authentication Setup
 def setup_verification_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1057,7 +1057,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Please choose whether to enable or disable verification. Also, please choose the verification type.',
+        text='*🌐 Authentication Setup 🌐*\n\nYou may enable or disable authentication. Once enabled, please choose an authentication type.', parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1104,7 +1104,7 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Verification enabled for this group. Please choose a verification type.'
+        text='Authentication enabled for this group.\n\n*❗ Please choose a authentication type ❗*', parse_mode='Markdown'
     )
 
     if msg is not None:
@@ -1146,11 +1146,9 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
             }
         })
 
-    menu_change(context, update)
-
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Verification disabled for this group.'
+        text='*❗ Authentication disabled for this group ❗*', parse_mode='Markdown'
     )
 
     if msg is not None:
@@ -1201,7 +1199,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Simple verification enabled for this group.',
+        text='*Simple authentication enabled for this group.*', parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1246,8 +1244,6 @@ def math_verification(update: Update, context: CallbackContext) -> None:
             }
         })
 
-    menu_change(context, update)
-
     keyboard = [
         [InlineKeyboardButton("Back", callback_data='setup_verification_callback')]
     ]
@@ -1255,7 +1251,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Math verification enabled for this group.',
+        text='*🖩 Math authentication enabled for this group 🖩*', parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1314,7 +1310,7 @@ def word_verification(update: Update, context: CallbackContext) -> None:
     # Ask the question for new users
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Word verification enabled.',
+        text='Word authentication enabled.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1356,7 +1352,7 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Please choose the verification timeout.',
+        text='Please choose the authentication timeout.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1381,7 +1377,7 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
         # Send a confirmation message to the user
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"Verification timeout set to {timeout_seconds // 60} minutes."
+            text=f"Authentication timeout set to {timeout_seconds // 60} minutes."
         )
 
 def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
@@ -1395,12 +1391,12 @@ def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
             }
         })
 
-        print(f"Verification timeout for group {group_id} set to {timeout_seconds} seconds")
+        print(f"Authentication timeout for group {group_id} set to {timeout_seconds} seconds")
 
     except Exception as e:
         print(f"Error setting verification timeout: {e}")
 
-#endregion Verification Setup
+#endregion Authentication Setup
 
 #endregion Bot Setup
 
@@ -1476,7 +1472,7 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
         verification_info = group_data.get('verification_info', {})
         verification_type = verification_info.get('verification_type', 'simple')
 
-        print(f"Verification type: {verification_type}")
+        print(f"Authentication type: {verification_type}")
 
         # Check if the user ID is in the KEYS of the unverified_users mapping
         if str(user_id) in unverified_users:  
@@ -1487,10 +1483,10 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
                     update, context, verification_type, group_id, user_id
                 )
             else:
-                query.edit_message_text(text="Invalid verification type configured.")
+                query.edit_message_text(text="Invalid authentication type configured.")
         else:
             query.edit_message_text(
-                text="You are already verified, not a member or need to restart verification."
+                text="You are already verified, not a member or need to restart authentication."
             )
     else:
         query.edit_message_text(text="No such group exists.")
@@ -1580,7 +1576,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
     else:
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="Invalid verification type. Please try again."
+            text="Invalid authentication type. Please try again."
         )
 
 def callback_word_response(update: Update, context: CallbackContext):
@@ -3029,7 +3025,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|aptos|harmony|mantle)$'))
 
-    # Setup Verification Callbacks
+    # Setup Authentication Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_verification_callback, pattern='^setup_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_verification_callback, pattern='^enable_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(disable_verification_callback, pattern='^disable_verification$'))
