@@ -1436,11 +1436,13 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
             [InlineKeyboardButton("Back", callback_data='setup_verification')]
         ]
 
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=f"*🔒 Current Verification Settings 🔒*\n\nVerification: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
             parse_mode='Markdown',
-            keyboard=keyboard
+            reply_markup=reply_markup
         )
 
     if msg is not None:
