@@ -833,6 +833,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context, user_id):
 
         keyboard = [
+            [InlineKeyboardButton("Example abi.json", callback_data='example_abi')],
             [InlineKeyboardButton("Back", callback_data='setup_crypto')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -877,6 +878,24 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
+
+def send_example_abi(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+
+    with open('abi.json', 'rb') as file:
+        context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=file,
+            filename='abi.json',
+            caption='Here is an example ABI file.'
+        )
+    
+    msg = query.message.reply_text("Example ABI file sent to your DM.")
+
+    if msg is not None:
+        track_message(msg)
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -941,7 +960,7 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
 
             complete_token_setup(group_id)
 
-            msg = query.message.reply_text(f"Chain {chain} has been successfully saved.")
+            msg = query.message.reply_text("Chain has been saved.")
 
             if msg is not None:
                 track_message(msg)
@@ -3005,6 +3024,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
+    dispatcher.add_handler(CallbackQueryHandler(send_example_abi, pattern='^example_abi$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|aptos|harmony|mantle)$'))
