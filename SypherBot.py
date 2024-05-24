@@ -3916,7 +3916,7 @@ def main() -> None:
     
     # Start the Bot
     updater.start_polling()
-    start_monitoring_groups()
+    # start_monitoring_groups()
     updater.idle()
 
 if __name__ == '__main__':
