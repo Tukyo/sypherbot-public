@@ -2048,6 +2048,11 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         blob = bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
         image_url = blob.generate_signed_url(expiration=timedelta(minutes=15))
 
+        print(f"image_url: {image_url}")
+
+        response = requests.get(image_url)
+        print(f"Response: {response}")
+
         print(f"Math challenge: {math_challenge}")
 
         keyboard = [
