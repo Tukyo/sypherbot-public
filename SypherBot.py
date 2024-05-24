@@ -110,6 +110,7 @@ FIREBASE_AUTH_URL= os.getenv('FIREBASE_AUTH_URL')
 FIREBASE_TOKEN_URI= os.getenv('FIREBASE_TOKEN_URI')
 FIREBASE_AUTH_PROVIDER_X509_CERT_URL= os.getenv('FIREBASE_AUTH_PROVIDER_X509_CERT_URL')
 FIREBASE_CLIENT_X509_CERT_URL= os.getenv('FIREBASE_CLIENT_X509_CERT_URL')
+FIREBASE_STORAGE_BUCKET = os.getenv('FIREBASE_STORAGE_BUCKET')
 
 cred = credentials.Certificate({
     "type": FIREBASE_TYPE,
@@ -124,11 +125,16 @@ cred = credentials.Certificate({
     "client_x509_cert_url": FIREBASE_CLIENT_X509_CERT_URL
 })
 
-firebase_admin.initialize_app(cred)
+firebase_admin.initialize_app(cred, {
+    'storageBucket': FIREBASE_STORAGE_BUCKET
+})
 
 db = firestore.client()
+bucket = storage.bucket()
 
 print("Firebase initialized.")
+print("Database: ", db)
+print("Bucket: ", bucket)
 #endregion Firebase
 
 #region Classes
@@ -2039,7 +2045,6 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         index = random.randint(0, 4)
         math_challenge = challenges[index]
 
-        bucket = storage.bucket()
         blob = bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
         image_url = blob.generate_signed_url(duration=datetime.timedelta(minutes=15), version="v4")
 
@@ -2089,7 +2094,6 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         word_challenge = challenges[0]  # The word challenge is the first word in the shuffled list
         index = original_challenges.index(word_challenge)  # Get the index of the word challenge in the original list
         
-        bucket = storage.bucket()
         blob = bucket.blob(f'sypherbot/private/auth/word_{index}.jpg')
         image_url = blob.generate_signed_url(duration=datetime.timedelta(minutes=15), version="v4")
     
