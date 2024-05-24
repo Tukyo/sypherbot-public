@@ -1988,11 +1988,26 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
 
 def handle_welcome_message_image(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('expecting_welcome_message_header_image'):
+        group_doc = db.collection('groups').document(str(group_id))
+        group_data = group_doc.get().to_dict()
+
+        if group_data is not None and group_data.get('premium') is not True:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="This feature is only available to premium users. Please contact the bot owner for more information.",
+                parse_mode='Markdown'
+            )
+            return
+        
         photo = update.message.photo[-1]  # Get the highest resolution photo
         file = context.bot.get_file(photo.file_id)
 
-        # Check dimensions
-        if photo.width <= 700 and photo.height <= 250:
+        # Download the image to check file size
+        image_stream = BytesIO()
+        file.download(out=image_stream)
+        file_size = len(image_stream.getvalue())  # Get the size of the file in bytes
+
+        if photo.width <= 700 and photo.height <= 250 and file_size <= 100000:  # File size less than 100 KB
             group_id = update.effective_chat.id
             filename = f'welcome_message_header_{group_id}.jpg'
             filepath = f'sypherbot/public/welcome_message_header/{filename}'
@@ -2000,8 +2015,6 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
             # Save to Firebase Storage
             bucket = storage.bucket()
             blob = bucket.blob(filepath)
-            image_stream = BytesIO()
-            file.download(out=image_stream)
             blob.upload_from_string(
                 image_stream.getvalue(),
                 content_type='image/jpeg'
@@ -2014,9 +2027,13 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
             context.user_data['expecting_welcome_message_header_image'] = False  # Reset the flag
             context.user_data['setup_stage'] = None
         else:
+            error_message = "Please ensure the image is less than 700x250 pixels"
+            if file_size > 100000:
+                error_message += " and smaller than 100 KB"
+            error_message += " and try again."
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text="Please ensure the image is less than 700x250 pixels and try again.",
+                text=error_message,
                 parse_mode='Markdown'
             )
 
@@ -2050,11 +2067,27 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
 
 def handle_buybot_message_image(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('expecting_buybot_header_image'):
+        group_doc = db.collection('groups').document(str(group_id))
+        group_data = group_doc.get().to_dict()
+
+        if group_data is not None and group_data.get('premium') is not True:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="This feature is only available to premium users. Please contact the bot owner for more information.",
+                parse_mode='Markdown'
+            )
+            return
+        
         photo = update.message.photo[-1]  # Get the highest resolution photo
         file = context.bot.get_file(photo.file_id)
 
-        # Check dimensions
-        if photo.width <= 700 and photo.height <= 250:
+        # Download the image to check file size
+        image_stream = BytesIO()
+        file.download(out=image_stream)
+        file_size = len(image_stream.getvalue())  # Get the size of the file in bytes
+
+        # Check dimensions adn filesize
+        if photo.width <= 700 and photo.height <= 250 and file_size <= 100000:
             group_id = update.effective_chat.id
             filename = f'buybot_message_header_{group_id}.jpg'
             filepath = f'sypherbot/public/buybot_message_header/{filename}'
@@ -2076,11 +2109,15 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
             context.user_data['expecting_buybot_header_image'] = False  # Reset the flag
             context.user_data['setup_stage'] = None
         else:
+            error_message = "Please ensure the image is less than 700x250 pixels"
+            if file_size > 100000:
+                error_message += " and smaller than 100 KB"
+            error_message += " and try again."
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text="Please ensure the image is less than 700x250 pixels and try again.",
+                text=error_message,
                 parse_mode='Markdown'
-           )
+            )
 
 #endregion Customization Setup
 
