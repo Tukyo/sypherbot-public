@@ -2605,6 +2605,9 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     global last_block_checked
 
     print(f"Monitoring transfers for group {group_data['group_id']}")
+    if last_block_checked is not None:
+        print(f"Last block checked: {last_block_checked}")
+        
     contract_address = group_data['token']['contract_address']
     abi = group_data['token']['abi']
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
