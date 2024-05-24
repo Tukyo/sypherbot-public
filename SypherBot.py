@@ -850,7 +850,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Please upload your ABI as a JSON file.\n\nExample file structure: ["function1(uint256)", "function2(string)"]',
+            text='Please upload your ABI as a JSON file.\n\n*Example file syntax:*\n\n```\n[\n    {\n        "inputs": [],\n        "stateMutability": "nonpayable",\n        "type": "constructor"\n    },\n    {\n        "anonymous": false,\n        "inputs": [\n            {\n                "indexed": true,\n                "internalType": "address",\n                "name": "owner",\n                "type": "address"\n            },\n            {\n                "indexed": true,\n                "internalType": "address",\n                "name": "spender",\n                "type": "address"\n            },\n            {\n                "indexed": false,\n                "internalType": "uint256",\n                "name": "value",\n                "type": "uint256"\n            }\n        ],\n        "name": "Approval",\n       "type": "event"\n    }\n]\n```',
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = 'ABI'
@@ -1029,9 +1029,6 @@ def complete_token_setup(group_id: str):
     })
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
-
-
-
 
 def check_token_details_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
