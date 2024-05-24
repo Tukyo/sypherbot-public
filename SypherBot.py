@@ -985,15 +985,15 @@ def complete_token_setup(group_id: str):
         return
 
     # Get the contract address, ABI, and chain from the group data
-    if 'contract_address' not in token_data:
-        print(f"Contract address not found in group {group_id}, token setup incomplete.")
-        return
-    contract_address = token_data['contract_address']
-
     if 'abi' not in token_data:
         print(f"ABI not found in group {group_id}, token setup incomplete.")
         return
     abi = token_data.get('abi')
+    
+    if 'contract_address' not in token_data:
+        print(f"Contract address not found in group {group_id}, token setup incomplete.")
+        return
+    contract_address = token_data['contract_address']
 
     if 'chain' not in token_data:
         print(f"Chain not found in group {group_id}, token setup incomplete.")
