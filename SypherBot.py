@@ -581,6 +581,10 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
             pass
         elif update.message.document:
             handle_ABI(update, context)
+    elif setup_stage == 'welcome_message_header' and context.user_data.get('expecting_welcome_message_header_image'):
+        handle_welcome_message_image(update, context)
+    elif setup_stage == 'buybot_message_header' and context.user_data.get('expecting_buybot_header_image'):
+        handle_buybot_message_image(update, context)
 
 def start(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1946,6 +1950,7 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
         parse_mode='Markdown'
     )
     context.user_data['expecting_welcome_message_header_image'] = True  # Flag to check in the image handler
+    context.user_data['setup_stage'] = 'welcome_message_header'
 
     if msg is not None:
         track_message(msg)
@@ -1975,7 +1980,8 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
                 text="Your welcome message header image has been successfully uploaded!",
                 parse_mode='Markdown'
             )
-            context.user_data['expecting_image'] = False  # Reset the flag
+            context.user_data['expecting_welcome_message_header_image'] = False  # Reset the flag
+            context.user_data['setup_stage'] = None
         else:
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
@@ -2006,9 +2012,44 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
         parse_mode='Markdown'
     )
     context.user_data['expecting_buybot_header_image'] = True  # Flag to check in the image handler
+    context.user_data['setup_stage'] = 'buybot_message_header'
 
     if msg is not None:
         track_message(msg)
+
+def handle_buybot_message_image(update: Update, context: CallbackContext) -> None:
+    if context.user_data.get('expecting_buybot_header_image'):
+        photo = update.message.photo[-1]  # Get the highest resolution photo
+        file = context.bot.get_file(photo.file_id)
+
+        # Check dimensions
+        if photo.width <= 700 and photo.height <= 250:
+            group_id = update.effective_chat.id
+            filename = f'buybot_message_header_{group_id}.jpg'
+            filepath = f'sypherbot/public/buybot_message_header/{filename}'
+
+            # Save to Firebase Storage
+            bucket = storage.bucket()
+            blob = bucket.blob(filepath)
+            image_stream = BytesIO()
+            file.download(out=image_stream)
+            blob.upload_from_string(
+                image_stream.getvalue(),
+                content_type='image/jpeg'
+            )
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Your buybot message header image has been successfully uploaded!",
+                parse_mode='Markdown'
+            )
+            context.user_data['expecting_buybot_header_image'] = False  # Reset the flag
+            context.user_data['setup_stage'] = None
+        else:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Please ensure the image is less than 700x250 pixels and try again.",
+                parse_mode='Markdown'
+           )
 
 #endregion Customization Setup
 
