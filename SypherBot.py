@@ -10,6 +10,7 @@ import pandas as pd
 import firebase_admin
 import mplfinance as mpf
 from web3 import Web3
+from io import BytesIO
 from decimal import Decimal
 from threading import Timer
 from dotenv import load_dotenv
@@ -132,9 +133,9 @@ firebase_admin.initialize_app(cred, {
 db = firestore.client()
 bucket = storage.bucket()
 
-print("Firebase initialized.")
 print("Database: ", db)
 print("Bucket: ", bucket)
+print("Firebase initialized.")
 #endregion Firebase
 
 #region Classes
@@ -1937,8 +1938,51 @@ def setup_welcome_message_header_callback(update: Update, context: CallbackConte
             print("User is not an admin.")
 
 def setup_welcome_message_header(update: Update, context: CallbackContext) -> None:
-    print("Setting up welcome message header.")
-    
+    msg = None
+    print("Requesting a welcome message header.")
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Please send a jpg image for the welcome message header that is less than 700x250px.",
+        parse_mode='Markdown'
+    )
+    context.user_data['expecting_welcome_message_header_image'] = True  # Flag to check in the image handler
+
+    if msg is not None:
+        track_message(msg)
+
+def handle_welcome_message_image(update: Update, context: CallbackContext) -> None:
+    if context.user_data.get('expecting_welcome_message_header_image'):
+        photo = update.message.photo[-1]  # Get the highest resolution photo
+        file = context.bot.get_file(photo.file_id)
+
+        # Check dimensions
+        if photo.width <= 700 and photo.height <= 250:
+            group_id = update.effective_chat.id
+            filename = f'welcome_message_header_{group_id}.jpg'
+            filepath = f'sypherbot/public/welcome_message_header/{filename}'
+
+            # Save to Firebase Storage
+            bucket = storage.bucket()
+            blob = bucket.blob(filepath)
+            image_stream = BytesIO()
+            file.download(out=image_stream)
+            blob.upload_from_string(
+                image_stream.getvalue(),
+                content_type='image/jpeg'
+            )
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Your welcome message header image has been successfully uploaded!",
+                parse_mode='Markdown'
+            )
+            context.user_data['expecting_image'] = False  # Reset the flag
+        else:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Please ensure the image is less than 700x250 pixels and try again.",
+                parse_mode='Markdown'
+            )
+
 
 #endregion Customization Setup
 
