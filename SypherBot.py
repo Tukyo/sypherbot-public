@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from collections import deque, defaultdict
 from google.cloud.firestore_v1 import DELETE_FIELD
 from firebase_admin import credentials, firestore, storage
+from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler, JobQueue
 
@@ -203,6 +204,8 @@ class AntiRaid:
 anti_spam = AntiSpam(rate_limit=5, time_window=10, mute_time=60)
 anti_raid = AntiRaid(user_amount=25, time_out=30, anti_raid_time=180)
 
+scheduler = BackgroundScheduler()
+
 eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 domain_pattern = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
@@ -293,6 +296,30 @@ def rate_limit_check():
         return True
     else:
         return False
+
+def start_monitoring_groups():
+    groups_snapshot = db.collection('groups').get()
+    for group_doc in groups_snapshot:
+        group_data = group_doc.to_dict()
+        schedule_group_monitoring(group_data)
+
+    scheduler.start()
+
+def schedule_group_monitoring(group_data):
+    token_info = group_data.get('token')
+    if token_info:
+        chain = token_info.get('chain')
+        liquidity_address = token_info.get('liquidity_address')
+        web3_instance = web3_instances.get(chain)
+
+        if web3_instance and web3_instance.is_connected():
+            scheduler.add_job(
+                monitor_transfers,
+                'interval',
+                seconds=30,
+                args=[web3_instance, liquidity_address, group_data],
+                id=str(group_data['group_id'])  # Unique ID for the job
+            )
 
 def is_user_admin(update: Update, context: CallbackContext) -> bool:
     chat_id = update.effective_chat.id
@@ -1919,7 +1946,6 @@ def reset_token_details(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
 #endregion Ethereum Setup
 
 #region Customization Setup
@@ -1982,7 +2008,7 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
     if group_data is not None and group_data.get('premium') is not True:
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="This feature is only available to premium users. Please contact the bot owner for more information.",
+            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
             parse_mode='Markdown'
         )
         print("User does not have premium.")
@@ -2554,6 +2580,63 @@ def plot_candlestick_chart(data_frame, group_id):
     mpf.plot(data_frame, type='candle', style=s, volume=True, savefig=save_path)
     print(f"Chart saved to {save_path}")
 #endregion Chart
+
+#region Buybot
+def monitor_transfers(web3_instance, liquidity_address, group_data):
+    print(f"Monitoring transfers for group {group_data['group_id']}")
+    contract_address = group_data['token']['contract_address']
+    abi = group_data['token']['abi']
+    contract = web3_instance.eth.contract(address=contract_address, abi=abi)
+
+    transfer_filter = contract.events.Transfer.create_filter(fromBlock='latest', argument_filters={'from': liquidity_address})
+    
+    for event in transfer_filter.get_new_entries():
+        handle_transfer_event(event, group_data)
+
+def handle_transfer_event(event, group_data):
+    amount = event['args']['value']
+    # web3_instance = web3_instances.get(group_data['token']['chain'])
+    
+    # Convert amount to token decimal
+    decimals = group_data['token'].get('decimals', 18)
+    token_amount = Decimal(amount) / (10 ** decimals)
+
+    print(f"Received transfer event for {token_amount} tokens.")
+
+    # # Fetch the USD price of the token
+    # token_price_in_usd = get_token_price_in_fiat(group_data['token']['contract_address'], 'usd', web3_instance)
+    # if token_price_in_usd is not None:
+    #     token_price_in_usd = Decimal(token_price_in_usd)
+    #     total_value_usd = token_amount * token_price_in_usd
+    #     if total_value_usd < 500:
+    #         print("Ignoring small buy")
+    #         return
+    #     value_message = f" ({total_value_usd:.2f} USD)"
+    #     header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
+    # else:
+    #     print("Failed to fetch token price in USD.")
+    #     return
+
+    # # Format message with Markdown
+    # message = f"{header_emoji} BUY ALERT {header_emoji}\n\n{buyer_emoji} {token_amount} TOKEN{value_message}"
+    # print(f"Sending buy message for group {group_data['group_id']}")
+    # send_buy_message(message, group_data['group_id'])
+
+# def categorize_buyer(usd_value):
+#     if usd_value < 2500:
+#         return "💸", "🐟"
+#     elif usd_value < 5000:
+#         return "💰", "🐬"
+#     else:
+#         return "🤑", "🐳"
+    
+# def send_buy_message(text, group_id):
+#     bot = telegram.Bot(token=TELEGRAM_TOKEN)
+#     msg = bot.send_message(chat_id=group_id, text=text, parse_mode='Markdown')
+#     if msg is not None:
+#         track_message(msg)
+
+#endregion Buybot
 
 #endregion Ethereum
 
@@ -3703,59 +3786,6 @@ def get_token_price_in_fiat(contract_address, currency):
 
 
 
-#region Buybot
-# def monitor_transfers():
-#     transfer_filter = contract.events.Transfer.create_filter(fromBlock='latest', argument_filters={'from': pool_address})
-    
-#     while True:
-#         for event in transfer_filter.get_new_entries():
-#             handle_transfer_event(event)
-#         time.sleep(10)
-
-# def handle_transfer_event(event):
-#     from_address = event['args']['from']
-#     amount = event['args']['value']
-    
-#     # Check if the transfer is from the LP address
-#     if from_address.lower() == pool_address.lower():
-#         # Convert amount to SYPHER (from Wei)
-#         sypher_amount = web3.from_wei(amount, 'ether')
-
-#         # Fetch the USD price of SYPHER
-#         sypher_price_in_usd = get_token_price_in_fiat(contract_address, 'usd')
-#         if sypher_price_in_usd is not None:
-#             sypher_price_in_usd = Decimal(sypher_price_in_usd)
-#             total_value_usd = sypher_amount * sypher_price_in_usd
-#             if total_value_usd < 500:
-#                 print("Ignoring small buy")
-#                 return
-#             value_message = f" ({total_value_usd:.2f} USD)"
-#             header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
-#         else:
-#             print("Failed to fetch token price in USD.")
-
-#         # Format message with Markdown
-#         message = f"{header_emoji}SYPHER BUY{header_emoji}\n\n{buyer_emoji} {sypher_amount} SYPHER{value_message}"
-#         print(message)  # Debugging
-
-#         send_buy_message(message)
-
-# def categorize_buyer(usd_value):
-#     if usd_value < 2500:
-#         return "💸", "🐟"
-#     elif usd_value < 5000:
-#         return "💰", "🐬"
-#     else:
-#         return "🤑", "🐳"
-    
-# def send_buy_message(text):
-#     msg = None
-#     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-#     msg = bot.send_message(chat_id=CHAT_ID, text=text)
-#     if msg is not None:
-#         track_message(msg)
-#endregion Buybot
-
 def main() -> None:
     # Create the Updater and pass it your bot's token
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
@@ -3851,13 +3881,14 @@ def main() -> None:
     # Setup Customization Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_customization_callback, pattern='^setup_customization$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_welcome_message_header_callback, pattern='^setup_welcome_message_header$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_buybot_message_header_callback, pattern='^setup_buybot_header$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_buybot_message_header_callback, pattern='^setup_buybot_message_header$'))
 
     # monitor_thread = threading.Thread(target=monitor_transfers)
     # monitor_thread.start()
     
     # Start the Bot
     updater.start_polling()
+    updater.start_monitoring_groups()
     updater.idle()
 
 if __name__ == '__main__':
