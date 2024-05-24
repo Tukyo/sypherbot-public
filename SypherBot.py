@@ -102,6 +102,38 @@ for network, web3_instance in web3_instances.items():
     else:
         print(f"Failed to connect to {network}")
 
+eth_web3 = web3_instances['ETHEREUM']
+chainlink_address = Web3.toChecksumAddress('0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419')
+
+chainlink_abi = """
+    [
+        {
+            "inputs": [],
+            "name": "latestRoundData",
+            "outputs": [
+                {"name": "roundId", "type": "uint80"},
+                {"name": "answer", "type": "int256"},
+                {"name": "startedAt", "type": "uint256"},
+                {"name": "updatedAt", "type": "uint256"},
+                {"name": "answeredInRound", "type": "uint80"}
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        }
+    ]
+    """
+chainlink_contract = eth_web3.eth.contract(address=chainlink_address, abi=chainlink_abi)
+
+def check_eth_price():
+    try:
+        latest_round_data = chainlink_contract.functions.latestRoundData().call()
+        price = latest_round_data[1] / 10 ** 8
+        print(f"ETH price: {price}")
+        return price
+    except Exception as e:
+        print(f"Failed to get ETH price: {e}")
+        return None
+
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID')
@@ -3854,6 +3886,9 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("allowlist", allowlist))
     dispatcher.add_handler(CommandHandler("warn", warn))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
+
+
+    dispatcher.add_handler(CommandHandler("test", check_eth_price))
 
     # General Callbacks
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
