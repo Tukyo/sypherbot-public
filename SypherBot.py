@@ -691,8 +691,12 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("ABI", callback_data='setup_ABI')
         ],
         [
+            InlineKeyboardButton("Check Token Details", callback_data='check_token_details')
+        ],
+        [
             InlineKeyboardButton("Back", callback_data='setup_home')
         ]
+        
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1027,51 +1031,54 @@ def complete_token_setup(group_id: str):
 
 
 
-# def check_token_details_callback(update: Update, context: CallbackContext) -> None:
-#     query = update.callback_query
-#     query.answer()
-#     user_id = query.from_user.id
+def check_token_details_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
 
-#     update = Update(update.update_id, message=query.message)
+    update = Update(update.update_id, message=query.message)
 
-#     if query.data == 'check_token_details':
-#         if is_user_owner(update, context, user_id):
-#             check_token_details(update, context)
-#         else:
-#             print("User is not an admin.")
+    if query.data == 'check_token_details':
+        if is_user_owner(update, context, user_id):
+            check_token_details(update, context)
+        else:
+            print("User is not an admin.")
 
-# def check_token_details(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     group_id = update.effective_chat.id
-#     group_doc = db.collection('groups').document(str(group_id))
+def check_token_details(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
 
-#     group_data = group_doc.get().to_dict()
+    group_data = group_doc.get().to_dict()
 
-#     if group_data is not None:
-#         token_info = group_data.get('token', {})
-#         chain = verification_info.get('verification', False)
-#         verification_type = verification_info.get('verification_type', 'none')
-#         verification_timeout = verification_info.get('verification_timeout', 000)
+    if group_data is not None:
+        token_info = group_data.get('token', {})
+        chain = token_info.get('chain', 'none')
+        contract_address = token_info.get('contract_address', 'none')
+        liquidity_address = token_info.get('liquidity_address', 'none')
+        name = token_info.get('name', 'none')
+        symbol = token_info.get('symbol', 'none')
+        total_supply = token_info.get('total_supply', 'none')
 
-#         menu_change(context, update)
+        menu_change(context, update)
 
-#         keyboard = [
-#             [InlineKeyboardButton("Back", callback_data='setup_verification')]
-#         ]
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        ]
 
-#         reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-#         msg = context.bot.send_message(
-#             chat_id=update.effective_chat.id,
-#             text=f"*🔒 Current Authentication Settings 🔒*\n\Authentication: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
-#             parse_mode='Markdown',
-#             reply_markup=reply_markup
-#         )
-#         context.user_data['setup_stage'] = None
-#         context.user_data['setup_verification_settings_message'] = msg.message_id
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"*📜 Current Token Details 📜*\n\n*Name:* {name}\n*Symbol:* {symbol}\n*Chain:*{chain}\n*Total Supply:*\n{total_supply}\n*CA:*\n{contract_address}\n*LP:*\n{liquidity_address}",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = None
+        context.user_data['setup_verification_settings_message'] = msg.message_id
 
-#     if msg is not None:
-#         track_message(msg)
+    if msg is not None:
+        track_message(msg)
 
 #endregion Ethereum Setup
 
@@ -3125,7 +3132,7 @@ def main() -> None:
     
     # Setup Crypto Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_crypto_callback, pattern='^setup_crypto$'))
-    # dispatcher.add_handler(CallbackQueryHandler(check_token_details_callback, pattern='^check_token_details$'))
+    dispatcher.add_handler(CallbackQueryHandler(check_token_details_callback, pattern='^check_token_details$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
