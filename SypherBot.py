@@ -102,6 +102,8 @@ for network, web3_instance in web3_instances.items():
     else:
         print(f"Failed to connect to {network}")
 
+last_block_checked = None
+
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID')
@@ -1856,7 +1858,7 @@ def complete_token_setup(group_id: str, context: CallbackContext):
         decimals = contract.functions.decimals().call()
         total_supply = contract.functions.totalSupply().call() / (10 ** decimals)
     except Exception as e:
-        print(f"Failed to get token name, symbol, and total supply: {e}")
+        print(f"Failed to get token name, symbol, total supply and decimals: {e}")
         return
     
     # Update the Firestore document with the token name, symbol, and total supply
@@ -1873,7 +1875,7 @@ def complete_token_setup(group_id: str, context: CallbackContext):
 
     msg = context.bot.send_message(
         chat_id=group_id,
-        text=f"*🎉 Token setup complete! 🎉*\n\n*Name:* {token_name}\n*Symbol:* {token_symbol}\n*Total Supply:* {total_supply}",
+        text=f"*🎉 Token setup complete! 🎉*\n\n*Name:* {token_name}\n*Symbol:* {token_symbol}\n*Total Supply:* {total_supply}\n*Decimals:* {decimals}",
         parse_mode='Markdown'
     )
 
@@ -2598,16 +2600,31 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Chart
 
 #region Buybot
+
 def monitor_transfers(web3_instance, liquidity_address, group_data):
+    global last_block_checked
+
     print(f"Monitoring transfers for group {group_data['group_id']}")
     contract_address = group_data['token']['contract_address']
     abi = group_data['token']['abi']
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
-    transfer_filter = contract.events.Transfer.create_filter(fromBlock='latest', argument_filters={'from': liquidity_address})
-    
+    if last_block_checked is None:
+        # Start from the latest block if no block has been checked yet
+        last_block_checked = web3_instance.eth.blockNumber
+        print(f"Starting from block {last_block_checked}")
+
+    transfer_filter = contract.events.Transfer.create_filter(
+        fromBlock=last_block_checked + 1,
+        toBlock='latest',
+        argument_filters={'from': liquidity_address}
+    )
+
     for event in transfer_filter.get_new_entries():
         handle_transfer_event(event, group_data)
+
+    # Update last_block_checked to the latest block number to prepare for the next check
+    last_block_checked = web3_instance.eth.blockNumber
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
