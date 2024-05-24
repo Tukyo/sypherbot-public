@@ -1974,6 +1974,20 @@ def setup_welcome_message_header_callback(update: Update, context: CallbackConte
 
 def setup_welcome_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None and group_data.get('premium') is not True:
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="This feature is only available to premium users. Please contact the bot owner for more information.",
+            parse_mode='Markdown'
+        )
+        print("User does not have premium.")
+        return
+
     print("Requesting a welcome message header.")
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1988,16 +2002,7 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
 
 def handle_welcome_message_image(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('expecting_welcome_message_header_image'):
-        group_doc = db.collection('groups').document(str(group_id))
-        group_data = group_doc.get().to_dict()
-
-        if group_data is not None and group_data.get('premium') is not True:
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="This feature is only available to premium users. Please contact the bot owner for more information.",
-                parse_mode='Markdown'
-            )
-            return
+        group_id = update.effective_chat.id
         
         photo = update.message.photo[-1]  # Get the highest resolution photo
         file = context.bot.get_file(photo.file_id)
@@ -2008,7 +2013,6 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
         file_size = len(image_stream.getvalue())  # Get the size of the file in bytes
 
         if photo.width <= 700 and photo.height <= 250 and file_size <= 100000:  # File size less than 100 KB
-            group_id = update.effective_chat.id
             filename = f'welcome_message_header_{group_id}.jpg'
             filepath = f'sypherbot/public/welcome_message_header/{filename}'
 
@@ -2052,6 +2056,20 @@ def setup_buybot_message_header_callback(update: Update, context: CallbackContex
 
 def setup_buybot_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None and group_data.get('premium') is not True:
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="This feature is only available to premium users. Please contact the bot owner for more information.",
+            parse_mode='Markdown'
+        )
+        print("User does not have premium.")
+        return
+    
     print("Requesting a Buybot message header.")
 
     msg = context.bot.send_message(
@@ -2067,16 +2085,7 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
 
 def handle_buybot_message_image(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('expecting_buybot_header_image'):
-        group_doc = db.collection('groups').document(str(group_id))
-        group_data = group_doc.get().to_dict()
-
-        if group_data is not None and group_data.get('premium') is not True:
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="This feature is only available to premium users. Please contact the bot owner for more information.",
-                parse_mode='Markdown'
-            )
-            return
+        group_id = update.effective_chat.id
         
         photo = update.message.photo[-1]  # Get the highest resolution photo
         file = context.bot.get_file(photo.file_id)
@@ -2088,7 +2097,6 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
 
         # Check dimensions adn filesize
         if photo.width <= 700 and photo.height <= 250 and file_size <= 100000:
-            group_id = update.effective_chat.id
             filename = f'buybot_message_header_{group_id}.jpg'
             filepath = f'sypherbot/public/buybot_message_header/{filename}'
 
