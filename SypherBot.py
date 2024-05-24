@@ -504,6 +504,13 @@ def menu_change(context: CallbackContext, update: Update):
         'setup_verification_settings_message',
         'check_verification_settings_message',
         'check_token_details_message',
+        'setup_admin_message',
+        'setup_mute_message',
+        'setup_warn_message',
+        'setup_allowlist_message',
+        'setup_blocklist_message',
+        'setup_antiraid_message',
+        'setup_antispam_message'
     ]
 
     for message_to_delete in messages_to_delete:
@@ -661,7 +668,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*🏠 Setup Home 🏠*\n\nPlease use the buttons below to setup your bot!\n\n*⚙️ Admin:*\nConfigure Admin Settings\n\n*🤖 Commands:*\nConfigure Custom Commands & Default Commands\n\n*🔒 Authentication:*\nConfigure Auth Settings\n\n*📈 Crypto:*\nConfigure Crypto Settings',
+        text='*🏠 Setup Home 🏠*\n\nPlease use the buttons below to setup your bot!\n\n*👑 Admin:*\nConfigure Admin Settings\n\n*🤖 Commands:*\nConfigure Custom Commands & Default Commands\n\n*🔒 Authentication:*\nConfigure Auth Settings\n\n*📈 Crypto:*\nConfigure Crypto Settings',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
@@ -670,7 +677,722 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
 
     if msg is not None:
         track_message(msg)
-    
+
+#region Admin Setup
+def setup_admin_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if is_user_owner(update, context, user_id):
+        if query.data == 'setup_admin':
+            setup_admin(update, context)
+    else:
+        print("User is not the owner.")
+
+def setup_admin(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [
+            InlineKeyboardButton("Mute", callback_data='setup_mute'),
+            InlineKeyboardButton("Warn", callback_data='setup_warn')
+        ],
+        [
+            InlineKeyboardButton("Allowlist", callback_data='setup_allowlist'),
+            InlineKeyboardButton("Blocklist", callback_data='setup_blocklist')
+        ],
+        [
+            InlineKeyboardButton("Anti-Raid", callback_data='setup_antiraid'),
+            InlineKeyboardButton("Anti-Spam", callback_data='setup_antispam')
+        ],
+        [
+            InlineKeyboardButton("❗ Reset Admin Settings ❗", callback_data='reset_admin_settings')
+        ],
+        [InlineKeyboardButton("Back", callback_data='setup_home')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*👑 Admin Setup 👑*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_admin_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def setup_mute_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_mute':
+        if is_user_owner(update, context, user_id):
+            setup_mute(update, context)
+        else:
+            print("User is not the owner.")
+
+def setup_mute(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_admin')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*🔇 Mute Setup 🔇*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_mute_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def setup_warn_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_warn':
+        if is_user_owner(update, context, user_id):
+            setup_warn(update, context)
+        else:
+            print("User is not the owner.")
+
+def setup_warn(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_admin')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*⚠️ Warn Setup ⚠️*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_warn_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def setup_allowlist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_allowlist':
+        if is_user_owner(update, context, user_id):
+            setup_allowlist(update, context)
+        else:
+            print("User is not the owner.")
+
+def setup_allowlist(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_admin')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*✅ Allowlist Setup ✅*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_allowlist_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def setup_blocklist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_blocklist':
+        if is_user_owner(update, context, user_id):
+            setup_blocklist(update, context)
+        else:
+            print("User is not the owner.")
+
+def setup_blocklist(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_admin')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*❌ Blocklist Setup ❌*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_blocklist_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def setup_antiraid_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_antiraid':
+        if is_user_owner(update, context, user_id):
+            setup_antiraid(update, context)
+        else:
+            print("User is not the owner.")
+
+def setup_antiraid(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_admin')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*🛡️ Anti-Raid Setup 🛡️*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_antiraid_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def setup_antispam_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_antispam':
+        if is_user_owner(update, context, user_id):
+            setup_antispam(update, context)
+        else:
+            print("User is not the owner.")
+
+def setup_antispam(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_admin')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*🚫 Anti-Spam Setup 🚫*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_antispam_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def reset_admin_settings_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'reset_admin_settings':
+        if is_user_owner(update, context, user_id):
+            reset_admin_settings(update, context)
+        else:
+            print("User is not the owner.")
+
+def reset_admin_settings(update: Update, context: CallbackContext) -> None:
+    msg = None
+    # group_id = update.effective_chat.id
+    # group_doc = db.collection('groups').document(str(group_id))
+
+    print("Resetting admin settings...")
+
+    if msg is not None:
+        track_message(msg)
+
+#endregion Admin Setup
+
+#region Commands Setup
+
+#endregion Commands Setup
+
+#region Authentication Setup
+def setup_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if is_user_owner(update, context, user_id):
+        if query.data == 'setup_verification':
+            setup_verification(update, context)
+
+def setup_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [
+            InlineKeyboardButton("Enable", callback_data='enable_verification'),
+            InlineKeyboardButton("Disable", callback_data='disable_verification')
+        ],
+        [
+            InlineKeyboardButton("Simple", callback_data='simple_verification'),
+            InlineKeyboardButton("Math", callback_data='math_verification'),
+            InlineKeyboardButton("Word", callback_data='word_verification')
+        ],
+        [
+            InlineKeyboardButton("Authentication Timeout", callback_data='timeout_verification'),
+            InlineKeyboardButton("Current Authentication Settings", callback_data='check_verification_settings')
+        ],
+        [InlineKeyboardButton("Back", callback_data='setup_home')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*🌐 Authentication Setup 🌐*\n\nYou may enable or disable authentication. Once enabled, please choose an authentication type.', parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_verification_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def enable_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'enable_verification':
+        if is_user_owner(update, context, user_id):
+            enable_verification(update, context)
+        else:
+            print("User is not an admin.")
+
+def enable_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'none',
+                'verification_timeout': 600
+            }
+        })
+    else:
+        group_doc.update({
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'none',
+                'verification_timeout': 600
+            }
+        })
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Authentication enabled for this group.\n\n*❗ Please choose an authentication type ❗*', parse_mode='Markdown'
+    )
+
+    if msg is not None:
+        track_message(msg)
+
+def disable_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'disable_verification':
+        if is_user_owner(update, context, user_id):
+            disable_verification(update, context)
+        else:
+            print("User is not an admin.")
+
+def disable_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification_info': {
+                'verification': False,
+                'verification_type': 'none'
+            }
+        })
+    else:
+        group_doc.update({
+            'verification_info': {
+                'verification': False,
+                'verification_type': 'none'
+            }
+        })
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*❗ Authentication disabled for this group ❗*', parse_mode='Markdown'
+    )
+
+    if msg is not None:
+        track_message(msg)
+
+def simple_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'simple_verification':
+        if is_user_owner(update, context, user_id):
+            simple_verification(update, context)
+        else:
+            print("User is not an admin.")
+
+def simple_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'simple',
+                'verification_timeout': 600
+            }
+        })
+    else:
+        group_doc.update({
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'simple',
+                'verification_timeout': 600
+            }
+        })
+
+    menu_change(context, update)
+
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*🤡 Simple authentication enabled for this group 🤡*', parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_simple_verification_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def math_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'math_verification':
+        if is_user_owner(update, context, user_id):
+            math_verification(update, context)
+        else:
+            print("User is not an admin.")
+
+def math_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'math',
+                'verification_timeout': 600
+            }
+        })
+    else:
+        group_doc.update({
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'math',
+                'verification_timeout': 600
+            }
+        })
+
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*#️⃣ Math authentication enabled for this group #️⃣*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_math_verification_message'] = msg.message_id
+
+
+    if msg is not None:
+        track_message(msg)
+
+def word_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'word_verification':
+        if is_user_owner(update, context, user_id):
+            word_verification(update, context)
+        else:
+            print("User is not an admin.")
+
+def word_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'group_id': group_id,
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'word',
+                'verification_timeout': 600
+            }
+        })
+    else:
+        group_doc.update({
+            'verification_info': {
+                'verification': True,
+                'verification_type': 'word',
+                'verification_timeout': 600
+            }
+        })
+
+    # Set the state in user_data
+    context.user_data['setup_stage'] = 'setup_word_verification'
+
+    menu_change(context, update)
+
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Ask the question for new users
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*🈹 Word authentication enabled for this group 🈹*',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_word_verification_message'] = msg.message_id
+
+
+    if msg is not None:
+        track_message(msg)
+
+def timeout_verification_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'timeout_verification':
+        if is_user_owner(update, context, user_id):
+            timeout_verification(update, context)
+        else:
+            print("User is not an admin.")
+
+def timeout_verification(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [
+            InlineKeyboardButton("1 Minute", callback_data='vtimeout_60'),
+            InlineKeyboardButton("10 Minutes", callback_data='vtimeout_600')
+        ],
+        [
+            InlineKeyboardButton("30 Minutes", callback_data='vtimeout_1800'),
+            InlineKeyboardButton("60 Minutes", callback_data='vtimeout_3600')
+        ],
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Please choose the authentication timeout.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_timeout_verification_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    if is_user_owner(update, context, user_id):
+        # Extract the timeout value from the callback_data
+        timeout_seconds = int(query.data.split('_')[1])
+
+        # Call set_verification_timeout with the group_id and timeout_seconds
+        group_id = update.effective_chat.id
+        set_verification_timeout(group_id, timeout_seconds)
+
+        # Send a confirmation message to the user
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"Authentication timeout set to {timeout_seconds // 60} minutes."
+        )
+
+def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
+    # Sets the verification timeout for a specific group in the Firestore database.
+    try:
+        group_ref = db.collection('groups').document(str(group_id))
+
+        group_ref.update({
+            'verification_info.verification_timeout': timeout_seconds
+        })
+
+        print(f"Authentication timeout for group {group_id} set to {timeout_seconds} seconds")
+
+    except Exception as e:
+        print(f"Error setting verification timeout: {e}")
+
+def check_verification_settings_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'check_verification_settings':
+        if is_user_owner(update, context, user_id):
+            check_verification_settings(update, context)
+        else:
+            print("User is not an admin.")
+
+def check_verification_settings(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None:
+        verification_info = group_data.get('verification_info', {})
+        verification = verification_info.get('verification', False)
+        verification_type = verification_info.get('verification_type', 'none')
+        verification_timeout = verification_info.get('verification_timeout', 000)
+
+        menu_change(context, update)
+
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"*🔒 Current Authentication Settings 🔒*\n\nAuthentication: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = None
+        context.user_data['check_verification_settings_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+#endregion Authentication Setup
+
 #region Ethereum Setup
 def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -1119,438 +1841,6 @@ def reset_token_details(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 #endregion Ethereum Setup
-
-#region Authentication Setup
-def setup_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if is_user_owner(update, context, user_id):
-        if query.data == 'setup_verification':
-            setup_verification(update, context)
-
-def setup_verification(update: Update, context: CallbackContext) -> None:
-    msg = None
-    keyboard = [
-        [
-            InlineKeyboardButton("Enable", callback_data='enable_verification'),
-            InlineKeyboardButton("Disable", callback_data='disable_verification')
-        ],
-        [
-            InlineKeyboardButton("Simple", callback_data='simple_verification'),
-            InlineKeyboardButton("Math", callback_data='math_verification'),
-            InlineKeyboardButton("Word", callback_data='word_verification')
-        ],
-        [
-            InlineKeyboardButton("Authentication Timeout", callback_data='timeout_verification'),
-            InlineKeyboardButton("Current Authentication Settings", callback_data='check_verification_settings')
-        ],
-        [InlineKeyboardButton("Back", callback_data='setup_home')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    menu_change(context, update)
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='*🌐 Authentication Setup 🌐*\n\nYou may enable or disable authentication. Once enabled, please choose an authentication type.', parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = None
-    context.user_data['setup_verification_message'] = msg.message_id
-
-    if msg is not None:
-        track_message(msg)
-
-def enable_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'enable_verification':
-        if is_user_owner(update, context, user_id):
-            enable_verification(update, context)
-        else:
-            print("User is not an admin.")
-
-def enable_verification(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
-
-    if group_data is None:
-        group_doc.set({
-            'group_id': group_id,
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'none',
-                'verification_timeout': 600
-            }
-        })
-    else:
-        group_doc.update({
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'none',
-                'verification_timeout': 600
-            }
-        })
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Authentication enabled for this group.\n\n*❗ Please choose an authentication type ❗*', parse_mode='Markdown'
-    )
-
-    if msg is not None:
-        track_message(msg)
-
-def disable_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'disable_verification':
-        if is_user_owner(update, context, user_id):
-            disable_verification(update, context)
-        else:
-            print("User is not an admin.")
-
-def disable_verification(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
-
-    if group_data is None:
-        group_doc.set({
-            'group_id': group_id,
-            'verification_info': {
-                'verification': False,
-                'verification_type': 'none'
-            }
-        })
-    else:
-        group_doc.update({
-            'verification_info': {
-                'verification': False,
-                'verification_type': 'none'
-            }
-        })
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='*❗ Authentication disabled for this group ❗*', parse_mode='Markdown'
-    )
-
-    if msg is not None:
-        track_message(msg)
-
-def simple_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'simple_verification':
-        if is_user_owner(update, context, user_id):
-            simple_verification(update, context)
-        else:
-            print("User is not an admin.")
-
-def simple_verification(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
-
-    if group_data is None:
-        group_doc.set({
-            'group_id': group_id,
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'simple',
-                'verification_timeout': 600
-            }
-        })
-    else:
-        group_doc.update({
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'simple',
-                'verification_timeout': 600
-            }
-        })
-
-    menu_change(context, update)
-
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='*🤡 Simple authentication enabled for this group 🤡*', parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = None
-    context.user_data['setup_simple_verification_message'] = msg.message_id
-
-    if msg is not None:
-        track_message(msg)
-
-def math_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'math_verification':
-        if is_user_owner(update, context, user_id):
-            math_verification(update, context)
-        else:
-            print("User is not an admin.")
-
-def math_verification(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
-
-    if group_data is None:
-        group_doc.set({
-            'group_id': group_id,
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'math',
-                'verification_timeout': 600
-            }
-        })
-    else:
-        group_doc.update({
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'math',
-                'verification_timeout': 600
-            }
-        })
-
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    menu_change(context, update)
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='*#️⃣ Math authentication enabled for this group #️⃣*',
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = None
-    context.user_data['setup_math_verification_message'] = msg.message_id
-
-
-    if msg is not None:
-        track_message(msg)
-
-def word_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'word_verification':
-        if is_user_owner(update, context, user_id):
-            word_verification(update, context)
-        else:
-            print("User is not an admin.")
-
-def word_verification(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
-
-    if group_data is None:
-        group_doc.set({
-            'group_id': group_id,
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'word',
-                'verification_timeout': 600
-            }
-        })
-    else:
-        group_doc.update({
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'word',
-                'verification_timeout': 600
-            }
-        })
-
-    # Set the state in user_data
-    context.user_data['setup_stage'] = 'setup_word_verification'
-
-    menu_change(context, update)
-
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    # Ask the question for new users
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='*🈹 Word authentication enabled for this group 🈹*',
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = None
-    context.user_data['setup_word_verification_message'] = msg.message_id
-
-
-    if msg is not None:
-        track_message(msg)
-
-def timeout_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'timeout_verification':
-        if is_user_owner(update, context, user_id):
-            timeout_verification(update, context)
-        else:
-            print("User is not an admin.")
-
-def timeout_verification(update: Update, context: CallbackContext) -> None:
-    msg = None
-    keyboard = [
-        [
-            InlineKeyboardButton("1 Minute", callback_data='vtimeout_60'),
-            InlineKeyboardButton("10 Minutes", callback_data='vtimeout_600')
-        ],
-        [
-            InlineKeyboardButton("30 Minutes", callback_data='vtimeout_1800'),
-            InlineKeyboardButton("60 Minutes", callback_data='vtimeout_3600')
-        ],
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    menu_change(context, update)
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Please choose the authentication timeout.',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = None
-    context.user_data['setup_timeout_verification_message'] = msg.message_id
-
-    if msg is not None:
-        track_message(msg)
-
-def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    if is_user_owner(update, context, user_id):
-        # Extract the timeout value from the callback_data
-        timeout_seconds = int(query.data.split('_')[1])
-
-        # Call set_verification_timeout with the group_id and timeout_seconds
-        group_id = update.effective_chat.id
-        set_verification_timeout(group_id, timeout_seconds)
-
-        # Send a confirmation message to the user
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Authentication timeout set to {timeout_seconds // 60} minutes."
-        )
-
-def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
-    # Sets the verification timeout for a specific group in the Firestore database.
-    try:
-        group_ref = db.collection('groups').document(str(group_id))
-
-        group_ref.update({
-            'verification_info.verification_timeout': timeout_seconds
-        })
-
-        print(f"Authentication timeout for group {group_id} set to {timeout_seconds} seconds")
-
-    except Exception as e:
-        print(f"Error setting verification timeout: {e}")
-
-def check_verification_settings_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'check_verification_settings':
-        if is_user_owner(update, context, user_id):
-            check_verification_settings(update, context)
-        else:
-            print("User is not an admin.")
-
-def check_verification_settings(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
-
-    if group_data is not None:
-        verification_info = group_data.get('verification_info', {})
-        verification = verification_info.get('verification', False)
-        verification_type = verification_info.get('verification_type', 'none')
-        verification_timeout = verification_info.get('verification_timeout', 000)
-
-        menu_change(context, update)
-
-        keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_verification')]
-        ]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"*🔒 Current Authentication Settings 🔒*\n\nAuthentication: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        context.user_data['setup_stage'] = None
-        context.user_data['check_verification_settings_message'] = msg.message_id
-
-    if msg is not None:
-        track_message(msg)
-#endregion Authentication Setup
 
 #endregion Bot Setup
 
@@ -2810,15 +3100,33 @@ def website(update: Update, context: CallbackContext) -> None:
 
 
 
-
-
-
-
-
-
-
-
-
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
 
 
@@ -3209,6 +3517,11 @@ def main() -> None:
     
     # Setup Callback
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
+
+    # Setup Admin Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(setup_admin_callback, pattern='^setup_admin$'))
+    dispatcher.add_handler(CallbackQueryHandler(check_admin_settings_callback, pattern='^check_admin_settings$'))
+
     
     # Setup Crypto Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_crypto_callback, pattern='^setup_crypto$'))
