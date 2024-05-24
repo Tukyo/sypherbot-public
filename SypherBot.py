@@ -699,7 +699,9 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
 
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id)).get()
-    token_info = group_doc.get('token')
+
+    if 'token' in group_doc.to_dict():
+        token_info = group_doc.get('token')
 
     if token_info and 'abi' in token_info:
         text = f"{token_info['name']} • {token_info['symbol']}\n\nBlockchain: {token_info['chain']}\nTotal Supply: {token_info['total_supply']}"
@@ -989,7 +991,7 @@ def complete_token_setup(group_id: str):
         print(f"ABI not found in group {group_id}, token setup incomplete.")
         return
     abi = token_data.get('abi')
-    
+
     if 'contract_address' not in token_data:
         print(f"Contract address not found in group {group_id}, token setup incomplete.")
         return
