@@ -1707,6 +1707,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
         msg = None
         if context.user_data.get('setup_stage') == 'ABI':
             document = update.message.document
+            print(f"MIME type: {document.mime_type}")
             if document.mime_type == 'application/json':
                 file = context.bot.getFile(document.file_id)
                 file.download('temp_abi.json')
