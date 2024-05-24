@@ -20,6 +20,9 @@ from firebase_admin import credentials, firestore
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler, JobQueue
 
+import warnings
+warnings.filterwarnings("ignore", "python-telegram-bot is using upstream urllib3")
+
 #
 ## This is the public version of the bot that was developed by Tukyo Games for the deSypher project.
 ## This bot has a customizable commands feature, and admin controls. Along with full charting, price and buybot functionality.
@@ -79,7 +82,6 @@ WORD_7 = os.getenv("WORD_7")
 WORD_8 = os.getenv("WORD_8")
 
 endpoints = {
-    "APTOS": os.getenv('APTOS_ENDPOINT'),
     "ARBITRUM": os.getenv('ARBITRUM_ENDPOINT'),
     "AVALANCHE": os.getenv('AVALANCHE_ENDPOINT'),
     "BASE": os.getenv('BASE_ENDPOINT'),
@@ -1675,16 +1677,15 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             ],
             [
                 InlineKeyboardButton("Arbitrum", callback_data='arbitrum'),
-                InlineKeyboardButton("Optimism", callback_data='optimism'),
-                InlineKeyboardButton("Polygon", callback_data='polygon')
+                InlineKeyboardButton("Optimism", callback_data='optimism')
             ],
             [
+                InlineKeyboardButton("Polygon", callback_data='polygon'),
                 InlineKeyboardButton("Fantom", callback_data='fantom'),
-                InlineKeyboardButton("Avalanche", callback_data='avalanche'),
-                InlineKeyboardButton("Binance", callback_data='binance')
+                InlineKeyboardButton("Avalanche", callback_data='avalanche')
             ],
             [
-                InlineKeyboardButton("Aptos", callback_data='aptos'),
+                InlineKeyboardButton("Binance", callback_data='binance'),
                 InlineKeyboardButton("Harmony", callback_data='harmony'),
                 InlineKeyboardButton("Mantle", callback_data='mantle')
             ],
@@ -3621,7 +3622,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(send_example_abi, pattern='^example_abi$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|aptos|harmony|mantle)$'))
+    dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|harmony|mantle)$'))
     dispatcher.add_handler(CallbackQueryHandler(reset_token_details_callback, pattern='^reset_token_details$'))
 
     # Setup Authentication Callbacks
