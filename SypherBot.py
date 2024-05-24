@@ -1711,7 +1711,7 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
 
     if is_user_owner(update, context, user_id):
         if context.user_data.get('setup_stage') == 'chain':
-            chain = update.callback_query.data
+            chain = update.callback_query.data.upper()  # Convert chain to uppercase
             group_id = update.effective_chat.id
             print(f"Adding chain {chain} to group {group_id}")
             group_doc = db.collection('groups').document(str(group_id))
