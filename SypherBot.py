@@ -2625,6 +2625,7 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
 
     # Update last_block_checked to the latest block number to prepare for the next check
     last_block_checked = web3_instance.eth.blockNumber
+    print(f"Last block checked: {last_block_checked}")
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
