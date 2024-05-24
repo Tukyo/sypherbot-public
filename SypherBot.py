@@ -2605,11 +2605,11 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
 
     settings_ref = db.collection('settings').document('crypto')
     last_block_field = f"last_block_checked_{group_id}"
-    settings_doc = settings_ref.get()
 
+    # --- Get last checked block (or None if not found) ---
+    settings_doc = settings_ref.get()
     if settings_doc.exists:
         last_block_checked = settings_doc.to_dict().get(last_block_field, None)
-        print(f"Last block checked: {last_block_checked}")
     else:
         last_block_checked = None
 
@@ -2631,10 +2631,12 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     for event in transfer_filter.get_new_entries():
         handle_transfer_event(event, group_data)
 
-    # Update last_block_checked in the database to the latest block number
-    settings_ref.update({last_block_field: web3_instance.eth.blockNumber})
-    print(f"Last block updated to: {web3_instance.eth.blockNumber}")
-
+    new_last_block = web3_instance.eth.blockNumber
+    try:
+        settings_ref.update({last_block_field: new_last_block})
+        print(f"Last block updated to: {new_last_block}")
+    except Exception as e:
+        print(f"Error updating last block for group {group_id}: {e}")
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
