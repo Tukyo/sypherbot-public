@@ -1065,7 +1065,7 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
         menu_change(context, update)
 
         keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_verification')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
         ]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
