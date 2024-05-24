@@ -78,6 +78,28 @@ WORD_6 = os.getenv("WORD_6")
 WORD_7 = os.getenv("WORD_7")
 WORD_8 = os.getenv("WORD_8")
 
+endpoints = {
+    "APTOS": os.getenv('APTOS_ENDPOINT'),
+    "ARBITRUM": os.getenv('ARBITRUM_ENDPOINT'),
+    "AVALANCHE": os.getenv('AVALANCHE_ENDPOINT'),
+    "BASE": os.getenv('BASE_ENDPOINT'),
+    "BSC": os.getenv('BSC_ENDPOINT'),
+    "ETHEREUM": os.getenv('ETHEREUM_ENDPOINT'),
+    "FANTOM": os.getenv('FANTOM_ENDPOINT'),
+    "HARMONY": os.getenv('HARMONY_ENDPOINT'),
+    "MANTLE": os.getenv('MANTLE_ENDPOINT'),
+    "OPTIMISM": os.getenv('OPTIMISM_ENDPOINT'),
+    "POLYGON": os.getenv('POLYGON_ENDPOINT')
+}
+
+web3_instances = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in endpoints.items()}
+
+for network, web3_instance in web3_instances.items():
+    if web3_instance.isConnected():
+        print(f"Successfully connected to {network}")
+    else:
+        print(f"Failed to connect to {network}")
+
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID')
@@ -1731,14 +1753,15 @@ def complete_token_setup(group_id: str):
         return
     chain = token_data.get('chain')
 
-    # Determine the provider URL based on the chain
-    provider_url = os.getenv(f'{chain.upper()}_ENDPOINT')
-    if provider_url is None:
-        print(f"Provider URL for chain {chain} not found in environment variables")
+    if not web3:
+        print("Web3 provider not found, token setup incomplete.")
         return
 
-    # Connect to the Ethereum network
-    web3 = Web3(Web3.HTTPProvider(provider_url))
+    # Get the Web3 instance for the chain
+    web3 = web3_instances.get(chain)
+    if not web3:
+        print(f"Web3 provider not found for chain {chain}, token setup incomplete.")
+        return
 
     # Create a contract object
     contract = web3.eth.contract(address=contract_address, abi=abi)
@@ -1883,6 +1906,23 @@ def setup_customization(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
+
+def setup_welcome_message_header_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_welcome_message_header':
+        if is_user_owner(update, context, user_id):
+            setup_welcome_message_header(update, context)
+        else:
+            print("User is not an admin.")
+
+def setup_welcome_message_header(update: Update, context: CallbackContext) -> None:
+    print("Setting up welcome message header.")
+    
 
 #endregion Customization Setup
 
@@ -3480,7 +3520,7 @@ def get_token_price_in_fiat(contract_address, currency):
 #             value_message = f" ({total_value_usd:.2f} USD)"
 #             header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
 #         else:
-            # print("Failed to fetch token price in USD.")
+#             print("Failed to fetch token price in USD.")
 
 #         # Format message with Markdown
 #         message = f"{header_emoji}SYPHER BUY{header_emoji}\n\n{buyer_emoji} {sypher_amount} SYPHER{value_message}"
