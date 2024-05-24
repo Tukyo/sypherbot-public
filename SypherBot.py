@@ -1102,8 +1102,6 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
             }
         })
 
-    menu_change(context, update)
-
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Verification enabled for this group. Please choose a verification type.'
