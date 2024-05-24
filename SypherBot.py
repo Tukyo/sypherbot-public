@@ -850,7 +850,8 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Please upload your ABI as a JSON file.\n\n*Example file syntax:*\n\n```\n[\n    {\n        "inputs": [],\n        "stateMutability": "nonpayable",\n        "type": "constructor"\n    },\n    {\n        "anonymous": false,\n        "inputs": [\n            {\n                "indexed": true,\n                "internalType": "address",\n                "name": "owner",\n                "type": "address"\n            },\n            {\n                "indexed": true,\n                "internalType": "address",\n                "name": "spender",\n                "type": "address"\n            },\n            {\n                "indexed": false,\n                "internalType": "uint256",\n                "name": "value",\n                "type": "uint256"\n            }\n        ],\n        "name": "Approval",\n       "type": "event"\n    }\n]\n```',
+            text='*📝 ABI Setup 📝*\n\nPlease upload your ABI in .json format.\n\n *Example file syntax:*\n```\n[\n    {\n        "inputs": [],\n        "stateMutability": "nonpayable",\n        "type": "constructor"\n    },\n    {\n        "anonymous": false,\n        "inputs": [\n            {\n                "indexed": true,\n                "internalType": "address",\n                "name": "owner",\n                "type": "address"\n            },\n            {\n                "indexed": true,\n                "internalType": "address",\n                "name": "spender",\n                "type": "address"\n            },\n            {\n                "indexed": false,\n                "internalType": "uint256",\n                "name": "value",\n                "type": "uint256"\n            }\n        ],\n        "name": "Approval",\n       "type": "event"\n    }\n]\n```',
+            parse_mode='markdown',
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = 'ABI'
@@ -1263,7 +1264,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*Simple authentication enabled for this group.*', parse_mode='Markdown',
+        text='*🤡 Simple authentication enabled for this group 🤡*', parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1319,7 +1320,8 @@ def math_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*🖩 Math authentication enabled for this group 🖩*', parse_mode='Markdown',
+        text='*#️⃣ Math authentication enabled for this group #️⃣*',
+        parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1380,7 +1382,8 @@ def word_verification(update: Update, context: CallbackContext) -> None:
     # Ask the question for new users
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Word authentication enabled.',
+        text='*🈹 Word authentication enabled for this group 🈹*',
+        parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
