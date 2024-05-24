@@ -707,7 +707,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         '*🤖 Commands:*\nConfigure Custom Commands & Default Commands\n\n'
         '*🔒 Authentication:*\nConfigure Auth Settings\n\n'
         '*📈 Crypto:*\nConfigure Crypto Settings\n\n'
-        '*🎨 Customization:*\n Customize Your Bot*',
+        '*🎨 Customization:*\n Customize Your Bot',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
