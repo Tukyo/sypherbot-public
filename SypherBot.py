@@ -1516,7 +1516,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
                 elif update.callback_query is not None:
                     msg = update.callback_query.message.reply_text("Contract address added successfully!")
             
-                complete_token_setup(group_id)
+                complete_token_setup(group_id, context)
             else:
                 msg = update.message.reply_text("Please send a valid Contract Address!")
                 
@@ -1573,7 +1573,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
                 elif update.callback_query is not None:
                     msg = update.callback_query.message.reply_text("Liquidity address added successfully!")
 
-                complete_token_setup(group_id)
+                complete_token_setup(group_id, context)
             else:
                 # Check if update.message is not None before using it
                 if update.message is not None:
@@ -1632,7 +1632,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
                     context.user_data['setup_stage'] = None
                     msg = update.message.reply_text("ABI has been successfully saved.")
 
-                    complete_token_setup(group_id)
+                    complete_token_setup(group_id, context)
             else:
                 msg = update.message.reply_text("Please make sure the file is a JSON file.")
             
@@ -1718,14 +1718,15 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
             group_doc.update({'token.chain': chain})
             context.user_data['setup_stage'] = None
 
-            complete_token_setup(group_id)
+            complete_token_setup(group_id, context)
 
             msg = query.message.reply_text("Chain has been saved.")
 
             if msg is not None:
                 track_message(msg)
 
-def complete_token_setup(group_id: str):
+def complete_token_setup(group_id: str, context: CallbackContext):
+    msg = None
     # Fetch the group data from Firestore
     group_doc = db.collection('groups').document(str(group_id))
     group_data = group_doc.get().to_dict()
@@ -1778,6 +1779,15 @@ def complete_token_setup(group_id: str):
     })
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
+
+    msg = context.bot.send_message(
+        chat_id=group_id,
+        text=f"*🎉 Token setup complete! 🎉*\n\n*Name:* {token_name}\n*Symbol:* {token_symbol}\n*Total Supply:* {total_supply}",
+        parse_mode='Markdown'
+    )
+
+    if msg is not None:
+        track_message(msg)
 
 def check_token_details_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
