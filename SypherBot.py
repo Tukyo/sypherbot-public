@@ -1864,7 +1864,7 @@ def complete_token_setup(group_id: str, context: CallbackContext):
         'token.name': token_name,
         'token.symbol': token_symbol,
         'token.total_supply': total_supply,
-        'decimals': decimals
+        'token.decimals': decimals
     })
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
