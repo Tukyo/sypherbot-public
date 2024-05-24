@@ -20,9 +20,6 @@ from firebase_admin import credentials, firestore
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler, JobQueue
 
-import warnings
-warnings.filterwarnings("ignore", "python-telegram-bot is using upstream urllib3")
-
 #
 ## This is the public version of the bot that was developed by Tukyo Games for the deSypher project.
 ## This bot has a customizable commands feature, and admin controls. Along with full charting, price and buybot functionality.
@@ -1754,10 +1751,6 @@ def complete_token_setup(group_id: str):
         return
     chain = token_data.get('chain')
 
-    if not web3:
-        print("Web3 provider not found, token setup incomplete.")
-        return
-
     # Get the Web3 instance for the chain
     web3 = web3_instances.get(chain)
     if not web3:
@@ -2968,7 +2961,7 @@ def price(update: Update, context: CallbackContext) -> None:
     token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
     if token_price_in_fiat is not None:
         formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"{symbol} • {currency.upper()}: {formatted_price}") # TODO: Replace 'Sypher' with Token name from group
+        update.message.reply_text(f"{symbol} • {currency.upper()}: {formatted_price}")
     else:
         update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
 
