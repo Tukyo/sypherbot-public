@@ -2598,45 +2598,24 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Chart
 
 #region Buybot
-
 def monitor_transfers(web3_instance, liquidity_address, group_data):
-    group_id = str(group_data['group_id'])
-    print(f"Monitoring transfers for group {group_id}")
-
-    settings_ref = db.collection('settings').document('crypto')
-    last_block_field = f"last_block_checked_{group_id}"
-
-    # --- Get last checked block (or None if not found) ---
-    settings_doc = settings_ref.get()
-    if settings_doc.exists:
-        last_block_checked = settings_doc.to_dict().get(last_block_field, None)
-    else:
-        last_block_checked = None
-
     contract_address = group_data['token']['contract_address']
     abi = group_data['token']['abi']
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
-    if last_block_checked is None:
-        # Start from the latest block if no block has been checked yet
-        last_block_checked = web3_instance.eth.blockNumber
-        print(f"Starting from block {last_block_checked}")
+    block_to_check = 14896750
+    
+    print(f"Checking transfers from block {block_to_check} for group {group_data['group_id']}")
 
-    transfer_filter = contract.events.Transfer.create_filter(
-        fromBlock=last_block_checked + 1,
-        toBlock='latest',
+    # --- Filter for events in the specific block ---
+    transfer_filter = contract.events.Transfer.createFilter(
+        fromBlock=block_to_check,
+        toBlock=block_to_check,  # Only check this specific block
         argument_filters={'from': liquidity_address}
     )
 
     for event in transfer_filter.get_new_entries():
         handle_transfer_event(event, group_data)
-
-    new_last_block = web3_instance.eth.blockNumber
-    try:
-        settings_ref.update({last_block_field: new_last_block})
-        print(f"Last block updated to: {new_last_block}")
-    except Exception as e:
-        print(f"Error updating last block for group {group_id}: {e}")
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
