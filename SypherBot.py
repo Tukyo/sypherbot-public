@@ -697,8 +697,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         ],
         [
             InlineKeyboardButton("❗ Reset Token Details ❗", callback_data='reset_token_details')
-        ]
-
+        ],
         [
             InlineKeyboardButton("Back", callback_data='setup_home')
         ]
