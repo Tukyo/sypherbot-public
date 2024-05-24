@@ -697,34 +697,9 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
 
     menu_change(context, update)
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id)).get()
-
-    if 'token' in group_doc.get().to_dict():
-        token_info = group_doc.get('token')
-    else:
-        # Define default values for the token
-        default_token_info = {
-            'name': 'Default Name',
-            'symbol': 'Default Symbol',
-            'chain': 'Default Chain',
-            'total_supply': 'Default Total Supply',
-            'abi': 'Default ABI'
-        }
-
-        # Update the Firestore document with the default token info
-        group_doc.update({'token': default_token_info})
-
-        token_info = default_token_info
-
-    if token_info and 'abi' in token_info:
-        text = f"{token_info['name']} • {token_info['symbol']}\n\nBlockchain: {token_info['chain']}\nTotal Supply: {token_info['total_supply']}"
-    else:
-        text = 'This is the crypto setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work and for token details to populate correctly.'
-
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text=text,
+        text='This is the crypto setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work and for token details to populate correctly.',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1005,7 +980,7 @@ def complete_token_setup(group_id: str):
         print(f"ABI not found in group {group_id}, token setup incomplete.")
         return
     abi = token_data.get('abi')
-
+    
     if 'contract_address' not in token_data:
         print(f"Contract address not found in group {group_id}, token setup incomplete.")
         return
