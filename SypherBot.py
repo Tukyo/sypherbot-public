@@ -2599,7 +2599,7 @@ def plot_candlestick_chart(data_frame, group_id):
 
 #region Buybot
 
-def monitor_transfers(web3_instance, liquidity_address, group_data, db):
+def monitor_transfers(web3_instance, liquidity_address, group_data):
     print(f"Monitoring transfers for group {group_data['group_id']}")
 
     settings_ref = db.collection('settings').document('crypto')
