@@ -3520,7 +3520,13 @@ def main() -> None:
 
     # Setup Admin Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_admin_callback, pattern='^setup_admin$'))
-    dispatcher.add_handler(CallbackQueryHandler(check_admin_settings_callback, pattern='^check_admin_settings$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_mute_callback, pattern='^setup_mute$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_warn_callback, pattern='^setup_warn$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_antiraid_callback, pattern='^setup_antiraid$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_antispam_callback, pattern='^setup_antispam$'))
+    dispatcher.add_handler(CallbackQueryHandler(reset_admin_settings_callback, pattern='^reset_admin_settings$'))
 
     
     # Setup Crypto Callbacks
