@@ -1005,23 +1005,74 @@ def complete_token_setup(group_id: str):
     # Create a contract object
     contract = web3.eth.contract(address=contract_address, abi=abi)
 
-    # Call the name and symbol functions
+    # Call the name, symbol, and decimals functions
     try:
         token_name = contract.functions.name().call()
         token_symbol = contract.functions.symbol().call()
-        total_supply = contract.functions.totalSupply().call()
+        decimals = contract.functions.decimals().call()
+        total_supply = contract.functions.totalSupply().call() / (10 ** decimals)
     except Exception as e:
-        print(f"Failed to get token name and symbol: {e}")
+        print(f"Failed to get token name, symbol, and total supply: {e}")
         return
-
-    # Update the Firestore document with the token name and symbol
+    
+    # Update the Firestore document with the token name, symbol, and total supply
     group_doc.update({
         'token.name': token_name,
         'token.symbol': token_symbol,
         'token.total_supply': total_supply
     })
+    
+    print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
 
-    print(f"Added token name {token_name} and symbol {token_symbol} to group {group_id}")
+
+
+
+# def check_token_details_callback(update: Update, context: CallbackContext) -> None:
+#     query = update.callback_query
+#     query.answer()
+#     user_id = query.from_user.id
+
+#     update = Update(update.update_id, message=query.message)
+
+#     if query.data == 'check_token_details':
+#         if is_user_owner(update, context, user_id):
+#             check_token_details(update, context)
+#         else:
+#             print("User is not an admin.")
+
+# def check_token_details(update: Update, context: CallbackContext) -> None:
+#     msg = None
+#     group_id = update.effective_chat.id
+#     group_doc = db.collection('groups').document(str(group_id))
+
+#     group_data = group_doc.get().to_dict()
+
+#     if group_data is not None:
+#         token_info = group_data.get('token', {})
+#         chain = verification_info.get('verification', False)
+#         verification_type = verification_info.get('verification_type', 'none')
+#         verification_timeout = verification_info.get('verification_timeout', 000)
+
+#         menu_change(context, update)
+
+#         keyboard = [
+#             [InlineKeyboardButton("Back", callback_data='setup_verification')]
+#         ]
+
+#         reply_markup = InlineKeyboardMarkup(keyboard)
+
+#         msg = context.bot.send_message(
+#             chat_id=update.effective_chat.id,
+#             text=f"*🔒 Current Authentication Settings 🔒*\n\Authentication: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
+#             parse_mode='Markdown',
+#             reply_markup=reply_markup
+#         )
+#         context.user_data['setup_stage'] = None
+#         context.user_data['setup_verification_settings_message'] = msg.message_id
+
+#     if msg is not None:
+#         track_message(msg)
+
 #endregion Ethereum Setup
 
 #region Authentication Setup
@@ -3074,6 +3125,7 @@ def main() -> None:
     
     # Setup Crypto Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_crypto_callback, pattern='^setup_crypto$'))
+    # dispatcher.add_handler(CallbackQueryHandler(check_token_details_callback, pattern='^check_token_details$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
