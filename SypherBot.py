@@ -500,7 +500,8 @@ def menu_change(context: CallbackContext, update: Update):
         'setup_simple_verification_message',
         'setup_math_verification_message',
         'setup_word_verification_message',
-        'setup_timeout_verification_message'
+        'setup_timeout_verification_message',
+        'setup_verification_settings_message'
     ]
 
     for message_to_delete in messages_to_delete:
@@ -699,7 +700,8 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='This is the crypto setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work and for token details to populate correctly.',
+        text='*🔑 Crypto Setup 🔑*\n\nHere you can setup the Buybot, Pricebot and Chartbot functionality.\n\n*Please Note:* ABI is *required* for the Buybot functionality to work and for token details to propagate correctly.',
+        parse_mode='markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -1048,7 +1050,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
         ],
         [
             InlineKeyboardButton("Authentication Timeout", callback_data='timeout_verification'),
-            InlineKeyboardButton("Current Verification Settings", callback_data='check_verification_settings')
+            InlineKeyboardButton("Current Authentication Settings", callback_data='check_verification_settings')
         ],
         [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
@@ -1093,7 +1095,7 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
             'verification_info': {
                 'verification': True,
                 'verification_type': 'none',
-                'verification_timeout': 6000
+                'verification_timeout': 600
             }
         })
     else:
@@ -1101,7 +1103,7 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
             'verification_info': {
                 'verification': True,
                 'verification_type': 'none',
-                'verification_timeout': 6000
+                'verification_timeout': 600
             }
         })
 
@@ -1183,14 +1185,15 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
             'verification_info': {
                 'verification': True,
                 'verification_type': 'simple',
-                'verification_timeout': 6000
+                'verification_timeout': 600
             }
         })
     else:
         group_doc.update({
             'verification_info': {
                 'verification': True,
-                'verification_type': 'simple'
+                'verification_type': 'simple',
+                'verification_timeout': 600
             }
         })
 
@@ -1238,7 +1241,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
             'verification_info': {
                 'verification': True,
                 'verification_type': 'math',
-                'verification_timeout': 6000
+                'verification_timeout': 600
             }
         })
     else:
@@ -1246,7 +1249,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
             'verification_info': {
                 'verification': True,
                 'verification_type': 'math',
-                'verification_timeout': 6000
+                'verification_timeout': 600
             }
         })
 
@@ -1295,7 +1298,7 @@ def word_verification(update: Update, context: CallbackContext) -> None:
             'verification_info': {
                 'verification': True,
                 'verification_type': 'word',
-                'verification_timeout': 6000
+                'verification_timeout': 600
             }
         })
     else:
@@ -1303,7 +1306,7 @@ def word_verification(update: Update, context: CallbackContext) -> None:
             'verification_info': {
                 'verification': True,
                 'verification_type': 'word',
-                'verification_timeout': 6000
+                'verification_timeout': 600
             }
         })
 
@@ -1440,10 +1443,12 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"*🔒 Current Verification Settings 🔒*\n\nVerification: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
+            text=f"*🔒 Current Authentication Settings 🔒*\n\Authentication: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
+        context.user_data['setup_stage'] = None
+        context.user_data['setup_verification_settings_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
