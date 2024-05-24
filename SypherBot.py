@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from collections import deque, defaultdict
 from google.cloud.firestore_v1 import DELETE_FIELD
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, storage
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler, JobQueue
 
@@ -694,7 +694,13 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*🏠 Setup Home 🏠*\n\nPlease use the buttons below to setup your bot!\n\n*👑 Admin:*\nConfigure Admin Settings\n\n*🤖 Commands:*\nConfigure Custom Commands & Default Commands\n\n*🔒 Authentication:*\nConfigure Auth Settings\n\n*📈 Crypto:*\nConfigure Crypto Settings',
+        text='*🏠 Setup Home 🏠*\n\n'
+        'Please use the buttons below to setup your bot!\n\n'
+        '*👑 Admin:*\nConfigure Admin Settings\n\n'
+        '*🤖 Commands:*\nConfigure Custom Commands & Default Commands\n\n'
+        '*🔒 Authentication:*\nConfigure Auth Settings\n\n'
+        '*📈 Crypto:*\nConfigure Crypto Settings'
+        '*🎨 Customization:*\n Customize Your Bot*',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
@@ -2032,7 +2038,10 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         challenges = [MATH_0, MATH_1, MATH_2, MATH_3, MATH_4]
         index = random.randint(0, 4)
         math_challenge = challenges[index]
-        image_path = f'assets/math_{index}.jpg'
+
+        bucket = storage.bucket()
+        blob = bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
+        image_url = blob.generate_signed_url(duration=datetime.timedelta(minutes=15), version="v4")
 
         print(f"Math challenge: {math_challenge}")
 
@@ -2061,12 +2070,12 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
 
         context.bot.send_photo(
             chat_id=update.effective_chat.id,
-            photo=open(image_path, 'rb'),
+            photo=image_url,
             caption="What is the answer to this math equation?",
             reply_markup=reply_markup
         )
 
-        print(f"image_path: {image_path}")
+        print(f"image_path: {image_url}")
 
         group_doc.update({
             f'unverified_users.{user_id}': math_challenge  
@@ -2079,7 +2088,10 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         random.shuffle(challenges)
         word_challenge = challenges[0]  # The word challenge is the first word in the shuffled list
         index = original_challenges.index(word_challenge)  # Get the index of the word challenge in the original list
-        image_path = f'assets/word_{index}.jpg'
+        
+        bucket = storage.bucket()
+        blob = bucket.blob(f'sypherbot/private/auth/word_{index}.jpg')
+        image_url = blob.generate_signed_url(duration=datetime.timedelta(minutes=15), version="v4")
     
         keyboard = []
 
@@ -2095,12 +2107,12 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
     
         context.bot.send_photo(
             chat_id=update.effective_chat.id,
-            photo=open(image_path, 'rb'),
+            photo=open(image_url),
             caption="Identify the correct word in the image:",
             reply_markup=reply_markup
         )
 
-        print(f"image_path: {image_path}")
+        print(f"image_path: {image_url}")
     
         # Update the challenge information in the database
         group_doc.update({
