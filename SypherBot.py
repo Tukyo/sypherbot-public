@@ -1708,23 +1708,25 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
         if context.user_data.get('setup_stage') == 'ABI':
             document = update.message.document
             print(f"MIME type: {document.mime_type}")
-            if document.mime_type in ['application/json', 'application/binary']:
-                try:
-                    # Download the document
-                    file = context.bot.getFile(document.file_id)
-                    file.download('temp.json')
+            if document.mime_type == 'application/json':
+                file = context.bot.getFile(document.file_id)
+                file.download('temp_abi.json')
+                with open('temp_abi.json', 'r') as file:
+                    abi = json.load(file)  # Parse the ABI
+                    group_id = update.effective_chat.id
+                    print(f"Adding ABI to group {group_id}")
+                    group_doc = db.collection('groups').document(str(group_id))
+                    group_doc.update({'token.abi': abi})
+                    context.user_data['setup_stage'] = None
+                    msg = update.message.reply_text("ABI has been successfully saved.")
 
-                    # Try to parse the file as JSON
-                    with open('temp.json', 'r') as f:
-                        json.load(f)
-
-                except json.JSONDecodeError:
-                    msg = "The file is not a valid JSON file."
+                    complete_token_setup(group_id, context)
             else:
-                msg = "Please make sure the file is a JSON file."
+                msg = update.message.reply_text("Make sure the file is a JSON file, and you are using a desktop device.")
+            
 
-            if msg:
-                context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
+        if msg is not None:
+            track_message(msg)
 
 def send_example_abi(update: Update, context: CallbackContext) -> None:
     msg = None
