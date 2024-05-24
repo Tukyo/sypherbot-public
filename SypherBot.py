@@ -2046,7 +2046,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         math_challenge = challenges[index]
 
         blob = bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
-        image_url = blob.generate_signed_url(duration=datetime.timedelta(minutes=15), version="v4")
+        image_url = blob.generate_signed_url(duration=timedelta(minutes=15), version="v4")
 
         print(f"Math challenge: {math_challenge}")
 
@@ -2093,7 +2093,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         random.shuffle(challenges)
         word_challenge = challenges[0]  # The word challenge is the first word in the shuffled list
         index = original_challenges.index(word_challenge)  # Get the index of the word challenge in the original list
-        
+
         blob = bucket.blob(f'sypherbot/private/auth/word_{index}.jpg')
         image_url = blob.generate_signed_url(duration=datetime.timedelta(minutes=15), version="v4")
     
