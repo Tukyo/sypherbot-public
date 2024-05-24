@@ -661,7 +661,8 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Welcome to the setup home page. Please use the buttons below to setup your bot!',
+        text='*🏠 Setup Home 🏠*\n\nPlease use the buttons below to setup your bot!\n\n*⚙️ Admin:*\nConfigure Admin Settings\n\n*🤖 Commands:*\nConfigure Custom Commands & Default Commands\n\n*🔒 Authentication:*\nConfigure Auth Settings\n\n*📈 Crypto:*\nConfigure Crypto Settings',
+        parse_mode='markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -709,7 +710,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*🔑 Crypto Setup 🔑*\n\nHere you can setup the Buybot, Pricebot and Chartbot functionality.\n\n*Please Note:* ABI is *required* for the Buybot functionality to work and for token details to propagate correctly.\n\n*⚠️ Updating Token Details ⚠️*\nTo update  your token details, you must click *Reset Token Details* first.',
+        text='*🔑 Crypto Setup 🔑*\n\nHere you can setup the Buybot, Pricebot and Chartbot functionality.\n\n*Please Note:* ABI is *required* for the Buybot functionality to work and for token details to propagate correctly.\n\n*⚠️ Updating Token Details ⚠️*\nTo enter new token details, you must click *Reset Token Details* first.',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
