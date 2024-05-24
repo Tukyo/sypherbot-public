@@ -3303,19 +3303,21 @@ def price(update: Update, context: CallbackContext) -> None:
     if not contract_address:
         update.message.reply_text("Contract address not found for this group.")
         return
-    
-    symbol = token_data.get('symbol')
-    if not symbol:
-        update.message.reply_text("Token symbol not found for this group.")
-        return
 
     # Proceed with price fetching
     currency = context.args[0].lower() if context.args else 'usd'
     if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
         update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
         return
-
+    
     token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
+    
+    symbol = token_data.get('symbol')
+    if not symbol:
+        formatted_price = format(token_price_in_fiat, '.4f')
+        update.message.reply_text(f"{currency.upper()}: {formatted_price}")
+        return
+
     if token_price_in_fiat is not None:
         formatted_price = format(token_price_in_fiat, '.4f')
         update.message.reply_text(f"{symbol} • {currency.upper()}: {formatted_price}")
