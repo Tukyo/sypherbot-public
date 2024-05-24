@@ -308,28 +308,28 @@ def start_monitoring_groups():
 
 def schedule_group_monitoring(group_data):
     group_id = str(group_data['group_id'])
-    job_id = f"monitoring_{group_id}"  # Unique job ID based on group ID
+    job_id = f"monitoring_{group_id}"
     token_info = group_data.get('token')
-    
+
     if token_info:
         chain = token_info.get('chain')
         liquidity_address = token_info.get('liquidity_address')
         web3_instance = web3_instances.get(chain)
 
         if web3_instance and web3_instance.is_connected():
-            # Check if there's an existing job
+            # Check for existing job with ID
             existing_job = scheduler.get_job(job_id)
             if existing_job:
                 # Remove existing job to update with new information
                 existing_job.remove()
 
-            # Schedule a new job
             scheduler.add_job(
                 monitor_transfers,
                 'interval',
                 seconds=30,
                 args=[web3_instance, liquidity_address, group_data],
-                id=job_id  # Use the unique job ID
+                id=job_id,  # Unique ID for the job
+                timezone=pytz.utc  # Use the UTC timezone from the pytz library
             )
 
 def is_user_admin(update: Update, context: CallbackContext) -> bool:
