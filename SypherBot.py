@@ -694,8 +694,11 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         ],
         [
             InlineKeyboardButton("Check Token Details", callback_data='check_token_details'),
-            InlineKeyboardButton("❗ Reset Token Details ❗", callback_data='reset_token_details')
         ],
+        [
+            InlineKeyboardButton("❗ Reset Token Details ❗", callback_data='reset_token_details')
+        ]
+
         [
             InlineKeyboardButton("Back", callback_data='setup_home')
         ]
@@ -1602,7 +1605,9 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 reply_markup=reply_markup
             )
 
-            # verification_timer(group_id, user_id, welcome_message.message_id)
+            timeout = get_verification_timeout(group_id)
+
+            verification_timer(context, group_id, user_id, welcome_message.message_id, timeout)
 
     if msg is not None:
         track_message(msg)
@@ -1867,23 +1872,36 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
         text="Authentication failed. Please start the authentication process again by clicking on the 'Start Authentication' button."
     )
 
-# def verification_timer(group_id, user_id, message_id, timeout=verificationTimeout):
-#     def delayed_action():
-#         try:
-#             group_doc = db.collection('groups').document(str(group_id))
-#             group_data = group_doc.get().to_dict()
+def get_verification_timeout(group_id):
+    group_doc = db.collection('groups').document(str(group_id))
+    group_data = group_doc.get().to_dict()
 
-#             if user_id in group_data.get('unverified_users', {}):
-#                 # If still unverified after timeout:
-#                 context.bot.delete_message(chat_id=group_id, message_id=message_id)
-#                 context.bot.ban_chat_member(chat_id=group_id, user_id=user_id) 
-#                 print(f"Deleted welcome message and kicked unverified user {user_id} in group {group_id}")
-#         except Exception as e:
-#             print(f"Error in delayed action: {e}")
+    if group_data is not None:
+        verification_info = group_data.get('verification_info', {})
+        verification_timeout = verification_info.get('verification_timeout', 600)
+        print("Verification timeout:", verification_timeout)
+        return verification_timeout
+    else:
+        return 600
 
-#     timer = Timer(timeout, delayed_action)
-#     timer.start()
-#endregion User Authentication
+def verification_timer(context: CallbackContext, group_id, user_id, message_id, timeout):
+    def delayed_action():
+        try:
+            group_doc = db.collection('groups').document(str(group_id))
+            group_data = group_doc.get().to_dict()
+
+            if user_id in group_data.get('unverified_users', {}):
+                # If still unverified after timeout:
+                context.bot.delete_message(chat_id=group_id, message_id=message_id)
+                context.bot.ban_chat_member(chat_id=group_id, user_id=user_id) 
+                print(f"Deleted welcome message and kicked unverified user {user_id} in group {group_id}")
+        except Exception as e:
+            print(f"Error in delayed action: {e}")
+
+    timer = Timer(timeout, delayed_action)
+    print(f"Starting verification timer for user {user_id} in group {group_id} with timeout {timeout} seconds")
+    timer.start()
+# endregion User Authentication
 
 #region Ethereum
 
