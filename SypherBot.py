@@ -693,7 +693,8 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("ABI", callback_data='setup_ABI')
         ],
         [
-            InlineKeyboardButton("Check Token Details", callback_data='check_token_details')
+            InlineKeyboardButton("Check Token Details", callback_data='check_token_details'),
+            InlineKeyboardButton("❗ Reset Token Details ❗", callback_data='reset_token_details')
         ],
         [
             InlineKeyboardButton("Back", callback_data='setup_home')
@@ -706,7 +707,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*🔑 Crypto Setup 🔑*\n\nHere you can setup the Buybot, Pricebot and Chartbot functionality.\n\n*Please Note:* ABI is *required* for the Buybot functionality to work and for token details to propagate correctly.',
+        text='*🔑 Crypto Setup 🔑*\n\nHere you can setup the Buybot, Pricebot and Chartbot functionality.\n\n*Please Note:* ABI is *required* for the Buybot functionality to work and for token details to propagate correctly.\n\n*⚠️ Updating Token Details ⚠️*\nTo update  your token details, you must click *Reset Token Details* first.',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
@@ -1076,6 +1077,40 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
         )
         context.user_data['setup_stage'] = None
         context.user_data['check_token_details_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def reset_token_details_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'reset_token_details':
+        if is_user_owner(update, context, user_id):
+            reset_token_details(update, context)
+        else:
+            print("User is not an admin.")
+
+def reset_token_details(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None:
+        group_doc.update({
+            'token': {}
+        })
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='*🔄 Token Details Reset 🔄*',
+            parse_mode='Markdown'
+        )
 
     if msg is not None:
         track_message(msg)
@@ -3167,6 +3202,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|aptos|harmony|mantle)$'))
+    dispatcher.add_handler(CallbackQueryHandler(reset_token_details_callback, pattern='^reset_token_details$'))
 
     # Setup Authentication Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_verification_callback, pattern='^setup_verification$'))
