@@ -124,7 +124,7 @@ chainlink_abi = """
     """
 chainlink_contract = eth_web3.eth.contract(address=chainlink_address, abi=chainlink_abi)
 
-def check_eth_price():
+def check_eth_price(update, context):
     try:
         latest_round_data = chainlink_contract.functions.latestRoundData().call()
         price = latest_round_data[1] / 10 ** 8
