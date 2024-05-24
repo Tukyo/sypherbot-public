@@ -1070,7 +1070,7 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"*📜 Current Token Details 📜*\n\n*Name:* {name}\n*Symbol:* {symbol}\n*Chain:*{chain}\n*Total Supply:*\n{total_supply}\n*CA:*\n{contract_address}\n*LP:*\n{liquidity_address}",
+            text=f"*📜 Current Token Details 📜*\n\n*Name:* {name}\n*Symbol:* {symbol}\n*Chain:* {chain}\n*Total Supply:*\n{total_supply}\n*CA:*\n{contract_address}\n*LP:*\n{liquidity_address}",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
@@ -1512,7 +1512,6 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
 
     if msg is not None:
         track_message(msg)
-
 #endregion Authentication Setup
 
 #endregion Bot Setup
@@ -2526,6 +2525,11 @@ def price(update: Update, context: CallbackContext) -> None:
     if not contract_address:
         update.message.reply_text("Contract address not found for this group.")
         return
+    
+    symbol = token_data.get('symbol')
+    if not symbol:
+        update.message.reply_text("Token symbol not found for this group.")
+        return
 
     # Proceed with price fetching
     currency = context.args[0].lower() if context.args else 'usd'
@@ -2536,7 +2540,7 @@ def price(update: Update, context: CallbackContext) -> None:
     token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
     if token_price_in_fiat is not None:
         formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"SYPHER • {currency.upper()}: {formatted_price}") # TODO: Replace 'Sypher' with Token name from group
+        update.message.reply_text(f"{symbol} • {currency.upper()}: {formatted_price}") # TODO: Replace 'Sypher' with Token name from group
     else:
         update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
 
@@ -2676,8 +2680,7 @@ def chart(update: Update, context: CallbackContext) -> None:
         token_data = group_data.get('token')
         if not token_data:
             update.message.reply_text("Token data not found for this group.")
-            return
-        
+            return   
         chain = token_data.get('chain')
         if not chain:
             update.message.reply_text("Chain not found for this group.")
@@ -2686,16 +2689,38 @@ def chart(update: Update, context: CallbackContext) -> None:
         if not liquidity_address:
             update.message.reply_text("Contract address not found for this group.")
             return
+        name = token_data.get('name')
+        if not name:
+            update.message.reply_text("Token name not found for this group.")
+            return
+        symbol = token_data.get('symbol')
+        if not symbol:
+            update.message.reply_text("Token symbol not found for this group.")
+            return
 
         group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
         ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
         if ohlcv_data:
             data_frame = prepare_data_for_chart(ohlcv_data)
             plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
+
+            dexscreener_url = f"https://dexscreener.com/{chain}/{liquidity_address}"
+            dextools_url = f"https://www.dextools.io/app/{chain}/pair-explorer/{liquidity_address}"
+
+            keyboard = [
+                [
+                    InlineKeyboardButton("Dexscreener", url=dexscreener_url),
+                    InlineKeyboardButton("Dextools", url=dextools_url),
+                ]
+            ]
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
             msg = update.message.reply_photo(
                 photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
-                caption=f"\n[Dexscreener](https://dexscreener.com/{chain}/{liquidity_address}) • [Dextools](https://www.dextools.io/app/{chain}/pair-explorer/{liquidity_address})\n",
-                parse_mode='Markdown'
+                caption=f"*{name}* • *{symbol}* • {time_frame.capitalize()} Chart",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
         else:
             msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
