@@ -1104,7 +1104,7 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Authentication enabled for this group.\n\n*❗ Please choose a authentication type ❗*', parse_mode='Markdown'
+        text='Authentication enabled for this group.\n\n*❗ Please choose an authentication type ❗*', parse_mode='Markdown'
     )
 
     if msg is not None:
@@ -1193,7 +1193,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
     menu_change(context, update)
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification_callback')]
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1245,7 +1245,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
         })
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification_callback')]
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1344,7 +1344,7 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
             [InlineKeyboardButton("30 Minutes", callback_data='vtimeout_1800')],
             [InlineKeyboardButton("60 Minutes", callback_data='vtimeout_3600')]
         ],
-        [InlineKeyboardButton("Back", callback_data='setup_verification_callback')]
+        [InlineKeyboardButton("Back", callback_data='setup_verification')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
