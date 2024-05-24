@@ -373,7 +373,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     msg = None
 
     if anti_spam.is_spam(user_id):
-        mute_time = anti_spam.mute_time  # Get the mute time from AntiSpam class
+        mute_time = anti_spam.mute_time
         msg = update.message.reply_text(f'{username}, you are spamming. You have been muted for {mute_time} seconds.')
 
         # Mute the user for the mute time
@@ -389,6 +389,37 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         job_queue = context.job_queue
         job_queue.run_once(unmute_user, mute_time, context={'chat_id': chat_id, 'user_id': user_id})
     
+    if msg is not None:
+        track_message(msg)
+
+def handle_image(update: Update, context: CallbackContext) -> None:
+    handle_setup_inputs_from_user(update, context)
+
+    if is_user_admin(update, context):
+        return
+
+    user_id = update.message.from_user.id
+    chat_id = update.message.chat.id
+    username = update.message.from_user.username or update.message.from_user.first_name
+    msg = None    
+
+    if anti_spam.is_spam(user_id):
+        mute_time = anti_spam.mute_time
+        msg = update.message.reply_text(f'{username}, you are spamming. You have been muted for {mute_time} seconds.')
+
+        # Mute the user for the mute time
+        until_date = int(time.time() + mute_time)
+        context.bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=user_id,
+            permissions=ChatPermissions(can_send_messages=False),
+            until_date=until_date
+        )
+
+        # Schedule job to unmute the user
+        job_queue = context.job_queue
+        job_queue.run_once(unmute_user, mute_time, context={'chat_id': chat_id, 'user_id': user_id})
+
     if msg is not None:
         track_message(msg)
 
@@ -3729,6 +3760,7 @@ def main() -> None:
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
     dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_message))
+    dispatcher.add_handler(MessageHandler(Filters.Image, handle_image))
 
     # Authentication Callbacks
     dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
