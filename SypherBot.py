@@ -697,9 +697,18 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
 
     menu_change(context, update)
 
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id)).get()
+    token_info = group_doc.get('token')
+
+    if token_info and 'abi' in token_info:
+        text = f"{token_info['name']} • {token_info['symbol']}\n\nBlockchain: {token_info['chain']}\nTotal Supply: {token_info['total_supply']}"
+    else:
+        text = 'This is the crypto setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work and for token details to populate correctly.'
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='This is the crypto setup page. Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\nYour ABI is required for the Buybot functionality to work.',
+        text=text,
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
@@ -885,8 +894,8 @@ def send_example_abi(update: Update, context: CallbackContext) -> None:
     query.answer()
 
     with open('abi.json', 'rb') as file:
-        context.bot.send_document(
-            chat_id=update.effective_chat.id,
+        msg = context.bot.send_document(
+            chat_id=update.effective_user.id,
             document=file,
             filename='abi.json',
             caption='Here is an example ABI file.'
@@ -1007,6 +1016,7 @@ def complete_token_setup(group_id: str):
     try:
         token_name = contract.functions.name().call()
         token_symbol = contract.functions.symbol().call()
+        total_supply = contract.functions.totalSupply().call()
     except Exception as e:
         print(f"Failed to get token name and symbol: {e}")
         return
@@ -1014,7 +1024,8 @@ def complete_token_setup(group_id: str):
     # Update the Firestore document with the token name and symbol
     group_doc.update({
         'token.name': token_name,
-        'token.symbol': token_symbol
+        'token.symbol': token_symbol,
+        'token.total_supply': total_supply
     })
 
     print(f"Added token name {token_name} and symbol {token_symbol} to group {group_id}")
