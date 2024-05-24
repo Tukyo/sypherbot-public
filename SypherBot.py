@@ -717,7 +717,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context, user_id):
 
         keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_crypto_callback')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -772,7 +772,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
     
     if is_user_owner(update, context, user_id):
         keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_crypto_callback')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -833,7 +833,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context, user_id):
 
         keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_crypto_callback')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -907,7 +907,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
                 InlineKeyboardButton("Harmony", callback_data='harmony'),
                 InlineKeyboardButton("Mantle", callback_data='mantle')
             ],
-            [InlineKeyboardButton("Back", callback_data='setup_crypto_callback')]
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -940,6 +940,11 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
             context.user_data['setup_stage'] = None
 
             complete_token_setup(group_id)
+
+            msg = query.message.reply_text(f"Chain {chain} has been successfully saved.")
+
+            if msg is not None:
+                track_message(msg)
 
 def complete_token_setup(group_id: str):
     # Fetch the group data from Firestore
