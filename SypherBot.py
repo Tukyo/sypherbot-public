@@ -302,7 +302,7 @@ def start_monitoring_groups():
     groups_snapshot = db.collection('groups').get()
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
-        group_data['group_id'] = group_doc.id 
+        group_data['group_id'] = group_doc.id
         schedule_group_monitoring(group_data)
 
     scheduler.start()
