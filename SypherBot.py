@@ -2046,7 +2046,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         math_challenge = challenges[index]
 
         blob = bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
-        image_url = blob.generate_signed_url(duration=timedelta(minutes=15), version="v4")
+        image_url = blob.generate_signed_url(expiration=timedelta(minutes=15))
 
         print(f"Math challenge: {math_challenge}")
 
