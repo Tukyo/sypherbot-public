@@ -3348,7 +3348,8 @@ def liquidity(update: Update, context: CallbackContext) -> None:
 
 def get_liquidity(chain, lp_address):
     try:
-        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
+        chain_lower = chain.lower()
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lower}/pools/{lp_address}"
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
@@ -3391,7 +3392,8 @@ def volume(update: Update, context: CallbackContext) -> None:
     
 def get_volume(chain, lp_address):
     try:
-        url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{lp_address}"
+        chain_lower = chain.lower()
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lower}/pools/{lp_address}"
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
@@ -3446,12 +3448,14 @@ def chart(update: Update, context: CallbackContext) -> None:
 
         group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
         ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
+        
         if ohlcv_data:
+            chain_lower = chain.lower()
             data_frame = prepare_data_for_chart(ohlcv_data)
             plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
 
-            dexscreener_url = f"https://dexscreener.com/{chain}/{liquidity_address}"
-            dextools_url = f"https://www.dextools.io/app/{chain}/pair-explorer/{liquidity_address}"
+            dexscreener_url = f"https://dexscreener.com/{chain_lower}/{liquidity_address}"
+            dextools_url = f"https://www.dextools.io/app/{chain_lower}/pair-explorer/{liquidity_address}"
 
             keyboard = [
                 [
