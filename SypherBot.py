@@ -1863,7 +1863,8 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     group_doc.update({
         'token.name': token_name,
         'token.symbol': token_symbol,
-        'token.total_supply': total_supply
+        'token.total_supply': total_supply,
+        'decimals': decimals
     })
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
@@ -2610,7 +2611,7 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
-    # web3_instance = web3_instances.get(group_data['token']['chain'])
+    web3_instance = web3_instances.get(group_data['token']['chain'])
     
     # Convert amount to token decimal
     decimals = group_data['token'].get('decimals', 18)
