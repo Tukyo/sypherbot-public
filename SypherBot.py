@@ -1249,6 +1249,8 @@ def math_verification(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    menu_change(context, update)
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='*🖩 Math authentication enabled for this group 🖩*', parse_mode='Markdown',
@@ -1337,12 +1339,12 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
         [
-            [InlineKeyboardButton("1 Minute", callback_data='vtimeout_60')],
-            [InlineKeyboardButton("10 Minutes", callback_data='vtimeout_600')]
+            InlineKeyboardButton("1 Minute", callback_data='vtimeout_60'),
+            InlineKeyboardButton("10 Minutes", callback_data='vtimeout_600')
         ],
         [
-            [InlineKeyboardButton("30 Minutes", callback_data='vtimeout_1800')],
-            [InlineKeyboardButton("60 Minutes", callback_data='vtimeout_3600')]
+            InlineKeyboardButton("30 Minutes", callback_data='vtimeout_1800'),
+            InlineKeyboardButton("60 Minutes", callback_data='vtimeout_3600')
         ],
         [InlineKeyboardButton("Back", callback_data='setup_verification')]
     ]
