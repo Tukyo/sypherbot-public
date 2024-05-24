@@ -501,7 +501,9 @@ def menu_change(context: CallbackContext, update: Update):
         'setup_math_verification_message',
         'setup_word_verification_message',
         'setup_timeout_verification_message',
-        'setup_verification_settings_message'
+        'setup_verification_settings_message',
+        'check_verification_settings_message',
+        'check_token_details_message',
     ]
 
     for message_to_delete in messages_to_delete:
@@ -1075,7 +1077,7 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = None
-        context.user_data['setup_verification_settings_message'] = msg.message_id
+        context.user_data['check_token_details_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1501,12 +1503,12 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"*🔒 Current Authentication Settings 🔒*\n\Authentication: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
+            text=f"*🔒 Current Authentication Settings 🔒*\n\nAuthentication: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = None
-        context.user_data['setup_verification_settings_message'] = msg.message_id
+        context.user_data['check_verification_settings_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
