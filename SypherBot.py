@@ -700,8 +700,22 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id)).get()
 
-    if 'token' in group_doc.to_dict():
+    if 'token' in group_doc.get().to_dict():
         token_info = group_doc.get('token')
+    else:
+        # Define default values for the token
+        default_token_info = {
+            'name': 'Default Name',
+            'symbol': 'Default Symbol',
+            'chain': 'Default Chain',
+            'total_supply': 'Default Total Supply',
+            'abi': 'Default ABI'
+        }
+
+        # Update the Firestore document with the default token info
+        group_doc.update({'token': default_token_info})
+
+        token_info = default_token_info
 
     if token_info and 'abi' in token_info:
         text = f"{token_info['name']} • {token_info['symbol']}\n\nBlockchain: {token_info['chain']}\nTotal Supply: {token_info['total_supply']}"
