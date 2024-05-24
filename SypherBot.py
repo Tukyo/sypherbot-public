@@ -2600,12 +2600,15 @@ def plot_candlestick_chart(data_frame, group_id):
 #region Buybot
 
 def monitor_transfers(web3_instance, liquidity_address, group_data):
-    print(f"Monitoring transfers for group {group_data['group_id']}")
+    group_id = str(group_data['group_id'])
+    print(f"Monitoring transfers for group {group_id}")
 
     settings_ref = db.collection('settings').document('crypto')
+    last_block_field = f"last_block_checked_{group_id}"
     settings_doc = settings_ref.get()
+
     if settings_doc.exists:
-        last_block_checked = settings_doc.to_dict().get('last_block_checked', None)
+        last_block_checked = settings_doc.to_dict().get(last_block_field, None)
         print(f"Last block checked: {last_block_checked}")
     else:
         last_block_checked = None
@@ -2629,8 +2632,9 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
         handle_transfer_event(event, group_data)
 
     # Update last_block_checked in the database to the latest block number
-    settings_ref.update({'last_block_checked': web3_instance.eth.blockNumber})
+    settings_ref.update({last_block_field: web3_instance.eth.blockNumber})
     print(f"Last block updated to: {web3_instance.eth.blockNumber}")
+
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
