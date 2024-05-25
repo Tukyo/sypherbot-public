@@ -906,7 +906,7 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
         ],
         [
             InlineKeyboardButton("Mute List", callback_data='check_mute_list')
-        ]
+        ],
         [InlineKeyboardButton("Back", callback_data='setup_admin')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
