@@ -277,6 +277,15 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
             'owner_id': owner_id,
             'owner_username': owner_username,
             'premium': False,
+            'admin':
+            {
+                'mute': False,
+                'warn': False,
+                'allowlist': False,
+                'blocklist': False,
+                'antiraid': False,
+                'antispam': False,
+            }
         })
 
         bot_member = context.bot.get_chat_member(group_id, context.bot.id)  # Get bot's member info
@@ -289,7 +298,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 "Thank you for adding me to your group! Please click 'Setup' to continue.",
                 reply_markup=setup_markup
             )
-            context.user_data['initialize_bot_message'] = msg.message_id
+            context.user_data['setup_bot_message'] = msg.message_id
         else:
             # Bot is not admin, send the "Give me admin perms" message
             setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
@@ -298,7 +307,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 "Hey, please give me admin permissions, then click 'Setup' to get started.",
                 reply_markup=setup_markup
             )
-            context.user_data['initialize_bot_message'] = msg.message_id
+            context.user_data['setup_bot_message'] = msg.message_id
  
         if msg is not None:
             track_message(msg)
@@ -618,41 +627,7 @@ def delete_service_messages(update, context):
 
 def menu_change(context: CallbackContext, update: Update):
     messages_to_delete = [
-        'initialize_bot_message',
-        'setup_home_message',
-        'setup_bot_message',
-        'setup_crypto_message',
-        'setup_contract_message',
-        'setup_liquidity_message',
-        'setup_ABI_message',
-        'setup_chain_message',
-        'setup_verification_message',
-        'setup_enable_verification_message',
-        'setup_disable_verification_message',
-        'setup_simple_verification_message',
-        'setup_math_verification_message',
-        'setup_word_verification_message',
-        'setup_timeout_verification_message',
-        'setup_verification_settings_message',
-        'check_verification_settings_message',
-        'check_token_details_message',
-        'setup_admin_message',
-        'setup_mute_message',
-        'setup_warn_message',
-        'setup_allowlist_message',
-        'setup_blocklist_message',
-        'setup_antiraid_message',
-        'setup_antispam_message',
-        'setup_customization_message',
-        'enable_mute_message',
-        'disable_mute_message',
-        'check_mute_list_message',
-        'enable_warn_message',
-        'disable_warn_message',
-        'check_warn_list_message',
-        'set_max_warns_message',
-        # 'enable_allowlist_message',
-        # 'disable_allowlist_message'
+        'setup_bot_message'
     ]
 
     for message_to_delete in messages_to_delete:
@@ -750,6 +725,7 @@ def start(update: Update, context: CallbackContext) -> None:
                 "Click 'Setup' to manage your group.",
                 reply_markup=setup_markup
             )
+            context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -765,7 +741,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
         if not chat_member.can_invite_users:
             context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
-                message_id=context.user_data['initialize_bot_message'],
+                message_id=context.user_data['setup_bot_message'],
                 text='Please give me admin permissions first!'
             )
             return
@@ -895,7 +871,7 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_admin_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -939,7 +915,7 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_mute_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -988,7 +964,7 @@ def enable_mute(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['enable_mute_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1037,7 +1013,7 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['disable_mute_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1057,10 +1033,6 @@ def check_mute_list_callback(update: Update, context: CallbackContext) -> None:
 
 def check_mute_list(update: Update, context: CallbackContext) -> None:
     msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_mute')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -1091,11 +1063,10 @@ def check_mute_list(update: Update, context: CallbackContext) -> None:
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=mute_list_text,
-        parse_mode='Markdown',
-        reply_markup=reply_markup
+        parse_mode='Markdown'
     )
     context.bot_data['setup_stage'] = None
-    context.bot_data['check_mute_list_message'] = msg.message_id
+    context.bot_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1135,12 +1106,13 @@ def setup_warn(update: Update, context: CallbackContext) -> None:
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='*⚠️ Warn Setup ⚠️*\n\n'
-        'Here, you may choose to enable/disable warn perms in your group. It is on by default. You may also set the maximum warns before a user is punished.',
+        'Here, you may choose to enable/disable warn perms in your group. It is on by default. You may also set the maximum warns before a user is punished.\n\n'
+        '*Default Max Warns:* _3_',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_warn_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1189,7 +1161,7 @@ def enable_warn(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['enable_warn_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1238,7 +1210,7 @@ def disable_warn(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['disable_warn_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1296,7 +1268,7 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['check_warn_list_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1316,18 +1288,15 @@ def set_max_warns_callback(update: Update, context: CallbackContext) -> None:
 
 def set_max_warns(update: Update, context: CallbackContext) -> None:
     msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_warn')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Please respond with the maximum number of warnings you want for the group.',
-        reply_markup=reply_markup
+        text='Please respond with the maximum number of warnings you want for the group.\n\n'
+        '*Default Max Warns:* _3_',
+        parse_mode='Markdown'
     )
     context.user_data['setup_stage'] = 'set_max_warns'
-    context.user_data['set_max_warns_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1386,6 +1355,9 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
         [
             InlineKeyboardButton("Check Allowlist", callback_data='check_allowlist')
         ],
+        [
+            InlineKeyboardButton("❗ Clear Allowlist ❗", callback_data='clear_allowlist')
+        ],
         [InlineKeyboardButton("Back", callback_data='setup_admin')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1397,13 +1369,14 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
         text='*✅ Allowlist Setup ✅*\n\n'
         'Here, you may add or remove links from the allowlist, check the current allowlist or disable allowlisting for links.\n\n'
         '_Please Note: If you disable link allowlisting, any links will be allowed in the group._\n\n'
-        '*How To Allow Links:*'
-        'To allow specific links in your group type: /allow <link>',
+        '*How To Allow Links:*\n'
+        'To allow specific links in your group type: /allow <link>\n\n'
+        '_Clearing the allowlist will remove all links and reset the allowlist._',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_allowlist_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1538,7 +1511,7 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_blocklist_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1574,7 +1547,7 @@ def setup_antiraid(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_antiraid_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1608,7 +1581,7 @@ def setup_antispam(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_antispam_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1682,7 +1655,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_verification_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1828,7 +1801,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_simple_verification_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1885,7 +1858,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_math_verification_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
 
     if msg is not None:
@@ -1947,7 +1920,7 @@ def word_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_word_verification_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
 
     if msg is not None:
@@ -1989,7 +1962,7 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_timeout_verification_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -2068,7 +2041,7 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = None
-        context.user_data['check_verification_settings_message'] = msg.message_id
+        context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -2124,7 +2097,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_crypto_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -2151,7 +2124,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
         )
         context.user_data['setup_stage'] = 'contract'
         print("Requesting contract address.")
-        context.user_data['setup_contract_message'] = msg.message_id
+        context.user_data['setup_bot_message'] = msg.message_id
 
         if msg is not None:
             track_message(msg)
@@ -2205,7 +2178,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = 'liquidity'
-        context.user_data['setup_liquidity_message'] = msg.message_id
+        context.user_data['setup_bot_message'] = msg.message_id
         print("Requesting liquidity address.")
 
         if msg is not None:
@@ -2268,7 +2241,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = 'ABI'
-        context.user_data['setup_ABI_message'] = msg.message_id
+        context.user_data['setup_bot_message'] = msg.message_id
         print("Requesting ABI file.")
 
         if msg is not None:
@@ -2360,7 +2333,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = 'chain'
-        context.user_data['setup_chain_message'] = msg.message_id
+        context.user_data['setup_bot_message'] = msg.message_id
         print("Requesting Chain.")
 
         if msg is not None:
@@ -2498,7 +2471,7 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = None
-        context.user_data['check_token_details_message'] = msg.message_id
+        context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -2570,7 +2543,7 @@ def setup_customization(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_customization_message'] = msg.message_id
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
