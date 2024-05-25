@@ -328,22 +328,6 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         group_doc.delete()
         delete_service_messages(update, context)
 
-def rate_limit_check():
-    global last_check_time, command_count
-    current_time = time.time()
-
-    # Reset count if time period has expired
-    if current_time - last_check_time > TIME_PERIOD:
-        command_count = 0
-        last_check_time = current_time
-
-    # Check if the bot is within the rate limit
-    if command_count < RATE_LIMIT:
-        command_count += 1
-        return True
-    else:
-        return False
-
 def start_monitoring_groups():
     groups_snapshot = db.collection('groups').get()
     for group_doc in groups_snapshot:
@@ -440,11 +424,24 @@ def fetch_group_info(update: Update, context: CallbackContext):
     
     return None
 
+#region Message Handling
+def rate_limit_check():
+    global last_check_time, command_count
+    current_time = time.time()
+
+    # Reset count if time period has expired
+    if current_time - last_check_time > TIME_PERIOD:
+        command_count = 0
+        last_check_time = current_time
+
+    # Check if the bot is within the rate limit
+    if command_count < RATE_LIMIT:
+        command_count += 1
+        return True
+    else:
+        return False
+
 def handle_message(update: Update, context: CallbackContext) -> None:
-    
-    delete_blocked_addresses(update, context)
-    delete_blocked_phrases(update, context)
-    delete_blocked_links(update, context)
 
     handle_guess(update, context)
 
@@ -452,6 +449,10 @@ def handle_message(update: Update, context: CallbackContext) -> None:
 
     if is_user_admin(update, context):
         return
+    
+    delete_blocked_addresses(update, context)
+    delete_blocked_phrases(update, context)
+    delete_blocked_links(update, context)
     
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
@@ -510,10 +511,6 @@ def handle_image(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
-    if is_user_admin(update, context):
-        # Don't block admin messages
-        return
-    
     print("Checking message for unallowed addresses...")
 
     group_data = fetch_group_info(update, context)
@@ -541,10 +538,6 @@ def delete_blocked_addresses(update: Update, context: CallbackContext):
             break
 
 def delete_blocked_links(update: Update, context: CallbackContext):
-    if is_user_admin(update, context):
-        # Don't block admin messages
-        return
-    
     print("Checking message for unallowed links...")
     message_text = update.message.text
 
@@ -583,10 +576,6 @@ def delete_blocked_links(update: Update, context: CallbackContext):
                 print(f"Failed to delete message: {e}")
 
 def delete_blocked_phrases(update: Update, context: CallbackContext):
-    if is_user_admin(update, context):
-        # Don't block admin messages
-        return
-
     print("Checking message for filtered phrases...")
     message_text = update.message.text
 
@@ -635,7 +624,11 @@ def store_message_id(context, message_id):
         context.user_data['setup_bot_message'].append(message_id)
     else:
         context.user_data['setup_bot_message'] = [message_id]
+#endregion Message Handling
 
+#endregion Bot Logic
+
+#region Bot Setup
 def menu_change(context: CallbackContext, update: Update):
     messages_to_delete = [
         'setup_bot_message'
@@ -653,9 +646,7 @@ def menu_change(context: CallbackContext, update: Update):
                     if str(e) != "Message to delete not found":
                         print(f"Failed to delete message: {e}")
             context.user_data[message_to_delete] = []
-#endregion Bot Logic
 
-#region Bot Setup
 def cancel_callback(update: Update, context: CallbackContext) -> None:
     msg = None
     query = update.callback_query
@@ -671,6 +662,8 @@ def cancel_callback(update: Update, context: CallbackContext) -> None:
 def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
     setup_stage = context.user_data.get('setup_stage')
     print("Checking if user is in setup mode.")
+    if not setup_stage:
+        return
     if setup_stage == 'contract':
         handle_contract_address(update, context)
     elif setup_stage == 'liquidity':
@@ -3075,6 +3068,11 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                     caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
                     reply_markup=reply_markup
                 )
+            else:
+                welcome_message = update.message.reply_text(
+                    f"Welcome to {group_name}! Please press the button below to authenticate.",
+                    reply_markup=reply_markup
+                )
 
             timeout = get_verification_timeout(group_id)
 
@@ -4585,49 +4583,6 @@ def antiraid(update: Update, context: CallbackContext) -> None:
     
     if msg is not None:
         track_message(msg)
-
-# def toggle_mute(update: Update, context: CallbackContext, mute: bool) -> None:
-#     msg = None
-#     chat_id = update.effective_chat.id
-
-#     if is_user_admin(update, context):
-#         if update.message.reply_to_message is None:
-#             msg = update.message.reply_text("This command must be used in response to another message!")
-#             if msg is not None:
-#                 track_message(msg)
-#             return
-#         reply_to_message = update.message.reply_to_message
-#         if reply_to_message:
-#             user_id = reply_to_message.from_user.id
-#             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
-
-#         context.bot.restrict_chat_member(
-#             chat_id=chat_id,
-#             user_id=user_id,
-#             permissions=ChatPermissions(
-#                 can_send_messages=not mute,
-#                 can_send_media_messages=not mute,
-#                 can_send_other_messages=not mute,
-#                 can_send_videos=not mute,
-#                 can_send_photos=not mute,
-#                 can_send_audios=not mute
-#                 )
-#         )
-
-#         action = "muted" if mute else "unmuted"
-#         msg = update.message.reply_text(f"User {username} has been {action}.")
-#     else:
-#         msg = update.message.reply_text("You must be an admin to use this command.")
-    
-#     if msg is not None:
-#         track_message(msg)
-
-# def mute(update: Update, context: CallbackContext) -> None:
-#     toggle_mute(update, context, True)
-
-# def unmute(update: Update, context: CallbackContext) -> None:
-#     toggle_mute(update, context, False)
-
 
 
 def commands(update: Update, context: CallbackContext) -> None:
