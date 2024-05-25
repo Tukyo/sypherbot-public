@@ -900,6 +900,7 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+#region Mute Setup
 def setup_mute_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1098,7 +1099,9 @@ def check_mute_list(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
+#endregion Mute Setup
 
+#region Warn Setup
 def setup_warn_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1131,7 +1134,8 @@ def setup_warn(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*⚠️ Warn Setup ⚠️*',
+        text='*⚠️ Warn Setup ⚠️*\n\n'
+        'Here, you may choose to enable/disable warn perms in your group. It is on by default. You may also set the maximum warns before a user is punished.',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -1356,7 +1360,9 @@ def handle_max_warns(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
+#endregion Warn Setup
 
+#region Allowlist Setup
 def setup_allowlist_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1373,6 +1379,13 @@ def setup_allowlist_callback(update: Update, context: CallbackContext) -> None:
 def setup_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
+        [
+            InlineKeyboardButton("Enable Allowlist", callback_data='enable_allowlist'),
+            InlineKeyboardButton("Disable Allowlist", callback_data='disable_allowlist')
+        ],
+        [
+            InlineKeyboardButton("Check Allowlist", callback_data='check_allowlist')
+        ],
         [InlineKeyboardButton("Back", callback_data='setup_admin')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1381,7 +1394,11 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*✅ Allowlist Setup ✅*',
+        text='*✅ Allowlist Setup ✅*\n\n'
+        'Here, you may add or remove links from the allowlist, check the current allowlist or disable allowlisting for links.\n\n'
+        '_Please Note: If you disable link allowlisting, any links will be allowed in the group._\n\n'
+        '*How To Allow Links:*'
+        'To allow specific links in your group type: /allow <link>',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -1391,6 +1408,107 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+def enable_allowlist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'enable_allowlist':
+        if is_user_owner(update, context, user_id):
+            enable_allowlist(update, context)
+        else:
+            print("User is not the owner.")
+
+def enable_allowlist(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_allowlist')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'admin': {
+                'allowlisting': True
+            }
+        })
+    else:
+        group_doc.update({
+            'admin.allowlisting': True
+        })
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Allowlisting has been enabled in this group.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['enable_allowlist_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def disable_allowlist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'disable_allowlist':
+        if is_user_owner(update, context, user_id):
+            disable_allowlist(update, context)
+        else:
+            print("User is not the owner.")
+
+def disable_allowlist(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_allowlist')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'admin': {
+                'allowlisting': False
+            }
+        })
+    else:
+        group_doc.update({
+            'admin.allowlisting': False
+        })
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Allowlisting has been disabled in this group.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['disable_allowlist_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+#endregion Allowlist Setup
+
+#region Blocklist Setup
 def setup_blocklist_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1424,6 +1542,8 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
+
+#endregion Blocklist Setup
 
 def setup_antiraid_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -2323,7 +2443,7 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
 
-    schedule_group_monitoring(group_data)
+    # schedule_group_monitoring(group_data)
 
     msg = context.bot.send_message(
         chat_id=group_id,
@@ -3251,9 +3371,9 @@ def clear_warns_for_user(update: Update, context: CallbackContext):
             try:
                 user_info = context.bot.get_chat_member(chat_id=chat_id, user_id=user_id).user
                 if user_info.username == username_to_clear:
-                    # Clear the warning count for the user
+                    # Remove the user from the warnings mapping
                     group_doc.update({
-                        f'warnings.{user_id}': 0
+                        f'warnings.{user_id}': firestore.DELETE_FIELD
                     })
                     msg = update.message.reply_text(f"Warnings cleared for @{username_to_clear}.")
                     break
@@ -4393,8 +4513,6 @@ def main() -> None:
 
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
     # dispatcher.add_handler(CommandHandler('antiraid', antiraid))
-    # dispatcher.add_handler(CommandHandler("mute", mute))
-    # dispatcher.add_handler(CommandHandler("unmute", unmute))
     
     # General Slash Command Handlers
     dispatcher.add_handler(CommandHandler("commands", commands))
@@ -4426,6 +4544,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("unmute", unmute))
     dispatcher.add_handler(CommandHandler("mutelist", check_mute_list))
     dispatcher.add_handler(CommandHandler("warn", warn))
+    dispatcher.add_handler(CommandHandler("warnlist", check_warn_list))
     dispatcher.add_handler(CommandHandler('clearwarns', clear_warns_for_user))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
 
