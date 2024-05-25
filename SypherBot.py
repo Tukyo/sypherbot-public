@@ -645,6 +645,7 @@ def menu_change(context: CallbackContext, update: Update):
         'setup_customization_message',
         'enable_mute_message',
         'disable_mute_message',
+        'check_mute_list_message',
         # 'enable_warn_message',
         # 'disable_warn_message',
     ]
@@ -902,7 +903,7 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
     keyboard = [
         [
             InlineKeyboardButton("Enable Muting", callback_data='enable_mute'),
-            InlineKeyboardButton("Disable Muting", callback_data='setup_disable_mute')
+            InlineKeyboardButton("Disable Muting", callback_data='disable_mute')
         ],
         [
             InlineKeyboardButton("Mute List", callback_data='check_mute_list')
@@ -1024,6 +1025,63 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
+
+def check_mute_list_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'check_mute_list':
+        if is_user_owner(update, context, user_id):
+            check_mute_list(update, context)
+        else:
+            print("User is not the owner.")
+
+def check_mute_list(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_mute')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None or 'muted_users' not in group_data:
+        mute_list_text = 'No users are currently muted.'
+    else:
+        mute_list_text = ''
+        for user_id, mute_date in group_data['muted_users'].items():
+            try:
+                user_info = context.bot.get_chat_member(chat_id=group_id, user_id=user_id).user
+                username = user_info.username
+                first_name = user_info.first_name
+                last_name = user_info.last_name
+
+                if username:
+                    mute_list_text += f'@{username} • {mute_date}\n'
+                elif first_name or last_name:
+                    mute_list_text += f'{first_name or ""} {last_name or ""} • {mute_date}\n'
+                else:
+                    mute_list_text += f'{user_id} • {mute_date}\n'
+            except Exception:
+                continue
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=mute_list_text,
+        reply_markup=reply_markup
+    )
+    context.bot_data['setup_stage'] = None
+    context.bot_data['check_mute_list_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+    
 
 def setup_warn_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -4115,6 +4173,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_mute_callback, pattern='^setup_mute$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_mute_callback, pattern='^enable_mute$'))
     dispatcher.add_handler(CallbackQueryHandler(disable_mute_callback, pattern='^disable_mute$'))
+    dispatcher.add_handler(CallbackQueryHandler(check_mute_list_callback, pattern='^check_mute_list$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_warn_callback, pattern='^setup_warn$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
