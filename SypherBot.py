@@ -791,9 +791,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    menu_change(context, update)
-
-    msg = context.bot.send_message(
+    msg = context.bot.edit_message_text(
         chat_id=update.effective_chat.id,
         text='*🏠 Setup Home 🏠*\n\n'
         'Please use the buttons below to setup your bot!\n\n'
