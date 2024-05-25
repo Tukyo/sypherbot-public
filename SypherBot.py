@@ -2607,6 +2607,7 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
             text="This feature is only available to premium users. Please contact @tukyowave for more information.",
             parse_mode='Markdown'
         )
+        store_message_id(context, msg.message_id)
         print("User does not have premium.")
         return
 
@@ -2618,6 +2619,7 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
     )
     context.user_data['expecting_welcome_message_header_image'] = True  # Flag to check in the image handler
     context.user_data['setup_stage'] = 'welcome_message_header'
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2694,6 +2696,7 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
             text="This feature is only available to premium users. Please contact @tukyowave for more information.",
             parse_mode='Markdown'
         )
+        store_message_id(context, msg.message_id)
         print("User does not have premium.")
         return
     
@@ -2706,6 +2709,7 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
     )
     context.user_data['expecting_buybot_header_image'] = True  # Flag to check in the image handler
     context.user_data['setup_stage'] = 'buybot_message_header'
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2785,6 +2789,7 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
             text="This feature is only available to premium users. Please contact @tukyowave for more information.",
             parse_mode='Markdown'
         )
+        store_message_id(context, msg.message_id)
         print("User does not have premium.")
         return
 
@@ -2798,6 +2803,8 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
             text='*✔️ Trust System Enabled ✔️*',
             parse_mode='Markdown'
         )
+        context.user_data['setup_stage'] = None
+        store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2828,6 +2835,7 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
             text="This feature is only available to premium users. Please contact @tukyowave for more information.",
             parse_mode='Markdown'
         )
+        store_message_id(context, msg.message_id)
         print("User does not have premium.")
         return
 
@@ -2841,6 +2849,8 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
             text='*❌ Trust System Disabled ❌*',
             parse_mode='Markdown'
         )
+        context.user_data['setup_stage'] = None
+        store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2860,6 +2870,20 @@ def sypher_trust_preferences_callback(update: Update, context: CallbackContext) 
 
 def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
     msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None and group_data.get('premium') is not True:
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
+            parse_mode='Markdown'
+        )
+        store_message_id(context, msg.message_id)
+        print("User does not have premium.")
+        return
     keyboard = [
         [
             InlineKeyboardButton("Relaxed", callback_data='sypher_trust_relaxed'),
@@ -2994,7 +3018,6 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
 
 #endregion Premium Setup
 
