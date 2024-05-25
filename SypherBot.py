@@ -809,11 +809,18 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         chat_id=update.effective_chat.id,
         text='*🏠 Setup Home 🏠*\n\n'
         'Please use the buttons below to setup your bot!\n\n'
-        '*👑 Admin:*\nConfigure Admin Settings\n\n'
-        '*🤖 Commands:*\nConfigure Custom Commands & Default Commands\n\n'
-        '*🔒 Authentication:*\nConfigure Auth Settings\n\n'
-        '*📈 Crypto:*\nConfigure Crypto Settings\n\n'
-        '*🎨 Customization:*\n Customize Your Bot',
+        '*👑 Admin:*\n'
+        'Configure Admin Settings: Mute, Warn, Allowlist, Blocklist, Anti-Raid & Anti-Spam.\n\n'
+        'Warning! Clicking "Reset Admin Settings" will reset all admin settings.\n\n'
+        '*🤖 Commands:*\n'
+        'Configure Custom Commands & Default Commands\n\n'
+        '*🔒 Authentication:*\n'
+        'Configure Auth Settings: Enable/Disable Auth, Auth Types [Simple, Math, Word], Auth Timeout & Check Current Auth Settings\n\n'
+        '*📈 Crypto:*\n'
+        'Configure Crypto Settings: Setup Token Details, Check Token Details or Reset Your Token Details.\n\n'
+        'Warning! Clicking "Reset Token Details" will reset all token details.\n\n'
+        '*🎨 Customization:*\n'
+        'Customize Your Bot: Premium features to adjust the look and feel of your bot. Configure your Welcome Message Header and your Buybot Header.',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
@@ -1577,7 +1584,13 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*🔑 Crypto Setup 🔑*\n\nHere you can setup the Buybot, Pricebot and Chartbot functionality.\n\n*Please Note:* ABI is *required* for the Buybot functionality to work and for token details to propagate correctly.\n\n*⚠️ Updating Token Details ⚠️*\nTo enter new token details, you must click *Reset Token Details* first.',
+        text='*🔑 Crypto Setup 🔑*\n\n'
+        'Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\n'
+        '*Please Note:*\n'
+        '• ABI is *required* for the Buybot functionality to work and for token details to propagate correctly.\n'
+        '• Currently, this functionality is only setup for ETH paired tokens.\n\n'
+        '*⚠️ Updating Token Details ⚠️*\n'
+        'To enter new token details, you must click *Reset Token Details* first.',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
