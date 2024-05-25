@@ -285,6 +285,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
             {
                 'mute': False,
                 'warn': False,
+                'max_warns': 3,
                 'allowlist': False,
                 'blocklist': False,
                 'antiraid': False,
@@ -821,9 +822,9 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         '_Warning! Clicking "Reset Token Details" will reset all token details._\n\n'
         '*🚀 Premium:*\n'
         '🎨 Customize Your Bot:\n'
-        'Adjust the look and feel of your bot. Configure your Welcome Message Header and your Buybot Header.\n'
-        '🚨 Sypher Trust:\n'
-        'A smart system that dynamically adjusts the trust level of users based on their activity.',
+        'Adjust the look and feel of your bot. Configure your Welcome Message Header and your Buybot Header.\n',
+        # '🚨 Sypher Trust:\n'
+        # 'A smart system that dynamically adjusts the trust level of users based on their activity.',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
@@ -2524,13 +2525,13 @@ def setup_premium(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Welcome Message Header", callback_data='setup_welcome_message_header'),
             InlineKeyboardButton("Buybot Message Header", callback_data='setup_buybot_message_header')
         ],
-        [
-            InlineKeyboardButton("Enable Trust System", callback_data='enable_sypher_trust'),
-            InlineKeyboardButton("Disable Trust System", callback_data='disable_sypher_trust')
-        ],
-        [
-            InlineKeyboardButton("Trust Preferences", callback_data='sypher_trust_preferences'),
-        ],
+        # [
+        #     InlineKeyboardButton("Enable Trust System", callback_data='enable_sypher_trust'),
+        #     InlineKeyboardButton("Disable Trust System", callback_data='disable_sypher_trust')
+        # ],
+        # [
+        #     InlineKeyboardButton("Trust Preferences", callback_data='sypher_trust_preferences'),
+        # ],
         [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2541,9 +2542,9 @@ def setup_premium(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='*🚀 Premium Setup 🚀*\n\n'
         '🎨 Customize:\n'
-        'Configure your *Welcome Message Header* and your *Buybot Header*.\n'
-        '🚨 Sypher Trust:\n'
-        'Enable/Disable Trust System. Set Trust Preferences.',
+        'Configure your *Welcome Message Header* and your *Buybot Header*.\n',
+        # '🚨 Sypher Trust:\n'
+        # 'Enable/Disable Trust System. Set Trust Preferences.',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -2600,6 +2601,9 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
     msg = None
     if context.user_data.get('expecting_welcome_message_header_image'):
         group_id = update.effective_chat.id
+        group_doc = db.collection('groups').document(str(group_id))
+
+        group_data = group_doc.get().to_dict()
         
         photo = update.message.photo[-1]  # Get the highest resolution photo
         file = context.bot.get_file(photo.file_id)
@@ -2620,6 +2624,12 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
                 image_stream.getvalue(),
                 content_type='image/jpeg'
             )
+
+            if group_data is not None:
+                group_doc.update({
+                    'premium_features.welcome_header': True
+                })
+
             msg = context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="Your welcome message header image has been successfully uploaded!",
@@ -2690,6 +2700,9 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
     msg = None
     if context.user_data.get('expecting_buybot_header_image'):
         group_id = update.effective_chat.id
+        group_doc = db.collection('groups').document(str(group_id))
+
+        group_data = group_doc.get().to_dict()
         
         photo = update.message.photo[-1]  # Get the highest resolution photo
         file = context.bot.get_file(photo.file_id)
@@ -2713,6 +2726,12 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
                 image_stream.getvalue(),
                 content_type='image/jpeg'
             )
+
+            if group_data is not None:
+                group_doc.update({
+                    'premium_features.buybot_header': True
+                })
+
             msg = context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="Your buybot message header image has been successfully uploaded!",
@@ -3042,11 +3061,23 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             keyboard = [
                 [InlineKeyboardButton("Start Authentication", url=auth_url)]
             ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            welcome_message = update.message.reply_text(
-                f"Welcome to {group_name}! Please press the button below to authenticate.",
-                reply_markup=reply_markup
-            )
+            if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
+                filename = f'welcome_message_header_{group_id}.jpg'
+                filepath = f'sypherbot/public/welcome_message_header/{filename}'
+                welcome_image_url = storage.bucket().blob(filepath).public_url()
+
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                welcome_message = update.message.reply_photo(
+                    photo=welcome_image_url,
+                    caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
+                    reply_markup=reply_markup
+                )
+            else:
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                welcome_message = update.message.reply_text(
+                    f"Welcome to {group_name}! Please press the button below to authenticate.",
+                    reply_markup=reply_markup
+                )
 
             timeout = get_verification_timeout(group_id)
 
