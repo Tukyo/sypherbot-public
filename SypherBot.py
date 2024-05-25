@@ -330,40 +330,40 @@ def rate_limit_check():
     else:
         return False
 
-# def start_monitoring_groups():
-#     groups_snapshot = db.collection('groups').get()
-#     for group_doc in groups_snapshot:
-#         group_data = group_doc.to_dict()
-#         group_data['group_id'] = group_doc.id
-#         schedule_group_monitoring(group_data)
+def start_monitoring_groups():
+    groups_snapshot = db.collection('groups').get()
+    for group_doc in groups_snapshot:
+        group_data = group_doc.to_dict()
+        group_data['group_id'] = group_doc.id
+        schedule_group_monitoring(group_data)
 
-#     scheduler.start()
+    scheduler.start()
 
-# def schedule_group_monitoring(group_data):
-#     group_id = str(group_data['group_id'])
-#     job_id = f"monitoring_{group_id}"
-#     token_info = group_data.get('token')
+def schedule_group_monitoring(group_data):
+    group_id = str(group_data['group_id'])
+    job_id = f"monitoring_{group_id}"
+    token_info = group_data.get('token')
 
-#     if token_info:
-#         chain = token_info.get('chain')
-#         liquidity_address = token_info.get('liquidity_address')
-#         web3_instance = web3_instances.get(chain)
+    if token_info:
+        chain = token_info.get('chain')
+        liquidity_address = token_info.get('liquidity_address')
+        web3_instance = web3_instances.get(chain)
 
-#         if web3_instance and web3_instance.is_connected():
-#             # Check for existing job with ID
-#             existing_job = scheduler.get_job(job_id)
-#             if existing_job:
-#                 # Remove existing job to update with new information
-#                 existing_job.remove()
+        if web3_instance and web3_instance.is_connected():
+            # Check for existing job with ID
+            existing_job = scheduler.get_job(job_id)
+            if existing_job:
+                # Remove existing job to update with new information
+                existing_job.remove()
 
-#             scheduler.add_job(
-#                 monitor_transfers,
-#                 'interval',
-#                 seconds=10,
-#                 args=[web3_instance, liquidity_address, group_data],
-#                 id=job_id,  # Unique ID for the job
-#                 timezone=pytz.utc  # Use the UTC timezone from the pytz library
-#             )
+            scheduler.add_job(
+                monitor_transfers,
+                'interval',
+                seconds=10,
+                args=[web3_instance, liquidity_address, group_data],
+                id=job_id,  # Unique ID for the job
+                timezone=pytz.utc  # Use the UTC timezone from the pytz library
+            )
 
 def is_user_admin(update: Update, context: CallbackContext) -> bool:
     chat_id = update.effective_chat.id
@@ -916,7 +916,7 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='*🔇 Mute Setup 🔇*\n\n'
-        'Here, you may choose to enable/disable muting perms in your group. It is on by default.\n'
+        'Here, you may choose to enable/disable mute perms in your group. It is on by default.\n'
         'You may also check the list of currently muted users.',
         parse_mode='Markdown',
         reply_markup=reply_markup
@@ -2754,34 +2754,34 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Chart
 
 #region Buybot
-# def monitor_transfers(web3_instance, liquidity_address, group_data):
-#     contract_address = group_data['token']['contract_address']
-#     abi = group_data['token']['abi']
-#     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
+def monitor_transfers(web3_instance, liquidity_address, group_data):
+    contract_address = group_data['token']['contract_address']
+    abi = group_data['token']['abi']
+    contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
-#     block_to_check = 14896750
+    block_to_check = 14896750
     
-#     print(f"Checking transfers from block {block_to_check} for group {group_data['group_id']}")
+    print(f"Checking transfers from block {block_to_check} for group {group_data['group_id']}")
 
-#     # --- Filter for events in the specific block ---
-#     transfer_filter = contract.events.Transfer.createFilter(
-#         fromBlock=block_to_check,
-#         toBlock=block_to_check,  # Only check this specific block
-#         argument_filters={'from': liquidity_address}
-#     )
+    # --- Filter for events in the specific block ---
+    transfer_filter = contract.events.Transfer.createFilter(
+        fromBlock=block_to_check,
+        toBlock=block_to_check,  # Only check this specific block
+        argument_filters={'from': liquidity_address}
+    )
 
-#     for event in transfer_filter.get_new_entries():
-#         handle_transfer_event(event, group_data)
+    for event in transfer_filter.get_new_entries():
+        handle_transfer_event(event, group_data)
 
-# def handle_transfer_event(event, group_data):
-#     amount = event['args']['value']
-#     web3_instance = web3_instances.get(group_data['token']['chain'])
+def handle_transfer_event(event, group_data):
+    amount = event['args']['value']
+    web3_instance = web3_instances.get(group_data['token']['chain'])
     
-#     # Convert amount to token decimal
-#     decimals = group_data['token'].get('decimals', 18)
-#     token_amount = Decimal(amount) / (10 ** decimals)
+    # Convert amount to token decimal
+    decimals = group_data['token'].get('decimals', 18)
+    token_amount = Decimal(amount) / (10 ** decimals)
 
-#     print(f"Received transfer event for {token_amount} tokens.")
+    print(f"Received transfer event for {token_amount} tokens.")
 
     # # Fetch the USD price of the token
     # token_price_in_usd = get_token_price_in_fiat(group_data['token']['contract_address'], 'usd', web3_instance)
@@ -4113,6 +4113,8 @@ def main() -> None:
     # Setup Admin Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_admin_callback, pattern='^setup_admin$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_mute_callback, pattern='^setup_mute$'))
+    dispatcher.add_handler(CallbackQueryHandler(enable_mute_callback, pattern='^enable_mute$'))
+    dispatcher.add_handler(CallbackQueryHandler(disable_mute_callback, pattern='^disable_mute$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_warn_callback, pattern='^setup_warn$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
@@ -4147,13 +4149,10 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_customization_callback, pattern='^setup_customization$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_welcome_message_header_callback, pattern='^setup_welcome_message_header$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_buybot_message_header_callback, pattern='^setup_buybot_message_header$'))
-
-    # monitor_thread = threading.Thread(target=monitor_transfers)
-    # monitor_thread.start()
     
     # Start the Bot
     updater.start_polling()
-    # start_monitoring_groups()
+    start_monitoring_groups()
     updater.idle()
 
 if __name__ == '__main__':
