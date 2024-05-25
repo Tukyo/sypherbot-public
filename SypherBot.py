@@ -445,9 +445,8 @@ def handle_message(update: Update, context: CallbackContext) -> None:
 
     handle_guess(update, context)
 
-    handle_setup_inputs_from_user(update, context)
-
     if is_user_admin(update, context):
+        handle_setup_inputs_from_user(update, context)
         return
     
     delete_blocked_addresses(update, context)
