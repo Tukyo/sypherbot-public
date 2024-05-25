@@ -880,14 +880,14 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*👑 Admin Setup 👑*'
+        text='*👑 Admin Setup 👑*\n\n'
         'Here, you may configure all admin settings for your group.\n\n'
-        'Mute: Enable/Disable Mute, Check Mute List\n'
-        'Warn: Enable/Disable Warn, Check Warn List, Max Warns\n\n'
-        'Allowlist: Add/Remove Links from Allowlist, Check Allowlist or Disable Allowlisting for Links\n'
-        'Blocklist: Add/Remove Phrases from Blocklist, Check Blocklist\n\n'
-        'Anti-Raid: Configure Anti-Raid Settings\n'
-        'Anti-Spam: Configure Anti-Spam Settings\n\n'
+        '*Mute:* Enable/Disable Mute, Check Mute List\n'
+        '*Warn:* Enable/Disable Warn, Check Warn List, Max Warns\n\n'
+        '*Allowlist:* Add/Remove Links from Allowlist, Check Allowlist or Disable Allowlisting for Links\n'
+        '*Blocklist:* Add/Remove Phrases from Blocklist, Check Blocklist\n\n'
+        '*Anti-Raid:* Configure Anti-Raid Settings\n'
+        '*Anti-Spam:* Configure Anti-Spam Settings\n\n'
         '_Warning! Clicking "Reset Admin Settings" will reset all admin settings._',
         parse_mode='Markdown',
         reply_markup=reply_markup
@@ -1120,7 +1120,7 @@ def setup_warn(update: Update, context: CallbackContext) -> None:
         ],
         [
             InlineKeyboardButton("Warned Users List", callback_data='check_warn_list'),
-        ]
+        ],
         [InlineKeyboardButton("Back", callback_data='setup_admin')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
