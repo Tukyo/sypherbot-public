@@ -3064,7 +3064,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
                 filename = f'welcome_message_header_{group_id}.jpg'
                 filepath = f'sypherbot/public/welcome_message_header/{filename}'
-                welcome_image_url = storage.bucket().blob(filepath).public_url()
+                welcome_image_url = storage.bucket().blob(filepath).public_url
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 welcome_message = update.message.reply_photo(
