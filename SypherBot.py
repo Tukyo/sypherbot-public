@@ -959,15 +959,13 @@ def enable_mute(update: Update, context: CallbackContext) -> None:
     if group_data is None:
         group_doc.set({
             'admin': {
-                'mute_command': True
+                'mute': True
             }
         })
     else:
         group_doc.update({
-            'admin.mute_command': True
+            'admin.mute': True
         })
-
-    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1003,12 +1001,12 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
     if group_data is None:
         group_doc.set({
             'admin': {
-                'mute_command': False
+                'mute': False
             }
         })
     else:
         group_doc.update({
-            'admin.mute_command': False
+            'admin.mute': False
         })
 
     msg = context.bot.send_message(
@@ -1144,15 +1142,13 @@ def enable_warn(update: Update, context: CallbackContext) -> None:
     if group_data is None:
         group_doc.set({
             'admin': {
-                'warn_command': True
+                'warn': True
             }
         })
     else:
         group_doc.update({
-            'admin.warn_command': True
+            'admin.warn': True
         })
-
-    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1188,15 +1184,13 @@ def disable_warn(update: Update, context: CallbackContext) -> None:
     if group_data is None:
         group_doc.set({
             'admin': {
-                'warn_command': False
+                'warn': False
             }
         })
     else:
         group_doc.update({
-            'admin.warn_command': False
+            'admin.warn': False
         })
-
-    menu_change(context, update)
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
