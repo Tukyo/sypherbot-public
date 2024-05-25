@@ -3062,10 +3062,10 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 [InlineKeyboardButton("Start Authentication", url=auth_url)]
             ]
             if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
-                filename = f'welcome_message_header_{group_id}.jpg'
-                filepath = f'sypherbot/public/welcome_message_header/{filename}'
-                print(f"Fetching welcome message header from {filepath}")
-                welcome_image_url = storage.bucket().blob(filepath).public_url
+
+                blob = bucket.blob(f'sypherbot/public/welcome_message_header/welcome_message_header_{group_id}.jpg')
+
+                welcome_image_url = blob.generate_signed_url(expiration=timedelta(minutes=15))
 
                 print(f"Welcome image URL: {welcome_image_url}")
 
@@ -3073,12 +3073,6 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 welcome_message = update.message.reply_photo(
                     photo=welcome_image_url,
                     caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
-                    reply_markup=reply_markup
-                )
-            else:
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                welcome_message = update.message.reply_text(
-                    f"Welcome to {group_name}! Please press the button below to authenticate.",
                     reply_markup=reply_markup
                 )
 
