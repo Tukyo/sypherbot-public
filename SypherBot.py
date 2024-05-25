@@ -647,8 +647,12 @@ def menu_change(context: CallbackContext, update: Update):
         'enable_mute_message',
         'disable_mute_message',
         'check_mute_list_message',
-        # 'enable_warn_message',
-        # 'disable_warn_message',
+        'enable_warn_message',
+        'disable_warn_message',
+        'check_warn_list_message',
+        'set_max_warns_message',
+        # 'enable_allowlist_message',
+        # 'disable_allowlist_message'
     ]
 
     for message_to_delete in messages_to_delete:
@@ -817,14 +821,14 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         'Please use the buttons below to setup your bot!\n\n'
         '*👑 Admin:*\n'
         'Configure Admin Settings: Mute, Warn, Allowlist, Blocklist, Anti-Raid & Anti-Spam.\n\n'
-        'Warning! Clicking "Reset Admin Settings" will reset all admin settings.\n\n'
+        '_Warning! Clicking "Reset Admin Settings" will reset all admin settings._\n\n'
         '*🤖 Commands:*\n'
         'Configure Custom Commands & Default Commands\n\n'
         '*🔒 Authentication:*\n'
         'Configure Auth Settings: Enable/Disable Auth, Auth Types [Simple, Math, Word], Auth Timeout & Check Current Auth Settings\n\n'
         '*📈 Crypto:*\n'
         'Configure Crypto Settings: Setup Token Details, Check Token Details or Reset Your Token Details.\n\n'
-        'Warning! Clicking "Reset Token Details" will reset all token details.\n\n'
+        '_Warning! Clicking "Reset Token Details" will reset all token details._\n\n'
         '*🎨 Customization:*\n'
         'Customize Your Bot: Premium features to adjust the look and feel of your bot. Configure your Welcome Message Header and your Buybot Header.',
         parse_mode='markdown',
@@ -876,7 +880,15 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*👑 Admin Setup 👑*',
+        text='*👑 Admin Setup 👑*'
+        'Here, you may configure all admin settings for your group.\n\n'
+        'Mute: Enable/Disable Mute, Check Mute List\n'
+        'Warn: Enable/Disable Warn, Check Warn List, Max Warns\n\n'
+        'Allowlist: Add/Remove Links from Allowlist, Check Allowlist or Disable Allowlisting for Links\n'
+        'Blocklist: Add/Remove Phrases from Blocklist, Check Blocklist\n\n'
+        'Anti-Raid: Configure Anti-Raid Settings\n'
+        'Anti-Spam: Configure Anti-Spam Settings\n\n'
+        '_Warning! Clicking "Reset Admin Settings" will reset all admin settings._',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -1052,10 +1064,10 @@ def check_mute_list(update: Update, context: CallbackContext) -> None:
 
     group_data = group_doc.get().to_dict()
 
-    if group_data is None or 'muted_users' not in group_data:
-        mute_list_text = 'No users are currently muted.'
+    mute_list_text = '*Current Mute List:*\n\n'
+    if group_data is None or 'muted_users' not in group_data or not group_data['muted_users']:
+        mute_list_text += 'No users are currently muted.'
     else:
-        mute_list_text = ''
         for user_id, mute_date in group_data['muted_users'].items():
             try:
                 user_info = context.bot.get_chat_member(chat_id=group_id, user_id=user_id).user
@@ -1064,17 +1076,19 @@ def check_mute_list(update: Update, context: CallbackContext) -> None:
                 last_name = user_info.last_name
 
                 if username:
-                    mute_list_text += f'@{username} • {mute_date}\n'
+                    mute_list_text += f'- @{username} • {mute_date}\n'
                 elif first_name or last_name:
-                    mute_list_text += f'{first_name or ""} {last_name or ""} • {mute_date}\n'
+                    mute_list_text += f'- {first_name or ""} {last_name or ""} • {mute_date}\n'
                 else:
-                    mute_list_text += f'{user_id} • {mute_date}\n'
+                    mute_list_text += f'- {user_id} • {mute_date}\n'
             except Exception:
+                print(f"Failed to get user info for {user_id}")
                 continue
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=mute_list_text,
+        parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.bot_data['setup_stage'] = None
@@ -1082,7 +1096,6 @@ def check_mute_list(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-    
 
 def setup_warn_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -1100,6 +1113,14 @@ def setup_warn_callback(update: Update, context: CallbackContext) -> None:
 def setup_warn(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
+        [
+            InlineKeyboardButton("Enable Warnings", callback_data='enable_warn'),
+            InlineKeyboardButton("Disable Warnings", callback_data='disable_warn'),
+            InlineKeyboardButton("Max Warns", callback_data='set_max_warns')
+        ],
+        [
+            InlineKeyboardButton("Warned Users List", callback_data='check_warn_list'),
+        ]
         [InlineKeyboardButton("Back", callback_data='setup_admin')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1114,6 +1135,211 @@ def setup_warn(update: Update, context: CallbackContext) -> None:
     )
     context.user_data['setup_stage'] = None
     context.user_data['setup_warn_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def enable_warn_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'enable_warn':
+        if is_user_owner(update, context, user_id):
+            enable_warn(update, context)
+        else:
+            print("User is not the owner.")
+
+def enable_warn(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_warn')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'admin': {
+                'warn_command': True
+            }
+        })
+    else:
+        group_doc.update({
+            'admin.warn_command': True
+        })
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Warning has been enabled in this group.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['enable_warn_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def disable_warn_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'disable_warn':
+        if is_user_owner(update, context, user_id):
+            disable_warn(update, context)
+        else:
+            print("User is not the owner.")
+
+def disable_warn(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_warn')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'admin': {
+                'warn_command': False
+            }
+        })
+    else:
+        group_doc.update({
+            'admin.warn_command': False
+        })
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Warning has been disabled in this group.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['disable_warn_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def check_warn_list_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'check_warn_list':
+        if is_user_owner(update, context, user_id):
+            check_warn_list(update, context)
+        else:
+            print("User is not the owner.")
+
+def check_warn_list(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_warn')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    warn_list_text = '*Current Warned Users List:*\n\n'
+    if group_data is None or 'warned_users' not in group_data or not group_data['warned_users']:
+        warn_list_text += 'No users are currently warned.'
+    else:
+        for user_id, warn_count in group_data['warned_users'].items():
+            try:
+                user_info = context.bot.get_chat_member(chat_id=group_id, user_id=user_id).user
+                username = user_info.username
+                first_name = user_info.first_name
+                last_name = user_info.last_name
+
+                if username:
+                    warn_list_text += f'- @{username} • {warn_count} warns\n'
+                elif first_name or last_name:
+                    warn_list_text += f'- {first_name or ""} {last_name or ""} • {warn_count} warns\n'
+                else:
+                    warn_list_text += f'- {user_id} • {warn_count} warns\n'
+            except Exception:
+                print(f"Failed to get user info for {user_id}")
+                continue
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=warn_list_text,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['check_warn_list_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def set_max_warns_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'set_max_warns':
+        if is_user_owner(update, context, user_id):
+            set_max_warns(update, context)
+        else:
+            print("User is not the owner.")
+
+def set_max_warns(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_warn')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'admin': {
+                'max_warns': 3
+            }
+        })
+    else:
+        group_doc.update({
+            'admin.max_warns': 3
+        })
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='The maximum number of warns has been set to 3.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['set_max_warns_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -4151,6 +4377,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("allowlist", allowlist))
     dispatcher.add_handler(CommandHandler("mute", mute))
     dispatcher.add_handler(CommandHandler("unmute", unmute))
+    dispatcher.add_handler(CommandHandler("mutelist", check_mute_list))
     dispatcher.add_handler(CommandHandler("warn", warn))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
 
@@ -4182,6 +4409,10 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(disable_mute_callback, pattern='^disable_mute$'))
     dispatcher.add_handler(CallbackQueryHandler(check_mute_list_callback, pattern='^check_mute_list$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_warn_callback, pattern='^setup_warn$'))
+    dispatcher.add_handler(CallbackQueryHandler(enable_warn_callback, pattern='^enable_warn$'))
+    dispatcher.add_handler(CallbackQueryHandler(disable_warn_callback, pattern='^disable_warn$'))
+    dispatcher.add_handler(CallbackQueryHandler(check_warn_list_callback, pattern='^check_warnings$'))
+    dispatcher.add_handler(CallbackQueryHandler(set_max_warns_callback, pattern='^set_max_warns$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_antiraid_callback, pattern='^setup_antiraid$'))
