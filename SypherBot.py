@@ -4426,6 +4426,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("unmute", unmute))
     dispatcher.add_handler(CommandHandler("mutelist", check_mute_list))
     dispatcher.add_handler(CommandHandler("warn", warn))
+    dispatcher.add_handler(CommandHandler('clearwarns', clear_warns_for_user))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
 
 
@@ -4460,7 +4461,6 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(disable_warn_callback, pattern='^disable_warn$'))
     dispatcher.add_handler(CallbackQueryHandler(check_warn_list_callback, pattern='^check_warn_list$'))
     dispatcher.add_handler(CallbackQueryHandler(set_max_warns_callback, pattern='^set_max_warns$'))
-    dispatcher.add_handler(CallbackQueryHandler(clear_warns_for_user, pattern='^clear_warns$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_antiraid_callback, pattern='^setup_antiraid$'))
