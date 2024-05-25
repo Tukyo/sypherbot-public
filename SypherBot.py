@@ -643,6 +643,10 @@ def menu_change(context: CallbackContext, update: Update):
         'setup_antiraid_message',
         'setup_antispam_message',
         'setup_customization_message',
+        'enable_mute_message',
+        'disable_mute_message',
+        # 'enable_warn_message',
+        # 'disable_warn_message',
     ]
 
     for message_to_delete in messages_to_delete:
@@ -896,6 +900,13 @@ def setup_mute_callback(update: Update, context: CallbackContext) -> None:
 def setup_mute(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
+        [
+            InlineKeyboardButton("Enable Muting", callback_data='enable_mute'),
+            InlineKeyboardButton("Disable Muting", callback_data='setup_disable_mute')
+        ],
+        [
+            InlineKeyboardButton("Mute List", callback_data='check_mute_list')
+        ]
         [InlineKeyboardButton("Back", callback_data='setup_admin')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -904,12 +915,112 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*🔇 Mute Setup 🔇*',
+        text='*🔇 Mute Setup 🔇*\n\n'
+        'Here, you may choose to enable/disable muting perms in your group. It is on by default.\n'
+        'You may also check the list of currently muted users.',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
     context.user_data['setup_mute_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def enable_mute_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'enable_mute':
+        if is_user_owner(update, context, user_id):
+            enable_mute(update, context)
+        else:
+            print("User is not the owner.")
+
+def enable_mute(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_mute')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'admin': {
+                'mute_command': True
+            }
+        })
+    else:
+        group_doc.update({
+            'admin.mute_command': True
+        })
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Muting has been enabled in this group.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['enable_mute_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def disable_mute_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'disable_mute':
+        if is_user_owner(update, context, user_id):
+            disable_mute(update, context)
+        else:
+            print("User is not the owner.")
+
+def disable_mute(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Back", callback_data='setup_mute')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None:
+        group_doc.set({
+            'admin': {
+                'mute_command': False
+            }
+        })
+    else:
+        group_doc.update({
+            'admin.mute_command': False
+        })
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Muting has been disabled in this group.',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['disable_mute_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -2710,6 +2821,80 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Ethereum
 
 #region Admin Controls
+def mute(update: Update, context: CallbackContext) -> None:
+    msg = None
+    chat_id = update.effective_chat.id
+
+    group_doc = db.collection('groups').document(str(chat_id))
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None or not group_data.get('admin', {}).get('mute_command', False):
+        msg = update.message.reply_text("Admins are not allowed to use the mute command in this group.")
+        if msg is not None:
+            track_message(msg)
+        return
+
+    if is_user_admin(update, context):
+        if update.message.reply_to_message is None:
+            msg = update.message.reply_text("This command must be used in response to another message!")
+            if msg is not None:
+                track_message(msg)
+            return
+        reply_to_message = update.message.reply_to_message
+        if reply_to_message:
+            user_id = reply_to_message.from_user.id
+            username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
+
+        context.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=ChatPermissions(can_send_messages=False))
+        msg = update.message.reply_text(f"User {username} has been muted.")
+
+        # Add the user to the muted_users mapping in the database
+        group_doc.update({
+            f'muted_users.{user_id}': datetime.now().isoformat()
+        })
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
+    
+    if msg is not None:
+        track_message(msg)
+
+def unmute(update: Update, context: CallbackContext) -> None:
+    msg = None
+    chat_id = update.effective_chat.id
+
+    group_doc = db.collection('groups').document(str(chat_id))
+    group_data = group_doc.get().to_dict()
+
+    if group_data is None or not group_data.get('admin', {}).get('mute_command', False):
+        msg = update.message.reply_text("Admins are not allowed to use the unmute command in this group.")
+        if msg is not None:
+            track_message(msg)
+        return
+
+    if is_user_admin(update, context):
+        if update.message.reply_to_message is None:
+            msg = update.message.reply_text("This command must be used in response to another message!")
+            if msg is not None:
+                track_message(msg)
+            return
+        reply_to_message = update.message.reply_to_message
+        if reply_to_message:
+            user_id = reply_to_message.from_user.id
+            username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
+
+        context.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=ChatPermissions(can_send_messages=True))
+        msg = update.message.reply_text(f"User {username} has been unmuted.")
+
+        # Remove the user from the muted_users mapping in the database
+        group_doc.update({
+            f'muted_users.{user_id}': firestore.DELETE_FIELD
+        })
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
+    
+    if msg is not None:
+        track_message(msg)
+
 def warn(update: Update, context: CallbackContext):
     msg = None
     if is_user_admin(update, context) and update.message.reply_to_message:
@@ -3664,47 +3849,47 @@ def antiraid(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def toggle_mute(update: Update, context: CallbackContext, mute: bool) -> None:
-    msg = None
-    chat_id = update.effective_chat.id
+# def toggle_mute(update: Update, context: CallbackContext, mute: bool) -> None:
+#     msg = None
+#     chat_id = update.effective_chat.id
 
-    if is_user_admin(update, context):
-        if update.message.reply_to_message is None:
-            msg = update.message.reply_text("This command must be used in response to another message!")
-            if msg is not None:
-                track_message(msg)
-            return
-        reply_to_message = update.message.reply_to_message
-        if reply_to_message:
-            user_id = reply_to_message.from_user.id
-            username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
+#     if is_user_admin(update, context):
+#         if update.message.reply_to_message is None:
+#             msg = update.message.reply_text("This command must be used in response to another message!")
+#             if msg is not None:
+#                 track_message(msg)
+#             return
+#         reply_to_message = update.message.reply_to_message
+#         if reply_to_message:
+#             user_id = reply_to_message.from_user.id
+#             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
 
-        context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user_id,
-            permissions=ChatPermissions(
-                can_send_messages=not mute,
-                can_send_media_messages=not mute,
-                can_send_other_messages=not mute,
-                can_send_videos=not mute,
-                can_send_photos=not mute,
-                can_send_audios=not mute
-                )
-        )
+#         context.bot.restrict_chat_member(
+#             chat_id=chat_id,
+#             user_id=user_id,
+#             permissions=ChatPermissions(
+#                 can_send_messages=not mute,
+#                 can_send_media_messages=not mute,
+#                 can_send_other_messages=not mute,
+#                 can_send_videos=not mute,
+#                 can_send_photos=not mute,
+#                 can_send_audios=not mute
+#                 )
+#         )
 
-        action = "muted" if mute else "unmuted"
-        msg = update.message.reply_text(f"User {username} has been {action}.")
-    else:
-        msg = update.message.reply_text("You must be an admin to use this command.")
+#         action = "muted" if mute else "unmuted"
+#         msg = update.message.reply_text(f"User {username} has been {action}.")
+#     else:
+#         msg = update.message.reply_text("You must be an admin to use this command.")
     
-    if msg is not None:
-        track_message(msg)
+#     if msg is not None:
+#         track_message(msg)
 
-def mute(update: Update, context: CallbackContext) -> None:
-    toggle_mute(update, context, True)
+# def mute(update: Update, context: CallbackContext) -> None:
+#     toggle_mute(update, context, True)
 
-def unmute(update: Update, context: CallbackContext) -> None:
-    toggle_mute(update, context, False)
+# def unmute(update: Update, context: CallbackContext) -> None:
+#     toggle_mute(update, context, False)
 
 
 
@@ -3899,6 +4084,8 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("blocklist", blocklist))
     dispatcher.add_handler(CommandHandler("allow", allow))
     dispatcher.add_handler(CommandHandler("allowlist", allowlist))
+    dispatcher.add_handler(CommandHandler("mute", mute))
+    dispatcher.add_handler(CommandHandler("unmute", unmute))
     dispatcher.add_handler(CommandHandler("warn", warn))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
 
