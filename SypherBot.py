@@ -2772,9 +2772,9 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
         return
 
     if group_data is not None:
-        group_doc.update({
+        group_doc.set({
             'premium_features.sypher_trust': True
-        })
+        }, merge = True)
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2818,9 +2818,9 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
         return
 
     if group_data is not None:
-        group_doc.update({
+        group_doc.set({
             'premium_features.sypher_trust': False
-        })
+        }, merge = True)
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2877,8 +2877,9 @@ def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='*🚨 Trust Preferences 🚨*\n\n'
-        'The sypher trust system dynamically allows users in your group to send [@username] tags. A common theme in crypto telegram groups is a new user joining and sending a message like this:\n'
-        'Huge pump incoming, join @username for details!!\n'
+        'The sypher trust system dynamically allows users in your group to send [@username] tags.\n'
+        'A common theme in crypto telegram groups is a new user joining and sending a message like this:\n\n'
+        '_Huge pump incoming, join @username for details!!_\n\n'
         'This feature *blocks users from tagging other users or groups* until their trust has been earned in the group.\n\n'
         '• *Relaxed:* Trust users more easily, allow tagging of other groups and members quickest.\n'
         '• *Moderate:* A bit more strict, the default setting for the sypher trust system. Trust users after interaction with the group.\n'
@@ -2913,9 +2914,9 @@ def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
     group_data = group_doc.get().to_dict()
 
     if group_data is not None:
-        group_doc.update({
-            'premium_features.sypher_trust_level': 'low'
-        })
+        group_doc.set({
+            'premium_features.sypher_trust_preferences': 'relaxed'
+        }, merge=True)
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2948,9 +2949,9 @@ def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
     group_data = group_doc.get().to_dict()
 
     if group_data is not None:
-        group_doc.update({
-            'premium_features.sypher_trust_level': 'medium'
-        })
+        group_doc.set({
+            'premium_features.sypher_trust_preferences': 'moderate'
+        }, merge=True)
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2983,9 +2984,9 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
     group_data = group_doc.get().to_dict()
 
     if group_data is not None:
-        group_doc.update({
-            'premium_features.sypher_trust_level': 'high'
-        })
+        group_doc.set({
+            'premium_features.sypher_trust_preferences': 'strict'
+        }, merge=True)
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
