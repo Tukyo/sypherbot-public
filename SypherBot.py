@@ -1276,11 +1276,11 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
                 last_name = user_info.last_name
 
                 if username:
-                    warn_list_text += f'- @{username} • {warn_count} warns\n'
+                    warn_list_text += f'@{username} • {warn_count} warns\n'
                 elif first_name or last_name:
-                    warn_list_text += f'- {first_name or ""} {last_name or ""} • {warn_count} warns\n'
+                    warn_list_text += f'{first_name or ""} {last_name or ""} • {warn_count} warns\n'
                 else:
-                    warn_list_text += f'- {user_id} • {warn_count} warns\n'
+                    warn_list_text += f'{user_id} • {warn_count} warns\n'
             except Exception:
                 print(f"Failed to get user info for {user_id}")
                 continue
@@ -3230,6 +3230,40 @@ def warn(update: Update, context: CallbackContext):
         except Exception as e:
             msg = update.message.reply_text(f"Failed to update warnings: {str(e)}")
 
+    if msg is not None:
+        track_message(msg)
+
+def clear_warns(update: Update, context: CallbackContext):
+    msg = None
+    chat_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(chat_id))
+    group_data = group_doc.get().to_dict()
+
+    if is_user_admin(update, context):
+        if not context.args:
+            msg = update.message.reply_text("You must provide a username to clear warnings.")
+            if msg is not None:
+                track_message(msg)
+            return
+        username_to_clear = context.args[0].lstrip('@')
+
+        for user_id in group_data.get('warnings', {}):
+            try:
+                user_info = context.bot.get_chat_member(chat_id=chat_id, user_id=user_id).user
+                if user_info.username == username_to_clear:
+                    # Clear the warning count for the user
+                    group_doc.update({
+                        f'warnings.{user_id}': 0
+                    })
+                    msg = update.message.reply_text(f"Warnings cleared for @{username_to_clear}.")
+                    break
+            except Exception:
+                continue
+        else:
+            msg = update.message.reply_text("Can't find that user.")
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
+    
     if msg is not None:
         track_message(msg)
 
