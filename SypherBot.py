@@ -3368,8 +3368,9 @@ def fetch_ohlcv_data(time_frame, chain, liquidity_address):
     now = datetime.now()
     one_hour_ago = now - timedelta(hours=1)
     start_of_hour_timestamp = int(one_hour_ago.timestamp())
+    chain_lowercase = chain.lower()
 
-    url = f"https://api.geckoterminal.com/api/v2/networks/{chain}/pools/{liquidity_address}/ohlcv/{time_frame}"
+    url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lowercase}/pools/{liquidity_address}/ohlcv/{time_frame}"
     params = {
         'aggregate': '1' + time_frame[0],  # '1m', '1h', '1d' depending on the time frame
         'before_timestamp': start_of_hour_timestamp,
