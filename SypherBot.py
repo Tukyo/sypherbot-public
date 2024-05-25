@@ -276,7 +276,11 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
             'group_id': group_id,
             'owner_id': owner_id,
             'owner_username': owner_username,
-            'premium': False,
+            'premium':
+            {
+                'premium_group': False,
+                'sypher_trust': False
+            },
             'admin':
             {
                 'mute': False,
@@ -785,7 +789,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
             InlineKeyboardButton("Crypto", callback_data='setup_crypto')
         ],
         [
-            InlineKeyboardButton("Customization", callback_data='setup_customization')
+            InlineKeyboardButton("Premium", callback_data='setup_premium')
         ],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
@@ -807,8 +811,11 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         '*📈 Crypto:*\n'
         'Configure Crypto Settings: Setup Token Details, Check Token Details or Reset Your Token Details.\n\n'
         '_Warning! Clicking "Reset Token Details" will reset all token details._\n\n'
-        '*🎨 Customization:*\n'
-        'Customize Your Bot: Premium features to adjust the look and feel of your bot. Configure your Welcome Message Header and your Buybot Header.',
+        '*🚀 Premium:*\n'
+        '🎨 Customize Your Bot:\n'
+        'Adjust the look and feel of your bot. Configure your Welcome Message Header and your Buybot Header.\n'
+        '🚨 Sypher Trust:\n'
+        'A smart system that dynamically adjusts the trust level of users based on their activity.',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
@@ -1671,7 +1678,7 @@ def enable_verification_callback(update: Update, context: CallbackContext) -> No
         if is_user_owner(update, context, user_id):
             enable_verification(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def enable_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1702,6 +1709,7 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='Authentication enabled for this group.\n\n*❗ Please choose an authentication type ❗*', parse_mode='Markdown'
     )
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1717,7 +1725,7 @@ def disable_verification_callback(update: Update, context: CallbackContext) -> N
         if is_user_owner(update, context, user_id):
             disable_verification(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def disable_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1746,6 +1754,7 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='*❗ Authentication disabled for this group ❗*', parse_mode='Markdown'
     )
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1761,7 +1770,7 @@ def simple_verification_callback(update: Update, context: CallbackContext) -> No
         if is_user_owner(update, context, user_id):
             simple_verification(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def simple_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1817,7 +1826,7 @@ def math_verification_callback(update: Update, context: CallbackContext) -> None
         if is_user_owner(update, context, user_id):
             math_verification(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def math_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1875,7 +1884,7 @@ def word_verification_callback(update: Update, context: CallbackContext) -> None
         if is_user_owner(update, context, user_id):
             word_verification(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def word_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1937,7 +1946,7 @@ def timeout_verification_callback(update: Update, context: CallbackContext) -> N
         if is_user_owner(update, context, user_id):
             timeout_verification(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def timeout_verification(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1968,6 +1977,7 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
+    msg = None
     query = update.callback_query
     query.answer()
     user_id = query.from_user.id
@@ -1981,10 +1991,14 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
         set_verification_timeout(group_id, timeout_seconds)
 
         # Send a confirmation message to the user
-        context.bot.send_message(
+        msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=f"Authentication timeout set to {timeout_seconds // 60} minutes."
         )
+        context.user_data['setup_bot_message'] = msg.message_id
+
+        if msg is not None:
+            track_message(msg)
 
 def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
     # Sets the verification timeout for a specific group in the Firestore database.
@@ -2011,7 +2025,7 @@ def check_verification_settings_callback(update: Update, context: CallbackContex
         if is_user_owner(update, context, user_id):
             check_verification_settings(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def check_verification_settings(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2438,7 +2452,7 @@ def check_token_details_callback(update: Update, context: CallbackContext) -> No
         if is_user_owner(update, context, user_id):
             check_token_details(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def check_token_details(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2487,7 +2501,7 @@ def reset_token_details_callback(update: Update, context: CallbackContext) -> No
         if is_user_owner(update, context, user_id):
             reset_token_details(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def reset_token_details(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2511,24 +2525,31 @@ def reset_token_details(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 #endregion Ethereum Setup
 
-#region Customization Setup
-def setup_customization_callback(update: Update, context: CallbackContext) -> None:
+#region Premium Setup
+def setup_premium_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
     user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
 
-    if query.data == 'setup_customization':
+    if query.data == 'setup_premium':
         if is_user_owner(update, context, user_id):
-            setup_customization(update, context)
+            setup_premium(update, context)
 
-def setup_customization(update: Update, context: CallbackContext) -> None:
+def setup_premium(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
         [
             InlineKeyboardButton("Welcome Message Header", callback_data='setup_welcome_message_header'),
             InlineKeyboardButton("Buybot Message Header", callback_data='setup_buybot_message_header')
+        ],
+        [
+            InlineKeyboardButton("Enable Trust System", callback_data='enable_sypher_trust'),
+            InlineKeyboardButton("Disable Trust System", callback_data='disable_sypher_trust')
+        ],
+        [
+            InlineKeyboardButton("Trust Preferences", callback_data='sypher_trust_preferences'),
         ],
         [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
@@ -2538,7 +2559,11 @@ def setup_customization(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*🎨 Customization Setup 🎨*',
+        text='*🚀 Premium Setup 🚀*\n\n'
+        '🎨 Customize:\n'
+        'Configure your *Welcome Message Header* and your *Buybot Header*.\n'
+        '🚨 Sypher Trust:\n'
+        'Enable/Disable Trust System. Set Trust Preferences.',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -2559,7 +2584,7 @@ def setup_welcome_message_header_callback(update: Update, context: CallbackConte
         if is_user_owner(update, context, user_id):
             setup_welcome_message_header(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def setup_welcome_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2569,11 +2594,12 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
     group_data = group_doc.get().to_dict()
 
     if group_data is not None and group_data.get('premium') is not True:
-        context.bot.send_message(
+        msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="This feature is only available to premium users. Please contact @tukyowave for more information.",
             parse_mode='Markdown'
         )
+        context.user_data['setup_bot_message'] = msg.message_id
         print("User does not have premium.")
         return
 
@@ -2585,11 +2611,13 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
     )
     context.user_data['expecting_welcome_message_header_image'] = True  # Flag to check in the image handler
     context.user_data['setup_stage'] = 'welcome_message_header'
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
 
 def handle_welcome_message_image(update: Update, context: CallbackContext) -> None:
+    msg = None
     if context.user_data.get('expecting_welcome_message_header_image'):
         group_id = update.effective_chat.id
         
@@ -2612,23 +2640,27 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
                 image_stream.getvalue(),
                 content_type='image/jpeg'
             )
-            context.bot.send_message(
+            msg = context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="Your welcome message header image has been successfully uploaded!",
                 parse_mode='Markdown'
             )
             context.user_data['expecting_welcome_message_header_image'] = False  # Reset the flag
             context.user_data['setup_stage'] = None
+            context.user_data['setup_bot_message'] = msg.message_id
         else:
             error_message = "Please ensure the image is less than 700x250 pixels"
             if file_size > 100000:
                 error_message += " and smaller than 100 KB"
             error_message += " and try again."
-            context.bot.send_message(
+            msg = context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=error_message,
                 parse_mode='Markdown'
             )
+            context.user_data['setup_bot_message'] = msg.message_id
+        if msg is not None:
+            track_message(msg)
 
 def setup_buybot_message_header_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -2641,7 +2673,7 @@ def setup_buybot_message_header_callback(update: Update, context: CallbackContex
         if is_user_owner(update, context, user_id):
             setup_buybot_message_header(update, context)
         else:
-            print("User is not an admin.")
+            print("User is not the owner.")
 
 def setup_buybot_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2651,11 +2683,12 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
     group_data = group_doc.get().to_dict()
 
     if group_data is not None and group_data.get('premium') is not True:
-        context.bot.send_message(
+        msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="This feature is only available to premium users. Please contact the bot owner for more information.",
             parse_mode='Markdown'
         )
+        context.user_data['setup_bot_message'] = msg.message_id
         print("User does not have premium.")
         return
     
@@ -2668,11 +2701,13 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
     )
     context.user_data['expecting_buybot_header_image'] = True  # Flag to check in the image handler
     context.user_data['setup_stage'] = 'buybot_message_header'
+    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
 
 def handle_buybot_message_image(update: Update, context: CallbackContext) -> None:
+    msg = None
     if context.user_data.get('expecting_buybot_header_image'):
         group_id = update.effective_chat.id
         
@@ -2698,25 +2733,247 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
                 image_stream.getvalue(),
                 content_type='image/jpeg'
             )
-            context.bot.send_message(
+            msg = context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="Your buybot message header image has been successfully uploaded!",
                 parse_mode='Markdown'
             )
             context.user_data['expecting_buybot_header_image'] = False  # Reset the flag
             context.user_data['setup_stage'] = None
+            context.user_data['setup_bot_message'] = msg.message_id
         else:
             error_message = "Please ensure the image is less than 700x250 pixels"
             if file_size > 100000:
                 error_message += " and smaller than 100 KB"
             error_message += " and try again."
-            context.bot.send_message(
+            msg = context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=error_message,
                 parse_mode='Markdown'
             )
+            context.user_data['setup_bot_message'] = msg.message_id
+        if msg is not None:
+            track_message(msg)
 
-#endregion Customization Setup
+def enable_sypher_trust_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'enable_sypher_trust':
+        if is_user_owner(update, context, user_id):
+            enable_sypher_trust(update, context)
+        else:
+            print("User is not the owner.")
+
+def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None:
+        group_doc.update({
+            'premium.sypher_trust': True
+        })
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='*✔️ Trust System Enabled ✔️*',
+            parse_mode='Markdown'
+        )
+        context.user_data['setup_bot_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def disable_sypher_trust_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'disable_sypher_trust':
+        if is_user_owner(update, context, user_id):
+            disable_sypher_trust(update, context)
+        else:
+            print("User is not the owner.")
+
+def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None:
+        group_doc.update({
+            'premium.sypher_trust': False
+        })
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='*❌ Trust System Disabled ❌*',
+            parse_mode='Markdown'
+        )
+        context.user_data['setup_bot_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def sypher_trust_preferences_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'sypher_trust_preferences':
+        if is_user_owner(update, context, user_id):
+            sypher_trust_preferences(update, context)
+        else:
+            print("User is not the owner.")
+
+def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
+    msg = None
+    keyboard = [
+        [InlineKeyboardButton("Relaxed", callback_data='sypher_trust_relaxed')],
+        [InlineKeyboardButton("Moderate", callback_data='sypher_trust_moderate')],
+        [InlineKeyboardButton("Strict", callback_data='sypher_trust_strict')],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*🚨 Trust Preferences 🚨*\n\n'
+        'The sypher trust system dynamically allows users in your group to send [@username] tags. A common theme in crypto telegram groups is a new user joining and sending a message like this:\n'
+        'Huge pump incoming, join @scamgroup69 for details!!\n'
+        'This feature *blocks users from tagging other users or groups* until their trust has been earned in the group.\n\n'
+        '• *Relaxed:* Trust users more easily, allow tagging of other groups and members quickest.\n'
+        '• *Moderate:* A bit more strict, the default setting for the sypher trust system. Trust users after interaction with the group.\n'
+        '• *Strict:* Strictest trust. Only allow users to be trusted after genuine activity in your group.',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    context.user_data['setup_bot_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def sypher_trust_relaxed_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'sypher_trust_relaxed':
+        if is_user_owner(update, context, user_id):
+            sypher_trust_relaxed(update, context)
+        else:
+            print("User is not the owner.")
+
+def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None:
+        group_doc.update({
+            'premium.sypher_trust_level': 'low'
+        })
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='*🟢 Relaxed Trust Level Enabled 🟢*',
+            parse_mode='Markdown'
+        )
+        context.user_data['setup_bot_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def sypher_trust_moderate_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'sypher_trust_moderate':
+        if is_user_owner(update, context, user_id):
+            sypher_trust_moderate(update, context)
+        else:
+            print("User is not the owner.")
+
+def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None:
+        group_doc.update({
+            'premium.sypher_trust_level': 'medium'
+        })
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='*🟡 Moderate Trust Level Enabled 🟡*',
+            parse_mode='Markdown'
+        )
+        context.user_data['setup_bot_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def sypher_trust_strict_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'sypher_trust_strict':
+        if is_user_owner(update, context, user_id):
+            sypher_trust_strict(update, context)
+        else:
+            print("User is not the owner.")
+
+def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    if group_data is not None:
+        group_doc.update({
+            'premium.sypher_trust_level': 'high'
+        })
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='*🔴 Strict Trust Level Enabled 🔴*',
+            parse_mode='Markdown'
+        )
+        context.user_data['setup_bot_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+
+#endregion Premium Setup
 
 #endregion Bot Setup
 
@@ -4582,10 +4839,16 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(timeout_verification_callback, pattern='^timeout_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_timeout_callback, pattern='^vtimeout_'))
 
-    # Setup Customization Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(setup_customization_callback, pattern='^setup_customization$'))
+    # Setup Premium Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(setup_premium_callback, pattern='^setup_premium$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_welcome_message_header_callback, pattern='^setup_welcome_message_header$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_buybot_message_header_callback, pattern='^setup_buybot_message_header$'))
+    dispatcher.add_handler(CallbackQueryHandler(enable_sypher_trust_callback, pattern='^enable_sypher_trust$'))
+    dispatcher.add_handler(CallbackQueryHandler(disable_sypher_trust_callback, pattern='^disable_sypher_trust$'))
+    dispatcher.add_handler(CallbackQueryHandler(sypher_trust_preferences_callback, pattern='^sypher_trust_preferences$'))
+    dispatcher.add_handler(CallbackQueryHandler(sypher_trust_relaxed_callback, pattern='^sypher_trust_relaxed$'))
+    dispatcher.add_handler(CallbackQueryHandler(sypher_trust_moderate_callback, pattern='^sypher_trust_moderate$'))
+    dispatcher.add_handler(CallbackQueryHandler(sypher_trust_strict_callback, pattern='^sypher_trust_strict$'))
     
     # Start the Bot
     updater.start_polling()
