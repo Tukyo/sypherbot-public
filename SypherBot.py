@@ -276,9 +276,9 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
             'group_id': group_id,
             'owner_id': owner_id,
             'owner_username': owner_username,
-            'premium':
+            'premium': False,
+            'premium_features':
             {
-                'premium_group': False,
                 'sypher_trust': False
             },
             'admin':
@@ -302,7 +302,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 "Thank you for adding me to your group! Please click 'Setup' to continue.",
                 reply_markup=setup_markup
             )
-            context.user_data['setup_bot_message'] = msg.message_id
+            store_message_id(context, msg.message_id)
         else:
             # Bot is not admin, send the "Give me admin perms" message
             setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
@@ -311,7 +311,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 "Hey, please give me admin permissions, then click 'Setup' to get started.",
                 reply_markup=setup_markup
             )
-            context.user_data['setup_bot_message'] = msg.message_id
+            store_message_id(context, msg.message_id)
  
         if msg is not None:
             track_message(msg)
@@ -629,6 +629,12 @@ def delete_service_messages(update, context):
         except Exception as e:
             print(f"Failed to delete service message: {str(e)}")
 
+def store_message_id(context, message_id):
+    if 'setup_bot_message' in context.user_data:
+        context.user_data['setup_bot_message'].append(message_id)
+    else:
+        context.user_data['setup_bot_message'] = [message_id]
+
 def menu_change(context: CallbackContext, update: Update):
     messages_to_delete = [
         'setup_bot_message'
@@ -636,14 +642,16 @@ def menu_change(context: CallbackContext, update: Update):
 
     for message_to_delete in messages_to_delete:
         if message_to_delete in context.user_data:
-            try:
-                context.bot.delete_message(
-                    chat_id=update.effective_chat.id,
-                    message_id=context.user_data[message_to_delete]
-                )
-            except Exception as e:
-                if str(e) != "Message to delete not found":
-                    print(f"Failed to delete message: {e}")
+            for message_id in context.user_data[message_to_delete]:
+                try:
+                    context.bot.delete_message(
+                        chat_id=update.effective_chat.id,
+                        message_id=message_id
+                    )
+                except Exception as e:
+                    if str(e) != "Message to delete not found":
+                        print(f"Failed to delete message: {e}")
+            context.user_data[message_to_delete] = []
 #endregion Bot Logic
 
 #region Bot Setup
@@ -729,7 +737,7 @@ def start(update: Update, context: CallbackContext) -> None:
                 "Click 'Setup' to manage your group.",
                 reply_markup=setup_markup
             )
-            context.user_data['setup_bot_message'] = msg.message_id
+            store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -820,7 +828,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -878,7 +886,7 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -922,7 +930,7 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -971,7 +979,7 @@ def enable_mute(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1020,7 +1028,7 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1119,7 +1127,7 @@ def setup_warn(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1168,7 +1176,7 @@ def enable_warn(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1217,7 +1225,7 @@ def disable_warn(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1275,7 +1283,7 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1303,7 +1311,7 @@ def set_max_warns(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown'
     )
     context.user_data['setup_stage'] = 'set_max_warns'
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1383,7 +1391,7 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1518,7 +1526,7 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1554,7 +1562,7 @@ def setup_antiraid(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1588,7 +1596,7 @@ def setup_antispam(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1662,7 +1670,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1709,7 +1717,7 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='Authentication enabled for this group.\n\n*❗ Please choose an authentication type ❗*', parse_mode='Markdown'
     )
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1754,7 +1762,7 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='*❗ Authentication disabled for this group ❗*', parse_mode='Markdown'
     )
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1810,7 +1818,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1867,7 +1875,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
 
     if msg is not None:
@@ -1929,7 +1937,7 @@ def word_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
 
     if msg is not None:
@@ -1971,7 +1979,7 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1995,7 +2003,7 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
             chat_id=update.effective_chat.id,
             text=f"Authentication timeout set to {timeout_seconds // 60} minutes."
         )
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
 
         if msg is not None:
             track_message(msg)
@@ -2055,7 +2063,7 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = None
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2111,7 +2119,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2138,7 +2146,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
         )
         context.user_data['setup_stage'] = 'contract'
         print("Requesting contract address.")
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
 
         if msg is not None:
             track_message(msg)
@@ -2192,7 +2200,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = 'liquidity'
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
         print("Requesting liquidity address.")
 
         if msg is not None:
@@ -2255,7 +2263,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = 'ABI'
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
         print("Requesting ABI file.")
 
         if msg is not None:
@@ -2347,7 +2355,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = 'chain'
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
         print("Requesting Chain.")
 
         if msg is not None:
@@ -2485,7 +2493,7 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = None
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2568,7 +2576,7 @@ def setup_premium(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2599,7 +2607,6 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
             text="This feature is only available to premium users. Please contact @tukyowave for more information.",
             parse_mode='Markdown'
         )
-        context.user_data['setup_bot_message'] = msg.message_id
         print("User does not have premium.")
         return
 
@@ -2611,7 +2618,6 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
     )
     context.user_data['expecting_welcome_message_header_image'] = True  # Flag to check in the image handler
     context.user_data['setup_stage'] = 'welcome_message_header'
-    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -2647,7 +2653,7 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
             )
             context.user_data['expecting_welcome_message_header_image'] = False  # Reset the flag
             context.user_data['setup_stage'] = None
-            context.user_data['setup_bot_message'] = msg.message_id
+            store_message_id(context, msg.message_id)
         else:
             error_message = "Please ensure the image is less than 700x250 pixels"
             if file_size > 100000:
@@ -2658,7 +2664,7 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
                 text=error_message,
                 parse_mode='Markdown'
             )
-            context.user_data['setup_bot_message'] = msg.message_id
+            store_message_id(context, msg.message_id)
         if msg is not None:
             track_message(msg)
 
@@ -2685,10 +2691,9 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
     if group_data is not None and group_data.get('premium') is not True:
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="This feature is only available to premium users. Please contact the bot owner for more information.",
+            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
             parse_mode='Markdown'
         )
-        context.user_data['setup_bot_message'] = msg.message_id
         print("User does not have premium.")
         return
     
@@ -2701,7 +2706,6 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
     )
     context.user_data['expecting_buybot_header_image'] = True  # Flag to check in the image handler
     context.user_data['setup_stage'] = 'buybot_message_header'
-    context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -2740,7 +2744,7 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
             )
             context.user_data['expecting_buybot_header_image'] = False  # Reset the flag
             context.user_data['setup_stage'] = None
-            context.user_data['setup_bot_message'] = msg.message_id
+            store_message_id(context, msg.message_id)
         else:
             error_message = "Please ensure the image is less than 700x250 pixels"
             if file_size > 100000:
@@ -2751,7 +2755,7 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
                 text=error_message,
                 parse_mode='Markdown'
             )
-            context.user_data['setup_bot_message'] = msg.message_id
+            store_message_id(context, msg.message_id)
         if msg is not None:
             track_message(msg)
 
@@ -2775,9 +2779,18 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
 
     group_data = group_doc.get().to_dict()
 
+    if group_data is not None and group_data.get('premium') is not True:
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
+            parse_mode='Markdown'
+        )
+        print("User does not have premium.")
+        return
+
     if group_data is not None:
         group_doc.update({
-            'premium.sypher_trust': True
+            'premium_features.sypher_trust': True
         })
 
         msg = context.bot.send_message(
@@ -2785,7 +2798,6 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
             text='*✔️ Trust System Enabled ✔️*',
             parse_mode='Markdown'
         )
-        context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -2810,9 +2822,18 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
 
     group_data = group_doc.get().to_dict()
 
+    if group_data is not None and group_data.get('premium') is not True:
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
+            parse_mode='Markdown'
+        )
+        print("User does not have premium.")
+        return
+
     if group_data is not None:
         group_doc.update({
-            'premium.sypher_trust': False
+            'premium_features.sypher_trust': False
         })
 
         msg = context.bot.send_message(
@@ -2820,7 +2841,6 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
             text='*❌ Trust System Disabled ❌*',
             parse_mode='Markdown'
         )
-        context.user_data['setup_bot_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -2841,9 +2861,12 @@ def sypher_trust_preferences_callback(update: Update, context: CallbackContext) 
 def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
-        [InlineKeyboardButton("Relaxed", callback_data='sypher_trust_relaxed')],
-        [InlineKeyboardButton("Moderate", callback_data='sypher_trust_moderate')],
-        [InlineKeyboardButton("Strict", callback_data='sypher_trust_strict')],
+        [
+            InlineKeyboardButton("Relaxed", callback_data='sypher_trust_relaxed'),
+            InlineKeyboardButton("Moderate", callback_data='sypher_trust_moderate'),
+            InlineKeyboardButton("Strict", callback_data='sypher_trust_strict')
+        ],
+        [InlineKeyboardButton("Back", callback_data='setup_premium')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -2853,7 +2876,7 @@ def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='*🚨 Trust Preferences 🚨*\n\n'
         'The sypher trust system dynamically allows users in your group to send [@username] tags. A common theme in crypto telegram groups is a new user joining and sending a message like this:\n'
-        'Huge pump incoming, join @scamgroup69 for details!!\n'
+        'Huge pump incoming, join @username for details!!\n'
         'This feature *blocks users from tagging other users or groups* until their trust has been earned in the group.\n\n'
         '• *Relaxed:* Trust users more easily, allow tagging of other groups and members quickest.\n'
         '• *Moderate:* A bit more strict, the default setting for the sypher trust system. Trust users after interaction with the group.\n'
@@ -2862,7 +2885,7 @@ def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    context.user_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2889,7 +2912,7 @@ def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
 
     if group_data is not None:
         group_doc.update({
-            'premium.sypher_trust_level': 'low'
+            'premium_features.sypher_trust_level': 'low'
         })
 
         msg = context.bot.send_message(
@@ -2897,7 +2920,7 @@ def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
             text='*🟢 Relaxed Trust Level Enabled 🟢*',
             parse_mode='Markdown'
         )
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2924,7 +2947,7 @@ def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
 
     if group_data is not None:
         group_doc.update({
-            'premium.sypher_trust_level': 'medium'
+            'premium_features.sypher_trust_level': 'medium'
         })
 
         msg = context.bot.send_message(
@@ -2932,7 +2955,7 @@ def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
             text='*🟡 Moderate Trust Level Enabled 🟡*',
             parse_mode='Markdown'
         )
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2959,7 +2982,7 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
 
     if group_data is not None:
         group_doc.update({
-            'premium.sypher_trust_level': 'high'
+            'premium_features.sypher_trust_level': 'high'
         })
 
         msg = context.bot.send_message(
@@ -2967,7 +2990,7 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
             text='*🔴 Strict Trust Level Enabled 🔴*',
             parse_mode='Markdown'
         )
-        context.user_data['setup_bot_message'] = msg.message_id
+        store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
