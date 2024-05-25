@@ -2772,9 +2772,10 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
         return
 
     if group_data is not None:
-        group_doc.set({
-            'premium_features.sypher_trust': True
-        }, merge = True)
+        group_doc.update({
+            'premium_features.sypher_trust': True,
+            'premium_features.sypher_trust_preferences': 'moderate'
+        })
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2818,9 +2819,9 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
         return
 
     if group_data is not None:
-        group_doc.set({
+        group_doc.update({
             'premium_features.sypher_trust': False
-        }, merge = True)
+        })
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2914,9 +2915,9 @@ def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
     group_data = group_doc.get().to_dict()
 
     if group_data is not None:
-        group_doc.set({
+        group_doc.update({
             'premium_features.sypher_trust_preferences': 'relaxed'
-        }, merge=True)
+        })
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2949,9 +2950,9 @@ def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
     group_data = group_doc.get().to_dict()
 
     if group_data is not None:
-        group_doc.set({
+        group_doc.update({
             'premium_features.sypher_trust_preferences': 'moderate'
-        }, merge=True)
+        })
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2984,9 +2985,9 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
     group_data = group_doc.get().to_dict()
 
     if group_data is not None:
-        group_doc.set({
+        group_doc.update({
             'premium_features.sypher_trust_preferences': 'strict'
-        }, merge=True)
+        })
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
