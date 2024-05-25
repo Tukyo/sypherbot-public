@@ -1265,10 +1265,10 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
     group_data = group_doc.get().to_dict()
 
     warn_list_text = '*Current Warned Users List:*\n\n'
-    if group_data is None or 'warned_users' not in group_data or not group_data['warned_users']:
+    if group_data is None or 'warnings' not in group_data or not group_data['warnings']:
         warn_list_text += 'No users are currently warned.'
     else:
-        for user_id, warn_count in group_data['warned_users'].items():
+        for user_id, warn_count in group_data['warnings'].items():
             try:
                 user_info = context.bot.get_chat_member(chat_id=group_id, user_id=user_id).user
                 username = user_info.username
