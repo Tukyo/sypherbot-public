@@ -697,6 +697,8 @@ def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> N
         handle_welcome_message_image(update, context)
     elif setup_stage == 'buybot_message_header' and context.user_data.get('expecting_buybot_header_image'):
         handle_buybot_message_image(update, context)
+    elif context.user_data.get('setup_stage') == 'set_max_warns':
+        handle_max_warns(update, context)
 
 def start(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1315,34 +1317,45 @@ def set_max_warns(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
-
-    if group_data is None:
-        group_doc.set({
-            'admin': {
-                'max_warns': 3
-            }
-        })
-    else:
-        group_doc.update({
-            'admin.max_warns': 3
-        })
-
-    menu_change(context, update)
-
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='The maximum number of warns has been set to 3.',
+        text='Please respond with the maximum number of warnings you want for the group.',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.user_data['setup_stage'] = 'set_max_warns'
     context.user_data['set_max_warns_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
+
+def handle_max_warns(update: Update, context: CallbackContext) -> None:
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    if update.message.text:
+        try:
+            max_warns = int(update.message.text)
+        except ValueError:
+            msg = context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text='Please enter a number.'
+            )
+
+            if msg is not None:
+                track_message(msg)
+            return
+
+        group_doc.update({
+            'admin.max_warns': max_warns
+        })
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f'Maximum number of warnings set to {max_warns}.'
+        )
+
+        if msg is not None:
+            track_message(msg)
 
 def setup_allowlist_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -4411,7 +4424,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_warn_callback, pattern='^setup_warn$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_warn_callback, pattern='^enable_warn$'))
     dispatcher.add_handler(CallbackQueryHandler(disable_warn_callback, pattern='^disable_warn$'))
-    dispatcher.add_handler(CallbackQueryHandler(check_warn_list_callback, pattern='^check_warnings$'))
+    dispatcher.add_handler(CallbackQueryHandler(check_warn_list_callback, pattern='^check_warn_list$'))
     dispatcher.add_handler(CallbackQueryHandler(set_max_warns_callback, pattern='^set_max_warns$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
