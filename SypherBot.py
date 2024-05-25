@@ -950,10 +950,6 @@ def enable_mute_callback(update: Update, context: CallbackContext) -> None:
 
 def enable_mute(update: Update, context: CallbackContext) -> None:
     msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_mute')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -975,8 +971,7 @@ def enable_mute(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Muting has been enabled in this group.',
-        reply_markup=reply_markup
+        text='✔️ Muting has been enabled in this group ✔️'
     )
     context.user_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
@@ -999,10 +994,6 @@ def disable_mute_callback(update: Update, context: CallbackContext) -> None:
 
 def disable_mute(update: Update, context: CallbackContext) -> None:
     msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_mute')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -1020,12 +1011,9 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
             'admin.mute_command': False
         })
 
-    menu_change(context, update)
-
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Muting has been disabled in this group.',
-        reply_markup=reply_markup
+        text='❌ Muting has been disabled in this group ❌'
     )
     context.user_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
@@ -1081,7 +1069,7 @@ def check_mute_list(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown'
     )
     context.bot_data['setup_stage'] = None
-    context.bot_data['setup_bot_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1147,10 +1135,6 @@ def enable_warn_callback(update: Update, context: CallbackContext) -> None:
 
 def enable_warn(update: Update, context: CallbackContext) -> None:
     msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_warn')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -1172,8 +1156,7 @@ def enable_warn(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Warning has been enabled in this group.',
-        reply_markup=reply_markup
+        text='✔️ Warning has been enabled in this group ✔️'
     )
     context.user_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
@@ -1196,10 +1179,6 @@ def disable_warn_callback(update: Update, context: CallbackContext) -> None:
 
 def disable_warn(update: Update, context: CallbackContext) -> None:
     msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_warn')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -1221,8 +1200,7 @@ def disable_warn(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Warning has been disabled in this group.',
-        reply_markup=reply_markup
+        text='❌ Warning has been disabled in this group ❌'
     )
     context.user_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
@@ -1341,6 +1319,7 @@ def handle_max_warns(update: Update, context: CallbackContext) -> None:
             chat_id=update.effective_chat.id,
             text=f'Maximum number of warnings set to {max_warns}.'
         )
+        store_message_id(context, msg.message_id)
 
         if msg is not None:
             track_message(msg)
@@ -1411,10 +1390,6 @@ def enable_allowlist_callback(update: Update, context: CallbackContext) -> None:
 
 def enable_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_allowlist')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -1436,11 +1411,11 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Allowlisting has been enabled in this group.',
-        reply_markup=reply_markup
+        text='✔️ Allowlisting has been enabled in this group ✔️'
     )
     context.user_data['setup_stage'] = None
     context.user_data['enable_allowlist_message'] = msg.message_id
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -1460,10 +1435,6 @@ def disable_allowlist_callback(update: Update, context: CallbackContext) -> None
 
 def disable_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_allowlist')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
@@ -1485,8 +1456,7 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Allowlisting has been disabled in this group.',
-        reply_markup=reply_markup
+        text='❌ Allowlisting has been disabled in this group ❌'
     )
     context.user_data['setup_stage'] = None
     context.user_data['disable_allowlist_message'] = msg.message_id
@@ -1521,7 +1491,7 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*❌ Blocklist Setup ❌*',
+        text='*⛔ Blocklist Setup ⛔*',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -2175,7 +2145,8 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
                 complete_token_setup(group_id, context)
             else:
                 msg = update.message.reply_text("Please send a valid Contract Address!")
-                
+
+        store_message_id(context, msg.message_id)
 
         if msg is not None:
             track_message(msg)
@@ -2237,6 +2208,8 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
                 elif update.callback_query is not None:
                     msg = update.callback_query.message.reply_text("Please send a valid Liquidity Address!")
 
+        store_message_id(context, msg.message_id)
+
         if msg is not None:
             track_message(msg)
 
@@ -2293,6 +2266,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
             else:
                 msg = update.message.reply_text("Make sure the file is a JSON file, and you are using a desktop device.")
             
+        store_message_id(context, msg.message_id)
 
         if msg is not None:
             track_message(msg)
@@ -2311,6 +2285,8 @@ def send_example_abi(update: Update, context: CallbackContext) -> None:
         )
     
     msg = query.message.reply_text("Example ABI file sent to your DM.")
+
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2378,6 +2354,8 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
             complete_token_setup(group_id, context)
 
             msg = query.message.reply_text("Chain has been saved.")
+
+            store_message_id(context, msg.message_id)
 
             if msg is not None:
                 track_message(msg)
