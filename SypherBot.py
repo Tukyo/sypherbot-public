@@ -2931,23 +2931,29 @@ def unmute(update: Update, context: CallbackContext) -> None:
         return
 
     if is_user_admin(update, context):
-        if update.message.reply_to_message is None:
-            msg = update.message.reply_text("This command must be used in response to another message!")
+        if not context.args:
+            msg = update.message.reply_text("You must provide a username to unmute.")
             if msg is not None:
                 track_message(msg)
             return
-        reply_to_message = update.message.reply_to_message
-        if reply_to_message:
-            user_id = reply_to_message.from_user.id
-            username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
+        username_to_unmute = context.args[0].lstrip('@')
 
-        context.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=ChatPermissions(can_send_messages=True))
-        msg = update.message.reply_text(f"User {username} has been unmuted.")
+        for user_id in group_data.get('muted_users', {}):
+            try:
+                user_info = context.bot.get_chat_member(chat_id=chat_id, user_id=user_id).user
+                if user_info.username == username_to_unmute:
+                    context.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=ChatPermissions(can_send_messages=True))
+                    msg = update.message.reply_text(f"User @{username_to_unmute} has been unmuted.")
 
-        # Remove the user from the muted_users mapping in the database
-        group_doc.update({
-            f'muted_users.{user_id}': firestore.DELETE_FIELD
-        })
+                    # Remove the user from the muted_users mapping in the database
+                    group_doc.update({
+                        f'muted_users.{user_id}': firestore.DELETE_FIELD
+                    })
+                    break
+            except Exception:
+                continue
+        else:
+            msg = update.message.reply_text("Can't find that user.")
     else:
         msg = update.message.reply_text("You must be an admin to use this command.")
     
