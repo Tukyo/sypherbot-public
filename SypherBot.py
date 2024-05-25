@@ -734,6 +734,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
     user_id = query.from_user.id
+    context.user_data['setup_bot_message'] = query.message.message_id
 
     if is_user_owner(update, context, user_id):
         # Check if the bot is an admin
@@ -791,6 +792,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+
     msg = context.bot.edit_message_text(
         chat_id=update.effective_chat.id,
         text='*🏠 Setup Home 🏠*\n\n'
@@ -821,6 +823,7 @@ def setup_admin_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
     user_id = query.from_user.id
+    context.user_data['setup_bot_message'] = query.message.message_id
 
     update = Update(update.update_id, message=query.message)
 
@@ -854,7 +857,7 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
 
     menu_change(context, update)
 
-    msg = context.bot.send_message(
+    msg = context.bot.edit_message_text(
         chat_id=update.effective_chat.id,
         text='*👑 Admin Setup 👑*\n\n'
         'Here, you may configure all admin settings for your group.\n\n'
