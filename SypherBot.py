@@ -3233,7 +3233,7 @@ def warn(update: Update, context: CallbackContext):
     if msg is not None:
         track_message(msg)
 
-def clear_warns(update: Update, context: CallbackContext):
+def clear_warns_for_user(update: Update, context: CallbackContext):
     msg = None
     chat_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(chat_id))
@@ -4460,6 +4460,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(disable_warn_callback, pattern='^disable_warn$'))
     dispatcher.add_handler(CallbackQueryHandler(check_warn_list_callback, pattern='^check_warn_list$'))
     dispatcher.add_handler(CallbackQueryHandler(set_max_warns_callback, pattern='^set_max_warns$'))
+    dispatcher.add_handler(CallbackQueryHandler(clear_warns_for_user, pattern='^clear_warns$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_antiraid_callback, pattern='^setup_antiraid$'))
