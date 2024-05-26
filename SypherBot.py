@@ -182,21 +182,24 @@ class AntiSpam:
         self.blocked_users = defaultdict(lambda: 0)
         print(f"Initialized AntiSpam with rate_limit={rate_limit}, time_window={time_window}, mute_time={mute_time}")
 
-    def is_spam(self, user_id):
+    def is_spam(self, user_id, chat_id):
         current_time = time.time()
-        if current_time < self.blocked_users[user_id]:
+        key = (user_id, chat_id)
+        if current_time < self.blocked_users[key]:
             return True
-        self.user_messages[user_id] = [msg_time for msg_time in self.user_messages[user_id] if current_time - msg_time < self.time_window]
-        self.user_messages[user_id].append(current_time)
-        if len(self.user_messages[user_id]) > self.rate_limit:
-            self.blocked_users[user_id] = current_time + self.mute_time
+        self.user_messages[key] = [msg_time for msg_time in self.user_messages[key] if current_time - msg_time < self.time_window]
+        self.user_messages[key].append(current_time)
+        if len(self.user_messages[key]) > self.rate_limit:
+            self.blocked_users[key] = current_time + self.mute_time
+            print(f"User {user_id} in chat {chat_id} is blocked until {self.blocked_users[key]}")
             return True
         return False
 
-    def time_to_wait(self, user_id):
+    def time_to_wait(self, user_id, chat_id):
         current_time = time.time()
-        if current_time < self.blocked_users[user_id]:
-            return int(self.blocked_users[user_id] - current_time)
+        key = (user_id, chat_id)
+        if current_time < self.blocked_users[key]:
+            return int(self.blocked_users[key] - current_time)
         return 0
 
 class AntiRaid:
@@ -446,7 +449,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     handle_guess(update, context)
 
     if is_user_admin(update, context):
-        handle_setup_inputs_from_user(update, context)
+        handle_setup_inputs_from_admin(update, context)
         return
     
     delete_blocked_addresses(update, context)
@@ -458,30 +461,15 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     username = update.message.from_user.username or update.message.from_user.first_name
     msg = None
 
-    if anti_spam.is_spam(user_id):
-        mute_time = anti_spam.mute_time
-        msg = update.message.reply_text(f'{username}, you are spamming. You have been muted for {mute_time} seconds.')
-
-        # Mute the user for the mute time
-        until_date = int(time.time() + mute_time)
-        context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user_id,
-            permissions=ChatPermissions(can_send_messages=False),
-            until_date=until_date
-        )
-
-        # Schedule job to unmute the user
-        job_queue = context.job_queue
-        job_queue.run_once(unmute_user, mute_time, context={'chat_id': chat_id, 'user_id': user_id})
+    if anti_spam.is_spam(user_id, chat_id):
+        handle_spam(update, context, chat_id, username)
     
     if msg is not None:
         track_message(msg)
 
 def handle_image(update: Update, context: CallbackContext) -> None:
-    handle_setup_inputs_from_user(update, context)
-
     if is_user_admin(update, context):
+        handle_setup_inputs_from_admin(update, context)
         return
 
     user_id = update.message.from_user.id
@@ -489,25 +477,15 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     username = update.message.from_user.username or update.message.from_user.first_name
     msg = None
 
-    if anti_spam.is_spam(user_id):
-        mute_time = anti_spam.mute_time
-        msg = update.message.reply_text(f'{username}, you are spamming. You have been muted for {mute_time} seconds.')
-
-        # Mute the user for the mute time
-        until_date = int(time.time() + mute_time)
-        context.bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=user_id,
-            permissions=ChatPermissions(can_send_messages=False),
-            until_date=until_date
-        )
-
-        # Schedule job to unmute the user
-        job_queue = context.job_queue
-        job_queue.run_once(unmute_user, mute_time, context={'chat_id': chat_id, 'user_id': user_id})
+    if anti_spam.is_spam(user_id, chat_id):
+        handle_spam(update, context, chat_id, username)
 
     if msg is not None:
         track_message(msg)
+
+def handle_spam(update: Update, context: CallbackContext, chat_id, username) -> None:
+    print(f"User {username} is spamming in chat {chat_id}.")
+
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
     print("Checking message for unallowed addresses...")
@@ -658,7 +636,7 @@ def cancel_callback(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def handle_setup_inputs_from_user(update: Update, context: CallbackContext) -> None:
+def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> None:
     setup_stage = context.user_data.get('setup_stage')
     print("Checking if user is in setup mode.")
     if not setup_stage:
@@ -4500,27 +4478,6 @@ def website(update: Update, context: CallbackContext) -> None:
 #
 #
 #
-
-
-
-
-
-
-def unmute_user(context: CallbackContext) -> None:
-    job = context.job
-    context.bot.restrict_chat_member(
-        chat_id=job.context['chat_id'],
-        user_id=job.context['user_id'],
-        permissions=ChatPermissions(
-            can_send_messages=True,
-            can_send_media_messages=True,
-            can_send_other_messages=True,
-            can_send_videos=True,
-            can_send_photos=True,
-            can_send_audios=True
-            )
-    )
-
 
 
 
