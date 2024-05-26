@@ -447,8 +447,6 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         handle_setup_inputs_from_admin(update, context)
         handle_guess(update, context)
         return
-
-    time.sleep(0.5)
     
     if anti_spam.is_spam(user_id, chat_id):
         handle_spam(update, context, chat_id, user_id, username)
@@ -466,8 +464,6 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     if is_user_admin(update, context):
         handle_setup_inputs_from_admin(update, context)
         return
-
-    time.sleep(0.5)
 
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
@@ -496,21 +492,26 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
     group_id = update.message.chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    # Add the user_id to the unverified_users array in the group document
-    group_doc.update({'unverified_users': {str(user_id): None}})  # No initial challenge
-    print(f"New user {user_id} added to unverified users in group {group_id}")
+    # Get the group document
+    group_data = group_doc.get().to_dict()
 
-    auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
-    keyboard = [
-        [InlineKeyboardButton("Remove Restrictions", url=auth_url)]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    # Only send the message if the user is not in the unverified_users mapping
+    if str(user_id) not in group_data.get('unverified_users', {}):
+        auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
+        keyboard = [
+            [InlineKeyboardButton("Remove Restrictions", url=auth_url)]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-    context.bot.send_message(
-        chat_id=chat_id,
-        text=f"@{username}, you have been muted for spamming. Press the button below to re-authenticate.",
-        reply_markup=reply_markup
-    )
+        context.bot.send_message(
+            chat_id=chat_id,
+            text=f"@{username}, you have been muted for spamming. Press the button below to re-authenticate.",
+            reply_markup=reply_markup
+        )
+
+        # Add the user_id to the unverified_users array in the group document
+        group_doc.update({'unverified_users': {str(user_id): None}})  # No initial challenge
+        print(f"New user {user_id} added to unverified users in group {group_id}")
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
     print("Checking message for unallowed addresses...")
