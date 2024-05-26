@@ -3388,7 +3388,7 @@ def clear_unverified_users(context: CallbackContext):
         for user_id, user_info in unverified_users.items():
             user_time = datetime.fromisoformat(user_info['timestamp'])
             # Check if the user has been unverified for too long (e.g., more than 10 minutes)
-            if (now - user_time).total_seconds() > 30:
+            if (now - user_time).total_seconds() > 60:
                 try:
                     # Attempt to kick the unverified user
                     context.bot.ban_chat_member(chat_id=group_id, user_id=user_id)
@@ -3405,7 +3405,7 @@ def clear_unverified_users(context: CallbackContext):
     print("Cleared unverified users in all groups")
 
     # Wait for some time before next run, consider using a scheduled job instead of sleep
-    time.sleep(30)
+    time.sleep(60)
 
 # endregion User Authentication
 
