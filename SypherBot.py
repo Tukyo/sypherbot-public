@@ -482,26 +482,31 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
     
     print(f"User {username} is spamming in chat {chat_id}.")
 
-    # Mute the new user
+    # Mute the spamming user
     context.bot.restrict_chat_member(
         chat_id=chat_id,
         user_id=user_id,
         permissions=ChatPermissions(can_send_messages=False)
     )
 
-    # Send a warning message
-    try:
-        context.bot.send_message(
-            chat_id=user_id,
-            text="You have been muted in the chat for spamming. Please refrain from spamming in the future."
-        )
-    except Exception as e:
-        # If unable to send a DM, send a message in the public chat
-        context.bot.send_message(
-            chat_id=chat_id,
-            text=f"@{username}, you have been muted for spamming. Please refrain from spamming in the future."
-        )
+    group_id = update.message.chat.id
+    group_doc = db.collection('groups').document(str(group_id))
 
+    # Add the user_id to the unverified_users array in the group document
+    group_doc.update({'unverified_users': {str(user_id): None}})  # No initial challenge
+    print(f"New user {user_id} added to unverified users in group {group_id}")
+
+    auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
+    keyboard = [
+        [InlineKeyboardButton("Remove Restrictions", url=auth_url)]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.bot.send_message(
+        chat_id=chat_id,
+        text=f"@{username}, you have been muted for spamming. Press the button below to re-authenticate.",
+        reply_markup=reply_markup
+    )
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
     print("Checking message for unallowed addresses...")
