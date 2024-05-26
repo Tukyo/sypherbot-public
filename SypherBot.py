@@ -3370,42 +3370,41 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
         text="Authentication failed. Please start the authentication process again by clicking on the 'Start Authentication' button."
     )
 
-def clear_unverified_users(context: CallbackContext):
-    # Get current time
-    now = datetime.now(timezone.utc)
+# def clear_unverified_users(context: CallbackContext):
+#     # Get current time
+#     now = datetime.now(timezone.utc)
+#     print("Clearing unverified users in all groups")
 
-    # Get all group documents that potentially have unverified users
-    group_docs = db.collection('groups').where('unverified_users', '!=', {}).get()
+#     # Get all group documents that potentially have unverified users
+#     group_docs = db.collection('groups').where('unverified_users', '!=', {}).get()
 
-    for group_doc in group_docs:
-        group_id = group_doc.id
-        group_data = group_doc.to_dict()
-        unverified_users = group_data.get('unverified_users', {})
+#     for group_doc in group_docs:
+#         group_id = group_doc.id
+#         group_data = group_doc.to_dict()
+#         unverified_users = group_data.get('unverified_users', {})
 
-        # Prepare update data for Firestore
-        update_data = {}
+#         # Prepare update data for Firestore
+#         update_data = {}
 
-        for user_id, user_info in unverified_users.items():
-            user_time = datetime.fromisoformat(user_info['timestamp'])
-            # Check if the user has been unverified for too long (e.g., more than 10 minutes)
-            if (now - user_time).total_seconds() > 60:
-                try:
-                    # Attempt to kick the unverified user
-                    context.bot.ban_chat_member(chat_id=group_id, user_id=user_id)
-                    print(f"Kicked unverified user {user_id} from group {group_id}")
-                    # Mark for clearing from the database
-                    update_data[f'unverified_users.{user_id}'] = firestore.DELETE_FIELD
-                except Exception as e:
-                    print(f"Failed to kick user {user_id} from group {group_id}: {e}")
+#         for user_id, user_info in unverified_users.items():
+#             user_time = datetime.fromisoformat(user_info['timestamp'])
+#             # Check if the user has been unverified for too long (e.g., more than 10 minutes)
+#             if (now - user_time).total_seconds() > 60:
+#                 try:
+#                     # Attempt to kick the unverified user
+#                     context.bot.ban_chat_member(chat_id=group_id, user_id=user_id)
+#                     print(f"Kicked unverified user {user_id} from group {group_id}")
+#                     # Mark for clearing from the database
+#                     update_data[f'unverified_users.{user_id}'] = firestore.DELETE_FIELD
+#                 except Exception as e:
+#                     print(f"Failed to kick user {user_id} from group {group_id}: {e}")
 
-        # Clear the unverified_users mapping in the group document if necessary
-        if update_data:
-            group_doc.reference.update(update_data)
+#         # Clear the unverified_users mapping in the group document if necessary
+#         if update_data:
+#             group_doc.reference.update(update_data)
 
-    print("Cleared unverified users in all groups")
-
-    # Wait for some time before next run, consider using a scheduled job instead of sleep
-    time.sleep(60)
+#     # Wait for some time before next run, consider using a scheduled job instead of sleep
+#     time.sleep(60)
 
 # endregion User Authentication
 
@@ -4865,9 +4864,9 @@ def main() -> None:
     updater.start_polling()
 
     # Start Threads
-    clear_unverified_users_with_context = partial(clear_unverified_users, context=updater.dispatcher)
-    monitoring_thread = threading.Thread(target=clear_unverified_users_with_context)
-    monitoring_thread.start()
+    # clear_unverified_users_with_context = partial(clear_unverified_users, context=updater.dispatcher)
+    # monitoring_thread = threading.Thread(target=clear_unverified_users_with_context)
+    # monitoring_thread.start()
     start_monitoring_groups()
 
     # Run the bot until stopped
