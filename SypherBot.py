@@ -13,7 +13,8 @@ import mplfinance as mpf
 from web3 import Web3
 from io import BytesIO
 from decimal import Decimal
-from threading import Timer
+from functools import partial
+from threading import Timer, Thread
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from collections import deque, defaultdict
@@ -3021,7 +3022,6 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
 #endregion Bot Setup
 
 #region User Authentication
-last_welcome_message_id = {}
 def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
     msg = None
@@ -3085,7 +3085,6 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                     f"Welcome to {group_name}! Please press the button below to authenticate.",
                     reply_markup=reply_markup
                 )
-            last_welcome_message_id[group_id] = welcome_message.message_id
 
             timeout = get_verification_timeout(group_id)
 
@@ -3363,35 +3362,34 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
         text="Authentication failed. Please start the authentication process again by clicking on the 'Start Authentication' button."
     )
 
-def get_verification_timeout(group_id):
-    group_doc = db.collection('groups').document(str(group_id))
-    group_data = group_doc.get().to_dict()
+def clear_unverified_users(context: CallbackContext):
+    while True:
+        # Get all group documents
+        group_docs = db.collection('groups').get()
 
-    if group_data is not None:
-        verification_info = group_data.get('verification_info', {})
-        verification_timeout = verification_info.get('verification_timeout', 600)
-        print("Verification timeout:", verification_timeout)
-        return verification_timeout
-    else:
-        return 600
+        for group_doc in group_docs:
+            group_id = group_doc.id
+            group_data = group_doc.to_dict()
 
-def verification_timer(context: CallbackContext, group_id, user_id, message_id, timeout):
-    def delayed_action():
-        try:
-            group_doc = db.collection('groups').document(str(group_id))
-            group_data = group_doc.get().to_dict()
+            # Get the unverified users in the group
+            unverified_users = group_data.get('unverified_users', {})
 
-            if user_id in group_data.get('unverified_users', {}):
-                # If still unverified after timeout:
-                context.bot.delete_message(chat_id=group_id, message_id=message_id)
-                context.bot.ban_chat_member(chat_id=group_id, user_id=user_id) 
-                print(f"Deleted welcome message and kicked unverified user {user_id} in group {group_id}")
-        except Exception as e:
-            print(f"Error in delayed action: {e}")
+            for user_id in unverified_users:
+                try:
+                    # Kick the unverified user from the group
+                    context.bot.ban_chat_member(chat_id=group_id, user_id=user_id)
+                    print(f"Kicked unverified user {user_id} from group {group_id}")
+                except Exception as e:
+                    print(f"Failed to kick user {user_id} from group {group_id}: {e}")
 
-    timer = Timer(timeout, delayed_action)
-    print(f"Starting verification timer for user {user_id} in group {group_id} with timeout {timeout} seconds")
-    timer.start()
+            # Clear the unverified_users mapping in the group document
+            group_doc.reference.update({'unverified_users': {}})
+
+        print("Cleared unverified users in all groups")
+
+        # Wait for 10 minutes
+        time.sleep(10)
+
 # endregion User Authentication
 
 #region Ethereum
@@ -4845,10 +4843,17 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(sypher_trust_relaxed_callback, pattern='^sypher_trust_relaxed$'))
     dispatcher.add_handler(CallbackQueryHandler(sypher_trust_moderate_callback, pattern='^sypher_trust_moderate$'))
     dispatcher.add_handler(CallbackQueryHandler(sypher_trust_strict_callback, pattern='^sypher_trust_strict$'))
-    
+
     # Start the Bot
     updater.start_polling()
+
+    # Start Threads
+    clear_unverified_users_with_context = partial(clear_unverified_users, context=updater.dispatcher)
+    monitoring_thread = threading.Thread(target=clear_unverified_users_with_context)
+    monitoring_thread.start()
     start_monitoring_groups()
+
+    # Run the bot until stopped
     updater.idle()
 
 if __name__ == '__main__':
