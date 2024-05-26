@@ -3372,7 +3372,7 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
 
 def clear_unverified_users(context: CallbackContext):
     # Get current time
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
 
     timeout_time = 30
 
@@ -3388,7 +3388,7 @@ def clear_unverified_users(context: CallbackContext):
         update_data = {}
 
         for user_id, user_info in unverified_users.items():
-            user_time = datetime.datetime.fromisoformat(user_info['timestamp'])
+            user_time = datetime.fromisoformat(user_info['timestamp'])
             # Check if the user has been unverified for too long (e.g., more than 10 minutes)
             if (now - user_time).total_seconds() > timeout_time:
                 try:
