@@ -3371,32 +3371,43 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
     )
 
 def clear_unverified_users(context: CallbackContext):
-    while True:
-        # Get all group documents
-        group_docs = db.collection('groups').get()
+    # Get current time
+    now = datetime.datetime.utcnow()
 
-        for group_doc in group_docs:
-            group_id = group_doc.id
-            group_data = group_doc.to_dict()
+    timeout_time = 30
 
-            # Get the unverified users in the group
-            unverified_users = group_data.get('unverified_users', {})
+    # Get all group documents that potentially have unverified users
+    group_docs = db.collection('groups').where('unverified_users', '!=', {}).get()
 
-            for user_id in unverified_users:
+    for group_doc in group_docs:
+        group_id = group_doc.id
+        group_data = group_doc.to_dict()
+        unverified_users = group_data.get('unverified_users', {})
+
+        # Prepare update data for Firestore
+        update_data = {}
+
+        for user_id, user_info in unverified_users.items():
+            user_time = datetime.datetime.fromisoformat(user_info['timestamp'])
+            # Check if the user has been unverified for too long (e.g., more than 10 minutes)
+            if (now - user_time).total_seconds() > timeout_time:
                 try:
-                    # Kick the unverified user from the group
+                    # Attempt to kick the unverified user
                     context.bot.ban_chat_member(chat_id=group_id, user_id=user_id)
                     print(f"Kicked unverified user {user_id} from group {group_id}")
+                    # Mark for clearing from the database
+                    update_data[f'unverified_users.{user_id}'] = firestore.DELETE_FIELD
                 except Exception as e:
                     print(f"Failed to kick user {user_id} from group {group_id}: {e}")
 
-            # Clear the unverified_users mapping in the group document
-            group_doc.reference.update({'unverified_users': {}})
+        # Clear the unverified_users mapping in the group document if necessary
+        if update_data:
+            group_doc.reference.update(update_data)
 
-        print("Cleared unverified users in all groups")
+    print("Cleared unverified users in all groups")
 
-        # Wait for 10 minutes
-        time.sleep(30)
+    # Wait for some time before next run, consider using a scheduled job instead of sleep
+    time.sleep(timeout_time)
 
 # endregion User Authentication
 
