@@ -490,7 +490,17 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, username) -> 
     
     if time_to_wait > 0:
         until_date = int(time.time()) + time_to_wait
-        context.bot.restrict_chat_member(chat_id, update.message.from_user.id, until_date=until_date)
+        permissions = ChatPermissions(
+            can_send_messages=False,
+            can_send_media_messages=False,
+            can_send_polls=False,
+            can_send_other_messages=False,
+            can_add_web_page_previews=False,
+            can_change_info=False,
+            can_invite_users=False,
+            can_pin_messages=False
+        )
+        context.bot.restrict_chat_member(chat_id, update.message.from_user.id, permissions, until_date=until_date)
 
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
