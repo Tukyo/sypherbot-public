@@ -3021,6 +3021,7 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
 #endregion Bot Setup
 
 #region User Authentication
+last_welcome_message_id = {}
 def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
     msg = None
@@ -3084,6 +3085,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                     f"Welcome to {group_name}! Please press the button below to authenticate.",
                     reply_markup=reply_markup
                 )
+            last_welcome_message_id[group_id] = welcome_message.message_id
 
             timeout = get_verification_timeout(group_id)
 
