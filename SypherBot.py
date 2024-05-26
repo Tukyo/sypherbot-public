@@ -372,7 +372,6 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
         user_id = update.effective_user.id
 
     if update.effective_chat.type == 'private':
-        print("User is in a private chat.")
         return False
     
     print(f"Checking if user is admin for chat {chat_id}")
@@ -407,6 +406,9 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
     return user_is_owner
 
 def fetch_group_info(update: Update, context: CallbackContext):
+    if update.effective_chat.type == 'private':
+        return None
+    
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
@@ -449,9 +451,13 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         handle_guess(update, context)
         return
     
+    if update.effective_chat.type == 'private':
+        handle_guess(update, context)
+        return
+
     if anti_spam.is_spam(user_id, chat_id):
         handle_spam(update, context, chat_id, user_id, username)
-    
+
     delete_blocked_addresses(update, context)
     delete_blocked_phrases(update, context)
     delete_blocked_links(update, context)
