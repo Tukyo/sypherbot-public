@@ -510,9 +510,9 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
             reply_markup=reply_markup
         )
 
-        # Add the user_id to the unverified_users array in the group document
-        group_doc.update({'unverified_users': {str(user_id): None}})  # No initial challenge
-        print(f"New user {user_id} added to unverified users in group {group_id}")
+        current_time = datetime.utcnow().isoformat()  # Get the current date/time in ISO 8601 format
+        group_doc.update({'unverified_users': {str(user_id): current_time}})  # Use the current date/time as the value
+        print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
     print("Checking message for unallowed addresses...")
@@ -3058,9 +3058,9 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
                 return
 
-            # Add the user_id to the unverified_users array in the group document
-            group_doc.update({'unverified_users': {str(user_id): None}})  # No initial challenge
-            print(f"New user {user_id} added to unverified users in group {group_id}")
+            current_time = datetime.utcnow().isoformat()  # Get the current date/time in ISO 8601 format
+            group_doc.update({'unverified_users': {str(user_id): current_time}})  # Use the current date/time as the value
+            print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
 
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
             keyboard = [
@@ -3075,20 +3075,16 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 print(f"Welcome image URL: {welcome_image_url}")
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
-                welcome_message = update.message.reply_photo(
+                msg = update.message.reply_photo(
                     photo=welcome_image_url,
                     caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
                     reply_markup=reply_markup
                 )
             else:
-                welcome_message = update.message.reply_text(
+                msg = update.message.reply_text(
                     f"Welcome to {group_name}! Please press the button below to authenticate.",
                     reply_markup=reply_markup
                 )
-
-            timeout = get_verification_timeout(group_id)
-
-            verification_timer(context, group_id, user_id, welcome_message.message_id, timeout)
 
     if msg is not None:
         track_message(msg)
@@ -3179,8 +3175,8 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         print(f"image_path: {image_url}")
 
         group_doc.update({
-            f'unverified_users.{user_id}': math_challenge  
-        })
+            f'unverified_users.{user_id}.challenge': math_challenge
+        }) 
 
 
     elif verification_type == 'word':
@@ -3216,8 +3212,8 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
     
         # Update the challenge information in the database
         group_doc.update({
-            f'unverified_users.{user_id}': word_challenge  
-        })
+            f'unverified_users.{user_id}.challenge': word_challenge
+        }) 
     
     else:
         context.bot.send_message(
@@ -3388,7 +3384,7 @@ def clear_unverified_users(context: CallbackContext):
         print("Cleared unverified users in all groups")
 
         # Wait for 10 minutes
-        time.sleep(10)
+        time.sleep(30)
 
 # endregion User Authentication
 
