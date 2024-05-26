@@ -3184,7 +3184,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             reply_markup=reply_markup
         )
 
-        print(f"image_path: {image_url}")
+        # print(f"image_path: {image_url}")
 
         group_doc.update({
             f'unverified_users.{user_id}.challenge': math_challenge
@@ -3220,7 +3220,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             reply_markup=reply_markup
         )
 
-        print(f"image_path: {image_url}")
+        # print(f"image_path: {image_url}")
     
         # Update the challenge information in the database
         group_doc.update({
@@ -3374,8 +3374,6 @@ def clear_unverified_users(context: CallbackContext):
     # Get current time
     now = datetime.now(timezone.utc)
 
-    timeout_time = 30
-
     # Get all group documents that potentially have unverified users
     group_docs = db.collection('groups').where('unverified_users', '!=', {}).get()
 
@@ -3390,7 +3388,7 @@ def clear_unverified_users(context: CallbackContext):
         for user_id, user_info in unverified_users.items():
             user_time = datetime.fromisoformat(user_info['timestamp'])
             # Check if the user has been unverified for too long (e.g., more than 10 minutes)
-            if (now - user_time).total_seconds() > timeout_time:
+            if (now - user_time).total_seconds() > 30:
                 try:
                     # Attempt to kick the unverified user
                     context.bot.ban_chat_member(chat_id=group_id, user_id=user_id)
@@ -3407,7 +3405,7 @@ def clear_unverified_users(context: CallbackContext):
     print("Cleared unverified users in all groups")
 
     # Wait for some time before next run, consider using a scheduled job instead of sleep
-    time.sleep(timeout_time)
+    time.sleep(30)
 
 # endregion User Authentication
 
