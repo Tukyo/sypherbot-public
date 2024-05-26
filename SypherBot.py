@@ -438,24 +438,24 @@ def rate_limit_check():
         return False
 
 def handle_message(update: Update, context: CallbackContext) -> None:
-
-    handle_guess(update, context)
-
-    if is_user_admin(update, context):
-        handle_setup_inputs_from_admin(update, context)
-        return
-    
-    delete_blocked_addresses(update, context)
-    delete_blocked_phrases(update, context)
-    delete_blocked_links(update, context)
-    
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
     username = update.message.from_user.username or update.message.from_user.first_name
     msg = None
 
+    if is_user_admin(update, context):
+        handle_setup_inputs_from_admin(update, context)
+        handle_guess(update, context)
+        return
+    
     if anti_spam.is_spam(user_id, chat_id):
         handle_spam(update, context, chat_id, user_id, username)
+    
+    delete_blocked_addresses(update, context)
+    delete_blocked_phrases(update, context)
+    delete_blocked_links(update, context)
+
+    handle_guess(update, context)
     
     if msg is not None:
         track_message(msg)
@@ -479,8 +479,6 @@ def handle_image(update: Update, context: CallbackContext) -> None:
 def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, username) -> None:
     if user_id == context.bot.id:
         return
-    
-    print(f"User {username} is spamming in chat {chat_id}.")
 
     # Mute the spamming user
     context.bot.restrict_chat_member(
@@ -488,6 +486,8 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
         user_id=user_id,
         permissions=ChatPermissions(can_send_messages=False)
     )
+
+    print(f"User {username} has been muted for spamming in chat {chat_id}.")
 
     group_id = update.message.chat.id
     group_doc = db.collection('groups').document(str(group_id))
