@@ -195,13 +195,6 @@ class AntiSpam:
             return True
         return False
 
-    def time_to_wait(self, user_id, chat_id):
-        current_time = time.time()
-        key = (user_id, chat_id)
-        if current_time < self.blocked_users[key]:
-            return int(self.blocked_users[key] - current_time)
-        return 0
-
 class AntiRaid:
     def __init__(self, user_amount, time_out, anti_raid_time):
         self.user_amount = user_amount
@@ -462,7 +455,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     msg = None
 
     if anti_spam.is_spam(user_id, chat_id):
-        handle_spam(update, context, chat_id, username)
+        handle_spam(update, context, chat_id, user_id, username)
     
     if msg is not None:
         track_message(msg)
@@ -478,29 +471,36 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     msg = None
 
     if anti_spam.is_spam(user_id, chat_id):
-        handle_spam(update, context, chat_id, username)
+        handle_spam(update, context, chat_id, user_id, username)
 
     if msg is not None:
         track_message(msg)
 
-def handle_spam(update: Update, context: CallbackContext, chat_id, username) -> None:
+def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, username) -> None:
+    if user_id == context.bot.id:
+        return
+    
     print(f"User {username} is spamming in chat {chat_id}.")
 
-    time_to_wait = anti_spam.time_to_wait(update.message.from_user.id, chat_id)
-    
-    if time_to_wait > 0:
-        until_date = int(time.time()) + time_to_wait
-        permissions = ChatPermissions(
-            can_send_messages=False,
-            can_send_media_messages=False,
-            can_send_polls=False,
-            can_send_other_messages=False,
-            can_add_web_page_previews=False,
-            can_change_info=False,
-            can_invite_users=False,
-            can_pin_messages=False
+    # Mute the new user
+    context.bot.restrict_chat_member(
+        chat_id=chat_id,
+        user_id=user_id,
+        permissions=ChatPermissions(can_send_messages=False)
+    )
+
+    # Send a warning message
+    try:
+        context.bot.send_message(
+            chat_id=user_id,
+            text="You have been muted in the chat for spamming. Please refrain from spamming in the future."
         )
-        context.bot.restrict_chat_member(chat_id, update.message.from_user.id, permissions, until_date=until_date)
+    except Exception as e:
+        # If unable to send a DM, send a message in the public chat
+        context.bot.send_message(
+            chat_id=chat_id,
+            text=f"@{username}, you have been muted for spamming. Please refrain from spamming in the future."
+        )
 
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
