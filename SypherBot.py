@@ -502,6 +502,10 @@ def delete_blocked_addresses(update: Update, context: CallbackContext):
 
     found_addresses = eth_address_pattern.findall(message_text)
 
+    if not found_addresses:
+        print("No addresses found in message.")
+        return
+
     # Retrieve the contract and LP addresses from the fetched group info
     allowed_addresses = [group_data.get('contract_address', '').lower(), group_data.get('liquidity_address', '').lower()]
 
@@ -537,6 +541,10 @@ def delete_blocked_links(update: Update, context: CallbackContext):
     
     # Regular expression to match any word with .[domain]
     found_domains = domain_pattern.findall(message_text)
+
+    if not found_links and not found_domains:
+        print("No links or domains found in message.")
+        return
 
     # Combine the found links and domains
     found_items = found_links + found_domains
