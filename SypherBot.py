@@ -447,6 +447,8 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         handle_setup_inputs_from_admin(update, context)
         handle_guess(update, context)
         return
+
+    time.sleep(0.5)
     
     if anti_spam.is_spam(user_id, chat_id):
         handle_spam(update, context, chat_id, user_id, username)
@@ -464,6 +466,8 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     if is_user_admin(update, context):
         handle_setup_inputs_from_admin(update, context)
         return
+
+    time.sleep(0.5)
 
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
