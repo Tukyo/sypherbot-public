@@ -237,7 +237,7 @@ class AntiRaid:
         return 0
 #endregion Classes
 
-anti_spam = AntiSpam(rate_limit=5, time_window=10, mute_time=60)
+anti_spam = AntiSpam(rate_limit=5, time_window=10, mute_time=10)
 anti_raid = AntiRaid(user_amount=25, time_out=30, anti_raid_time=180)
 
 scheduler = BackgroundScheduler()
@@ -485,6 +485,12 @@ def handle_image(update: Update, context: CallbackContext) -> None:
 
 def handle_spam(update: Update, context: CallbackContext, chat_id, username) -> None:
     print(f"User {username} is spamming in chat {chat_id}.")
+
+    time_to_wait = anti_spam.time_to_wait(update.message.from_user.id, chat_id)
+    
+    if time_to_wait > 0:
+        until_date = int(time.time()) + time_to_wait
+        context.bot.restrict_chat_member(chat_id, update.message.from_user.id, until_date=until_date)
 
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
