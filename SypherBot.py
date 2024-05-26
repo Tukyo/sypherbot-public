@@ -16,7 +16,7 @@ from decimal import Decimal
 from functools import partial
 from threading import Timer, Thread
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import deque, defaultdict
 from google.cloud.firestore_v1 import DELETE_FIELD
 from firebase_admin import credentials, firestore, storage
@@ -510,7 +510,7 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
             reply_markup=reply_markup
         )
 
-        current_time = datetime.utcnow().isoformat()  # Get the current date/time in ISO 8601 format
+        current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
         user_data = {
             str(user_id): {
                 'timestamp': current_time,
@@ -3064,7 +3064,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
                 return
 
-            current_time = datetime.utcnow().isoformat()  # Get the current date/time in ISO 8601 format
+            current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
             user_data = {
                 str(user_id): {
                     'timestamp': current_time,
@@ -3084,7 +3084,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
                 welcome_image_url = blob.generate_signed_url(expiration=timedelta(minutes=15))
 
-                print(f"Welcome image URL: {welcome_image_url}")
+                # print(f"Welcome image URL: {welcome_image_url}")
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 msg = update.message.reply_photo(
@@ -3372,7 +3372,7 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
 
 def clear_unverified_users(context: CallbackContext):
     # Get current time
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     timeout_time = 30
 
