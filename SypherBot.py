@@ -511,9 +511,13 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
         )
 
         current_time = datetime.utcnow().isoformat()  # Get the current date/time in ISO 8601 format
-        group_doc.update({
-            f'unverified_users.{user_id}.time': current_time
-        })  # Use a subfield update to avoid overwriting the existing data
+        user_data = {
+            str(user_id): {
+                'timestamp': current_time,
+                'challenge': None  # Initializes with no challenge
+            }
+        }
+        group_doc.update({'unverified_users': user_data})  # Update the document with structured data
         print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
@@ -3061,7 +3065,13 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 return
 
             current_time = datetime.utcnow().isoformat()  # Get the current date/time in ISO 8601 format
-            group_doc.update({'unverified_users': {str(user_id): current_time}})  # Use the current date/time as the value
+            user_data = {
+                str(user_id): {
+                    'timestamp': current_time,
+                    'challenge': None  # Initializes with no challenge
+                }
+            }
+            group_doc.update({'unverified_users': user_data})  # Update the document with structured data
             print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
 
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
