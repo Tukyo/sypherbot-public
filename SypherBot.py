@@ -53,8 +53,6 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 ### /createcommand - Create a new command
 ### /cleanbot - Clean all bot messages in the chat
 ### /cleargames - Clear all active games in the chat
-### /antiraid - Manage the anti-raid system
-#### /antiraid end /anti-raid [user_amount] [time_out] [anti_raid_time]
 ### /mute /unmute - Reply to a message with this command to toggle mute for a user
 ### /kick - Reply to a message with this command to kick a user from the chat
 ### /warn - Reply to a message with this command to warn a user
@@ -175,13 +173,12 @@ print("Firebase initialized.")
 
 #region Classes
 class AntiSpam:
-    def __init__(self, rate_limit, time_window, mute_time):
+    def __init__(self, rate_limit, time_window):
         self.rate_limit = rate_limit
         self.time_window = time_window
-        self.mute_time = mute_time
         self.user_messages = defaultdict(list)
         self.blocked_users = defaultdict(lambda: 0)
-        print(f"Initialized AntiSpam with rate_limit={rate_limit}, time_window={time_window}, mute_time={mute_time}")
+        print(f"Initialized AntiSpam with rate_limit={rate_limit}, time_window={time_window}")
 
     def is_spam(self, user_id, chat_id):
         current_time = time.time()
@@ -191,7 +188,7 @@ class AntiSpam:
         self.user_messages[key] = [msg_time for msg_time in self.user_messages[key] if current_time - msg_time < self.time_window]
         self.user_messages[key].append(current_time)
         if len(self.user_messages[key]) > self.rate_limit:
-            self.blocked_users[key] = current_time + self.mute_time
+            self.blocked_users[key] = current_time
             print(f"User {user_id} in chat {chat_id} is blocked until {self.blocked_users[key]}")
             return True
         return False
@@ -231,7 +228,7 @@ class AntiRaid:
         return 0
 #endregion Classes
 
-anti_spam = AntiSpam(rate_limit=5, time_window=10, mute_time=10)
+anti_spam = AntiSpam(rate_limit=5, time_window=10)
 anti_raid = AntiRaid(user_amount=25, time_out=30, anti_raid_time=180)
 
 scheduler = BackgroundScheduler()
@@ -284,9 +281,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 'warn': False,
                 'max_warns': 3,
                 'allowlist': False,
-                'blocklist': False,
-                'antiraid': False,
-                'antispam': False,
+                'blocklist': False
             }
         })
 
@@ -828,7 +823,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         text='*🏠 Setup Home 🏠*\n\n'
         'Please use the buttons below to setup your bot!\n\n'
         '*👑 Admin:*\n'
-        'Configure Admin Settings: Mute, Warn, Allowlist, Blocklist, Anti-Raid & Anti-Spam.\n\n'
+        'Configure Admin Settings: Mute, Warn, Allowlist & Blocklist\n\n'
         '_Warning! Clicking "Reset Admin Settings" will reset all admin settings._\n\n'
         '*🤖 Commands:*\n'
         'Configure Custom Commands & Default Commands\n\n'
@@ -877,10 +872,6 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Blocklist", callback_data='setup_blocklist')
         ],
         [
-            InlineKeyboardButton("Anti-Raid", callback_data='setup_antiraid'),
-            InlineKeyboardButton("Anti-Spam", callback_data='setup_antispam')
-        ],
-        [
             InlineKeyboardButton("❗ Reset Admin Settings ❗", callback_data='reset_admin_settings')
         ],
         [InlineKeyboardButton("Back", callback_data='setup_home')]
@@ -897,8 +888,6 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
         '*Warn:* Enable/Disable Warn, Check Warn List, Max Warns\n\n'
         '*Allowlist:* Add/Remove Links from Allowlist, Check Allowlist or Disable Allowlisting for Links\n'
         '*Blocklist:* Add/Remove Phrases from Blocklist, Check Blocklist\n\n'
-        '*Anti-Raid:* Configure Anti-Raid Settings\n'
-        '*Anti-Spam:* Configure Anti-Spam Settings\n\n'
         '_Warning! Clicking "Reset Admin Settings" will reset all admin settings._',
         parse_mode='Markdown',
         reply_markup=reply_markup
@@ -1476,6 +1465,7 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+
 #endregion Allowlist Setup
 
 #region Blocklist Setup
@@ -1514,75 +1504,6 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 #endregion Blocklist Setup
-
-def setup_antiraid_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_antiraid':
-        if is_user_owner(update, context, user_id):
-            setup_antiraid(update, context)
-        else:
-            print("User is not the owner.")
-
-def setup_antiraid(update: Update, context: CallbackContext) -> None:
-    msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_admin')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    menu_change(context, update)
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='*🛡️ Anti-Raid Setup 🛡️*',
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
-
-    if msg is not None:
-        track_message(msg)
-
-def setup_antispam_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_antispam':
-        if is_user_owner(update, context, user_id):
-            setup_antispam(update, context)
-        else:
-            print("User is not the owner.")
-
-def setup_antispam(update: Update, context: CallbackContext) -> None:
-    msg = None
-    keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_admin')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    menu_change(context, update)
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='*🚫 Anti-Spam Setup 🚫*',
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-    context.user_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
-
-    if msg is not None:
-        track_message(msg)
-
 def reset_admin_settings_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -4545,7 +4466,6 @@ def admin_commands(update: Update, context: CallbackContext) -> None:
             "*Admin commands:*\n"
             "*/cleanbot*\nCleans all bot messages\n"
             "*/cleargames*\nClear all active games\n"
-            "*/antiraid*\nManage anti-raid settings\n"
             "*/mute*\nMute a user\n"
             "*/unmute*\nUnmute a user\n"
             "*/kick*\nKick a user\n"
@@ -4558,44 +4478,6 @@ def admin_commands(update: Update, context: CallbackContext) -> None:
     
     if msg is not None:
         track_message(msg)
-
-
-def antiraid(update: Update, context: CallbackContext) -> None:
-    msg = None
-    args = context.args
-
-    if is_user_admin(update, context):
-        if not args:
-            msg = update.message.reply_text("Usage: /antiraid end or /antiraid [user_amount] [time_out] [anti_raid_time]")
-            return
-
-        command = args[0]
-        if command == 'end':
-            if anti_raid.is_raid():
-                anti_raid.anti_raid_end_time = 0
-                msg = update.message.reply_text("Anti-raid timer ended. System reset to normal operation.")
-                print("Anti-raid timer ended. System reset to normal operation.")
-            else:
-                msg = update.message.reply_text("No active anti-raid to end.")
-        else:
-            try:
-                user_amount = int(args[0])
-                time_out = int(args[1])
-                anti_raid_time = int(args[2])
-                anti_raid.user_amount = user_amount
-                anti_raid.time_out = time_out
-                anti_raid.anti_raid_time = anti_raid_time
-                msg = update.message.reply_text(f"Anti-raid settings updated: user_amount={user_amount}, time_out={time_out}, anti_raid_time={anti_raid_time}")
-                print(f"Updated AntiRaid settings to user_amount={user_amount}, time_out={time_out}, anti_raid_time={anti_raid_time}")
-            except (IndexError, ValueError):
-                msg = update.message.reply_text("Invalid arguments. Usage: /antiraid [user_amount] [time_out] [anti_raid_time]")
-    else:
-        msg = update.message.reply_text("You must be an admin to use this command.")
-        print(f"User {update.effective_user.id} tried to use /antiraid but is not an admin in chat {update.effective_chat.id}.")
-    
-    if msg is not None:
-        track_message(msg)
-
 
 def commands(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -4758,7 +4640,6 @@ def main() -> None:
     dispatcher = updater.dispatcher
 
     # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
-    # dispatcher.add_handler(CommandHandler('antiraid', antiraid))
     
     # General Slash Command Handlers
     dispatcher.add_handler(CommandHandler("commands", commands))
@@ -4828,8 +4709,6 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(set_max_warns_callback, pattern='^set_max_warns$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_antiraid_callback, pattern='^setup_antiraid$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_antispam_callback, pattern='^setup_antispam$'))
     dispatcher.add_handler(CallbackQueryHandler(reset_admin_settings_callback, pattern='^reset_admin_settings$'))
     
     # Setup Crypto Callbacks
