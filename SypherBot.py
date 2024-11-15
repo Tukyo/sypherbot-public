@@ -3180,7 +3180,8 @@ def callback_word_response(update: Update, context: CallbackContext):
 
         # Check if the user is in the unverified users mapping
         if str(user_id) in group_data_dict.get('unverified_users', {}):
-            challenge_answer = group_data_dict['unverified_users'][str(user_id)]
+            user_challenge_data = group_data_dict['unverified_users'][str(user_id)] # Get the user's challenge data
+            challenge_answer = user_challenge_data.get('challenge')  # Extract only the challenge value as the required answer
 
             print(f"Challenge answer: {challenge_answer}")
 
@@ -3219,7 +3220,8 @@ def callback_math_response(update: Update, context: CallbackContext):
 
         # Check if the user is in the unverified users mapping
         if str(user_id) in group_data_dict.get('unverified_users', {}):
-            challenge_answer = group_data_dict['unverified_users'][str(user_id)]
+            user_challenge_data = group_data_dict['unverified_users'][str(user_id)] # Get the user's challenge data
+            challenge_answer = user_challenge_data.get('challenge')  # Extract only the challenge value as the required answer
 
             print(f"Challenge answer: {challenge_answer}")
 
