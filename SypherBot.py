@@ -135,105 +135,118 @@ def check_eth_price(update, context):
 
 
 def get_token_price(update: Update, context: CallbackContext) -> None:
+    print("Fetching token price using Uniswap V3...")
     group_data = fetch_group_info(update, context)
     if group_data is None:
+        print("Group data not found.")
         update.message.reply_text("Group data not found.")
         return
 
     token_data = group_data.get('token')
     if not token_data:
+        print("Token data not found for this group.")
         update.message.reply_text("Token data not found for this group.")
         return
 
     # Extract token details
     lp_address = token_data.get('liquidity_address')
     chain = token_data.get('chain')
-    decimals = token_data.get('decimals', 18)  # Default to 18 decimals if not specified
+
+    print(f"Token data: {token_data}")
 
     if not lp_address or not chain:
+        print("Liquidity address or chain not found for this group.")
         update.message.reply_text("Liquidity address or chain not found for this group.")
         return
 
     try:
         # Step 1: Get ETH price in USD using Chainlink
+        print("Fetching ETH price in USD using Chainlink...")
         eth_price_in_usd = check_eth_price(update, context)
         if eth_price_in_usd is None:
+            print("Failed to fetch ETH price from Chainlink.")
             update.message.reply_text("Failed to fetch ETH price.")
             return
 
         print(f"ETH price in USD: {eth_price_in_usd}")
 
-        # Step 2: Fetch reserves from the liquidity pool
-        pair_contract = web3_instances[chain].eth.contract(
-            address=web3_instances[chain].to_checksum_address(lp_address),
+        # Step 2: Connect to the Uniswap V3 liquidity pool
+        print(f"Connecting to Uniswap V3 pool at address: {lp_address} on chain: {chain}")
+        web3_instance = web3_instances.get(chain)
+        if not web3_instance:
+            print(f"Web3 instance for chain {chain} not found or not connected.")
+            update.message.reply_text(f"Web3 instance for chain {chain} is unavailable.")
+            return
+
+        print(f"Web3 instance for chain {chain} is connected: {web3_instance.is_connected()}")
+
+        pair_contract = web3_instance.eth.contract(
+            address=web3_instance.to_checksum_address(lp_address),
             abi=[
                 {
                     "constant": True,
                     "inputs": [],
-                    "name": "getReserves",
+                    "name": "slot0",
                     "outputs": [
-                        {"name": "_reserve0", "type": "uint112"},
-                        {"name": "_reserve1", "type": "uint112"},
-                        {"name": "_blockTimestampLast", "type": "uint32"}
+                        {"name": "sqrtPriceX96", "type": "uint160"},
+                        {"name": "tick", "type": "int24"},
+                        {"name": "observationIndex", "type": "uint16"},
+                        {"name": "observationCardinality", "type": "uint16"},
+                        {"name": "observationCardinalityNext", "type": "uint16"},
+                        {"name": "feeProtocol", "type": "uint8"},
+                        {"name": "unlocked", "type": "bool"}
                     ],
-                    "stateMutability": "view",
-                    "type": "function"
-                },
-                {
-                    "constant": True,
-                    "inputs": [],
-                    "name": "token0",
-                    "outputs": [{"name": "", "type": "address"}],
-                    "stateMutability": "view",
-                    "type": "function"
-                },
-                {
-                    "constant": True,
-                    "inputs": [],
-                    "name": "token1",
-                    "outputs": [{"name": "", "type": "address"}],
                     "stateMutability": "view",
                     "type": "function"
                 }
             ]
         )
 
-        reserves = pair_contract.functions.getReserves().call()
-        reserve0 = reserves[0]
-        reserve1 = reserves[1]
-        token0 = pair_contract.functions.token0().call()
-        token1 = pair_contract.functions.token1().call()
+        print("Successfully connected to the liquidity pool contract.")
 
-        print(f"Reserves: {reserve0} (token0), {reserve1} (token1)")
-        print(f"Token0: {token0}, Token1: {token1}")
-
-        # Step 3: Identify which token is paired with the liquidity token
-        if token0.lower() == web3_instances[chain].to_checksum_address(lp_address).lower():
-            token_reserve = reserve0
-            pair_reserve = reserve1
-        elif token1.lower() == web3_instances[chain].to_checksum_address(lp_address).lower():
-            token_reserve = reserve1
-            pair_reserve = reserve0
-        else:
-            update.message.reply_text("Liquidity pool does not include the token.")
+        # Step 3: Fetch slot0 data
+        print("Fetching slot0 data from the liquidity pool contract...")
+        try:
+            slot0 = pair_contract.functions.slot0().call()
+            sqrt_price_x96 = slot0[0]
+            print(f"slot0 data fetched: {slot0}")
+            print(f"Square root price (sqrtPriceX96): {sqrt_price_x96}")
+        except Exception as e:
+            print(f"Error fetching slot0 data: {e}")
+            update.message.reply_text("Failed to fetch slot0 data.")
             return
 
-        # Step 4: Calculate token price in the pair token
-        token_price_in_pair = pair_reserve / token_reserve
-        print(f"Token price in pair: {token_price_in_pair}")
+        # Step 4: Calculate the token price in WETH
+        try:
+            print("Calculating token price in WETH...")
+            price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192)
+            print(f"Token price in WETH: {price_in_weth}")
+        except Exception as e:
+            print(f"Error calculating token price in WETH: {e}")
+            update.message.reply_text("Failed to calculate token price in WETH.")
+            return
 
-        # Step 5: Convert to USD if paired with ETH
-        token_price_in_usd = token_price_in_pair * eth_price_in_usd
-        print(f"Token price in USD: {token_price_in_usd}")
+        # Step 5: Convert to USD
+        try:
+            print("Calculating token price in USD...")
+            token_price_in_usd = price_in_weth * eth_price_in_usd
+            print(f"Token price in USD: {token_price_in_usd}")
+        except Exception as e:
+            print(f"Error converting token price to USD: {e}")
+            update.message.reply_text("Failed to calculate token price in USD.")
+            return
 
+        # Step 6: Output results
+        print("Sending results to the user...")
         update.message.reply_text(
-            f"Token price: {token_price_in_pair:.8f} ETH (or equivalent pair token)\n"
+            f"Token price in WETH: {price_in_weth:.8f}\n"
             f"Token price in USD: ${token_price_in_usd:.2f}"
         )
+        print("Token price sent to the user successfully.")
 
     except Exception as e:
-        print(f"Error fetching token price: {e}")
-        update.message.reply_text("Failed to fetch token price.")
+        print(f"Unexpected error occurred: {e}")
+        update.message.reply_text("An unexpected error occurred while fetching the token price.")
 
 
 
