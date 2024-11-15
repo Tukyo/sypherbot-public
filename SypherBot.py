@@ -1465,7 +1465,6 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-
 #endregion Allowlist Setup
 
 #region Blocklist Setup
@@ -1504,6 +1503,7 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 #endregion Blocklist Setup
+
 def reset_admin_settings_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -1530,7 +1530,7 @@ def reset_admin_settings(update: Update, context: CallbackContext) -> None:
 #endregion Admin Setup
 
 #region Commands Setup
-
+# TODO: Put command setup logic here
 #endregion Commands Setup
 
 #region Authentication Setup
@@ -2992,13 +2992,11 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 return
 
             current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
-            user_data = {
-                str(user_id): {
-                    'timestamp': current_time,
-                    'challenge': None  # Initializes with no challenge
-                }
-            }
-            group_doc.update({'unverified_users': user_data})  # Update the document with structured data
+            
+            group_doc.update({f'unverified_users.{user_id}': { # Update only the specific user's data within the unverified_users map
+                'timestamp': current_time,
+                'challenge': None  # Initializes with no challenge
+            }})
             print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
 
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
@@ -3113,10 +3111,11 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
 
         # print(f"image_path: {image_url}")
 
+        # Update Firestore with the challenge
         group_doc.update({
             f'unverified_users.{user_id}.challenge': math_challenge
-        }) 
-
+        })
+        print(f"Stored math challenge for user {user_id} in group {group_id}: {math_challenge}")
 
     elif verification_type == 'word':
         challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4, WORD_5, WORD_6, WORD_7, WORD_8]
@@ -3149,10 +3148,11 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
 
         # print(f"image_path: {image_url}")
     
-        # Update the challenge information in the database
+        # Update Firestore with the challenge
         group_doc.update({
             f'unverified_users.{user_id}.challenge': word_challenge
-        }) 
+        })
+        print(f"Stored word challenge for user {user_id} in group {group_id}: {word_challenge}")
     
     else:
         context.bot.send_message(
@@ -3335,7 +3335,7 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
 
 # endregion User Authentication
 
-#region Ethereum
+#region Ethereum Logic
 
 #region Chart
 def fetch_ohlcv_data(time_frame, chain, liquidity_address):
@@ -3467,7 +3467,61 @@ def handle_transfer_event(event, group_data):
 
 #endregion Buybot
 
-#endregion Ethereum
+#region Price Fetching
+def get_token_price_in_weth(contract_address):
+    apiUrl = f"https://api.dexscreener.com/latest/dex/tokens/{contract_address}"
+    try:
+        response = requests.get(apiUrl)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data['pairs'] and len(data['pairs']) > 0:
+            # Find the pair with WETH as the quote token
+            weth_pair = next((pair for pair in data['pairs'] if pair['quoteToken']['symbol'] == 'WETH'), None)
+            
+            if weth_pair:
+                price_in_weth = weth_pair['priceNative']
+                return price_in_weth
+            else:
+                print("No WETH pair found for this token.")
+                return None
+        else:
+            print("No pairs found for this token.")
+            return None
+    except requests.RequestException as e:
+        print(f"Error fetching token price from DexScreener: {e}")
+        return None
+    
+def get_weth_price_in_fiat(currency):
+    apiUrl = f"https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies={currency}"
+    try:
+        response = requests.get(apiUrl)
+        response.raise_for_status()  # This will raise an exception for HTTP errors
+        data = response.json()
+        return data['ethereum'][currency]
+    except requests.RequestException as e:
+        print(f"Error fetching WETH price from CoinGecko: {e}")
+        return None
+    
+def get_token_price_in_fiat(contract_address, currency):
+    # Fetch price of token in WETH
+    token_price_in_weth = get_token_price_in_weth(contract_address)
+    if token_price_in_weth is None:
+        print("Could not retrieve token price in WETH.")
+        return None
+
+    # Fetch price of WETH in the specified currency
+    weth_price_in_fiat = get_weth_price_in_fiat(currency)
+    if weth_price_in_fiat is None:
+        print(f"Could not retrieve WETH price in {currency}.")
+        return None
+
+    # Calculate token price in the specified currency
+    token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
+    return token_price_in_fiat
+#endregion Price Fetching
+
+#endregion Ethereum Logic
 
 #region Admin Controls
 def mute(update: Update, context: CallbackContext) -> None:
@@ -4537,98 +4591,6 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#region Main Slash Commands
-# def sypher(update: Update, context: CallbackContext) -> None:
-#     msg = None
-#     if rate_limit_check():
-#         msg = update.message.reply_text(
-#             'SYPHER is the native token of deSypher. It is used to play the game, and can be earned by playing the game.\n'
-#             '\n'
-#             'Get SYPHER: [Uniswap](https://app.uniswap.org/#/swap?outputCurrency=0x21b9D428EB20FA075A29d51813E57BAb85406620)\n'
-#             'BaseScan: [Link](https://basescan.org/token/0x21b9d428eb20fa075a29d51813e57bab85406620)\n'
-#             'Contract Address: 0x21b9D428EB20FA075A29d51813E57BAb85406620\n'
-#             'Total Supply: 1,000,000\n'
-#             'Blockchain: Base\n'
-#             'Liquidity: Uniswap\n'
-#             'Ticker: SYPHER\n',
-#             parse_mode='Markdown',
-#             disable_web_page_preview=True
-#         )
-#     else:
-#         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-#     if msg is not None:
-#         track_message(msg)
-#endregion Main Slash Commands
-
-
-
-
-def get_token_price_in_weth(contract_address):
-    apiUrl = f"https://api.dexscreener.com/latest/dex/tokens/{contract_address}"
-    try:
-        response = requests.get(apiUrl)
-        response.raise_for_status()
-        data = response.json()
-        
-        if data['pairs'] and len(data['pairs']) > 0:
-            # Find the pair with WETH as the quote token
-            weth_pair = next((pair for pair in data['pairs'] if pair['quoteToken']['symbol'] == 'WETH'), None)
-            
-            if weth_pair:
-                price_in_weth = weth_pair['priceNative']
-                return price_in_weth
-            else:
-                print("No WETH pair found for this token.")
-                return None
-        else:
-            print("No pairs found for this token.")
-            return None
-    except requests.RequestException as e:
-        print(f"Error fetching token price from DexScreener: {e}")
-        return None
-    
-def get_weth_price_in_fiat(currency):
-    apiUrl = f"https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies={currency}"
-    try:
-        response = requests.get(apiUrl)
-        response.raise_for_status()  # This will raise an exception for HTTP errors
-        data = response.json()
-        return data['ethereum'][currency]
-    except requests.RequestException as e:
-        print(f"Error fetching WETH price from CoinGecko: {e}")
-        return None
-    
-def get_token_price_in_fiat(contract_address, currency):
-    # Fetch price of token in WETH
-    token_price_in_weth = get_token_price_in_weth(contract_address)
-    if token_price_in_weth is None:
-        print("Could not retrieve token price in WETH.")
-        return None
-
-    # Fetch price of WETH in the specified currency
-    weth_price_in_fiat = get_weth_price_in_fiat(currency)
-    if weth_price_in_fiat is None:
-        print(f"Could not retrieve WETH price in {currency}.")
-        return None
-
-    # Calculate token price in the specified currency
-    token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
-    return token_price_in_fiat
 
 
 
