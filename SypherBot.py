@@ -132,6 +132,113 @@ def check_eth_price(update, context):
     except Exception as e:
         print(f"Failed to get ETH price: {e}")
         return None
+    
+
+
+def get_token_price_in_eth(update: Update, context: CallbackContext) -> float:
+    # Fetch group and token data from Firestore
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        update.message.reply_text("Group data not found.")
+        return None
+
+    token_data = group_data.get('token')
+    if not token_data:
+        update.message.reply_text("Token data not found for this group.")
+        return None
+
+    # Extract token details
+    contract_address = token_data.get('contract_address')
+    liquidity_address = token_data.get('liquidity_address')
+    decimals = token_data.get('decimals', 18)  # Default to 18 decimals if not specified
+
+    if not contract_address or not liquidity_address:
+        update.message.reply_text("Token or liquidity pool address missing.")
+        return None
+
+    try:
+        # Step 1: Get WETH price in USD via Chainlink
+        latest_round_data = chainlink_contract.functions.latestRoundData().call()
+        eth_price_in_usd = latest_round_data[1] / 10 ** 8
+        print(f"ETH price in USD: {eth_price_in_usd}")
+
+        # Step 2: Get Token price in WETH from the liquidity pair contract
+        pair_contract = eth_web3.eth.contract(address=eth_web3.to_checksum_address(liquidity_address), abi=[
+            {
+                "constant": True,
+                "inputs": [],
+                "name": "getReserves",
+                "outputs": [
+                    {"name": "_reserve0", "type": "uint112"},
+                    {"name": "_reserve1", "type": "uint112"},
+                    {"name": "_blockTimestampLast", "type": "uint32"}
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "constant": True,
+                "inputs": [],
+                "name": "token0",
+                "outputs": [{"name": "", "type": "address"}],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "constant": True,
+                "inputs": [],
+                "name": "token1",
+                "outputs": [{"name": "", "type": "address"}],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ])
+
+        # Get reserves of the liquidity pair
+        reserves = pair_contract.functions.getReserves().call()
+        reserve0 = reserves[0]  # Reserve of token0
+        reserve1 = reserves[1]  # Reserve of token1
+
+        # Identify which token is WETH
+        token0 = pair_contract.functions.token0().call()
+        token1 = pair_contract.functions.token1().call()
+
+        if token0.lower() == eth_web3.to_checksum_address('0xC02aaa39b223FE8D0A0E5C4F27eAD9083C756Cc2').lower():  # WETH address
+            weth_reserve = reserve0
+            token_reserve = reserve1
+        elif token1.lower() == eth_web3.to_checksum_address('0xC02aaa39b223FE8D0A0E5C4F27eAD9083C756Cc2').lower():
+            weth_reserve = reserve1
+            token_reserve = reserve0
+        else:
+            update.message.reply_text("Neither token0 nor token1 is WETH.")
+            return None
+
+        # Calculate token price in WETH
+        token_price_in_weth = weth_reserve / token_reserve
+        print(f"Token price in WETH: {token_price_in_weth}")
+
+        # Step 3: Calculate token price in USD
+        token_price_in_usd = token_price_in_weth * eth_price_in_usd
+        print(f"Token price in USD: {token_price_in_usd}")
+
+        update.message.reply_text(f"The token price is {token_price_in_weth:.8f} WETH or ${token_price_in_usd:.2f} USD.")
+        return token_price_in_usd
+
+    except Exception as e:
+        print(f"Error fetching token price: {e}")
+        update.message.reply_text("Failed to fetch token price.")
+        return None
+
+
+
+
+
+
+
+
+
+
+
 
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
@@ -666,13 +773,12 @@ def menu_change(context: CallbackContext, update: Update):
                         print(f"Failed to delete message: {e}")
             context.user_data[message_to_delete] = []
 
-def cancel_callback(update: Update, context: CallbackContext) -> None:
+def exit_callback(update: Update, context: CallbackContext) -> None:
     msg = None
     query = update.callback_query
     query.answer()
-    print("User pressed cancel, exiting setup.")
+    print("User pressed exit button, exiting setup.")
     query.message.delete()
-    msg = context.bot.send_message(chat_id=update.effective_chat.id, text="Setup cancelled.")
     context.user_data['setup_stage'] = None
 
     if msg is not None:
@@ -812,7 +918,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         [
             InlineKeyboardButton("Premium", callback_data='setup_premium')
         ],
-        [InlineKeyboardButton("Cancel", callback_data='cancel')]
+        [InlineKeyboardButton("Exit", callback_data='exit_setup')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -3017,9 +3123,9 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             }
             print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
 
-            context.job_queue.run_once( # Schedule the deletion of the join message after 10 minutes
+            context.job_queue.run_once( # Schedule the deletion of the join message after 5 minutes
                 delete_join_message,
-                when=10,  # 10 minutes in seconds
+                when=300,
                 context={'chat_id': chat_id, 'message_id': msg.message_id, 'user_id': user_id}
             )
 
@@ -3047,8 +3153,7 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
 
         print(f"Authentication type: {verification_type}")
 
-        # Check if the user ID is in the KEYS of the unverified_users mapping
-        if str(user_id) in unverified_users:  
+        if str(user_id) in unverified_users: # Check if the user ID is in the KEYS of the unverified_users mapping
             if verification_type == 'simple':
                 authenticate_user(context, group_id, user_id)
             elif verification_type == 'math' or verification_type == 'word':
@@ -3181,8 +3286,7 @@ def callback_word_response(update: Update, context: CallbackContext):
     if group_data.exists:
         group_data_dict = group_data.to_dict()
 
-        # Check if the user is in the unverified users mapping
-        if str(user_id) in group_data_dict.get('unverified_users', {}):
+        if str(user_id) in group_data_dict.get('unverified_users', {}): # Check if the user is in the unverified users mapping
             user_challenge_data = group_data_dict['unverified_users'][str(user_id)] # Get the user's challenge data
             challenge_answer = user_challenge_data.get('challenge')  # Extract only the challenge value as the required answer
 
@@ -3221,8 +3325,7 @@ def callback_math_response(update: Update, context: CallbackContext):
     if group_data.exists:
         group_data_dict = group_data.to_dict()
 
-        # Check if the user is in the unverified users mapping
-        if str(user_id) in group_data_dict.get('unverified_users', {}):
+        if str(user_id) in group_data_dict.get('unverified_users', {}): # Check if the user is in the unverified users mapping
             user_challenge_data = group_data_dict['unverified_users'][str(user_id)] # Get the user's challenge data
             challenge_answer = user_challenge_data.get('challenge')  # Extract only the challenge value as the required answer
 
@@ -3245,7 +3348,6 @@ def authenticate_user(context, group_id, user_id):
     print(f"Authenticating user {user_id} in group {group_id}")
     group_doc = db.collection('groups').document(group_id)
 
-    # Get the current group document
     group_data = group_doc.get().to_dict()
 
     if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
@@ -3263,8 +3365,7 @@ def authenticate_user(context, group_id, user_id):
         del group_data['unverified_users'][user_id]
         print(f"Removed user {user_id} from unverified users in group {group_id}")
 
-        # Write the updated group data back to Firestore
-        group_doc.set(group_data)
+        group_doc.set(group_data) # Write the updated group data back to Firestore
 
     context.bot.send_message(
         chat_id=user_id,
@@ -3288,26 +3389,21 @@ def authenticate_user(context, group_id, user_id):
 def authentication_failed(update: Update, context: CallbackContext, group_id, user_id):
     print(f"Authentication failed for user {user_id} in group {group_id}")
     group_doc = db.collection('groups').document(group_id)
-
-    # Get the current group document
-    group_data = group_doc.get().to_dict()
+    group_data = group_doc.get().to_dict() 
 
     if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
         group_data['unverified_users'][user_id] = None
 
     print(f"Reset challenge for user {user_id} in group {group_id}")
 
-    # Write the updated group data back to Firestore
-    group_doc.set(group_data)
+    group_doc.set(group_data) # Write the updated group data back to Firestore
 
-    # Delete the original message
     context.bot.delete_message(
         chat_id=update.effective_chat.id,
         message_id=update.callback_query.message.message_id
     )
 
-    # Send a message to the user instructing them to start the authentication process again
-    context.bot.send_message(
+    context.bot.send_message( # Send a message to the user instructing them to start the authentication process again
         chat_id=user_id,
         text="Authentication failed. Please start the authentication process again by clicking on the 'Start Authentication' button."
     )
@@ -3323,7 +3419,6 @@ def delete_join_message(context: CallbackContext) -> None:
         print(f"Deleted join message {message_id} for user {user_id} in chat {chat_id}.")
     except Exception as e:
         print(f"Failed to delete join message {message_id} for user {user_id} in chat {chat_id}: {e}")
-
 # endregion User Authentication
 
 #region Ethereum Logic
@@ -4630,6 +4725,8 @@ def main() -> None:
 
 
     dispatcher.add_handler(CommandHandler("test", check_eth_price))
+    dispatcher.add_handler(CommandHandler("price", get_token_price_in_eth))
+
 
     # General Callbacks
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
@@ -4672,7 +4769,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_ABI, pattern='^setup_ABI$'))
     dispatcher.add_handler(CallbackQueryHandler(send_example_abi, pattern='^example_abi$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
-    dispatcher.add_handler(CallbackQueryHandler(cancel_callback, pattern='^cancel$'))
+    dispatcher.add_handler(CallbackQueryHandler(exit_callback, pattern='^exit_setup$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|harmony|mantle)$'))
     dispatcher.add_handler(CallbackQueryHandler(reset_token_details_callback, pattern='^reset_token_details$'))
 
