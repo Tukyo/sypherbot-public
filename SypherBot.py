@@ -4724,8 +4724,8 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
 
 
-    dispatcher.add_handler(CommandHandler("test", check_eth_price))
-    dispatcher.add_handler(CommandHandler("price", get_token_price_in_eth))
+    # dispatcher.add_handler(CommandHandler("test", check_eth_price))
+    dispatcher.add_handler(CommandHandler("test", get_token_price_in_eth))
 
 
     # General Callbacks
