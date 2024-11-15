@@ -2949,7 +2949,6 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
 #endregion Premium Setup
 
 #endregion Bot Setup
@@ -2966,6 +2965,8 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
         group_name = "the group"  # Default text if group name not available
     else:
         group_name = group_data.get('group_info', {}).get('group_username', "the group")
+
+    updates = {} # Initialize the updates to send to the database at the end of the function
         
     for member in update.message.new_chat_members:
             user_id = member.id
@@ -2993,12 +2994,6 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
             
-            group_doc.update({f'unverified_users.{user_id}': { # Update only the specific user's data within the unverified_users map
-                'timestamp': current_time,
-                'challenge': None  # Initializes with no challenge
-            }})
-            print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
-
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
             keyboard = [
                 [InlineKeyboardButton("Start Authentication", url=auth_url)]
@@ -3022,6 +3017,17 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                     f"Welcome to {group_name}! Please press the button below to authenticate.",
                     reply_markup=reply_markup
                 )
+
+            # Collect updates for Firestore
+            updates[f'unverified_users.{user_id}'] = {
+                'timestamp': current_time,
+                'challenge': None,  # Initializes with no challenge
+                'join_message_id': msg.message_id
+            }
+            print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
+
+            if updates:
+                group_doc.update(updates)
 
     if msg is not None:
         track_message(msg)
@@ -3246,12 +3252,22 @@ def authenticate_user(context, group_id, user_id):
     group_data = group_doc.get().to_dict()
 
     if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
+        join_message_id = group_data['unverified_users'][user_id].get('join_message_id')
+        if join_message_id:
+            try: # Attempt to delete the join message
+                context.bot.delete_message(
+                    chat_id=int(group_id),
+                    message_id=join_message_id
+                )
+                print(f"Deleted join message {join_message_id} for user {user_id} in group {group_id}")
+            except Exception as e:
+                print(f"Failed to delete join message {join_message_id} for user {user_id}: {e}")
+
         del group_data['unverified_users'][user_id]
+        print(f"Removed user {user_id} from unverified users in group {group_id}")
 
-    print(f"Removed user {user_id} from unverified users in group {group_id}")
-
-    # Write the updated group data back to Firestore
-    group_doc.set(group_data)
+        # Write the updated group data back to Firestore
+        group_doc.set(group_data)
 
     context.bot.send_message(
         chat_id=user_id,
