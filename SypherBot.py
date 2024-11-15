@@ -2975,8 +2975,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             if user_id == context.bot.id:
                 return
 
-            # Mute the new user
-            context.bot.restrict_chat_member(
+            context.bot.restrict_chat_member( # Mute the new user
                 chat_id=chat_id,
                 user_id=user_id,
                 permissions=ChatPermissions(can_send_messages=False)
@@ -2985,26 +2984,19 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             if anti_raid.is_raid():
                 msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
                 
-                # Get the user_id of the user that just joined
-                user_id = update.message.new_chat_members[0].id
+                user_id = update.message.new_chat_members[0].id # Get the user_id of the user that just joined
 
-                # Kick the user that just joined
-                context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
+                context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id) # Kick the user that just joined
                 return
 
             current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
             
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
-            keyboard = [
-                [InlineKeyboardButton("Start Authentication", url=auth_url)]
-            ]
+            keyboard = [ [InlineKeyboardButton("Start Authentication", url=auth_url)] ]
+
             if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
-
                 blob = bucket.blob(f'sypherbot/public/welcome_message_header/welcome_message_header_{group_id}.jpg')
-
                 welcome_image_url = blob.generate_signed_url(expiration=timedelta(minutes=15))
-
-                # print(f"Welcome image URL: {welcome_image_url}")
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 msg = update.message.reply_photo(
@@ -3018,13 +3010,18 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                     reply_markup=reply_markup
                 )
 
-            # Collect updates for Firestore
-            updates[f'unverified_users.{user_id}'] = {
+            updates[f'unverified_users.{user_id}'] = { # Collect updates for Firestore
                 'timestamp': current_time,
                 'challenge': None,  # Initializes with no challenge
                 'join_message_id': msg.message_id
             }
             print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
+
+            context.job_queue.run_once( # Schedule the deletion of the join message after 10 minutes
+                delete_join_message,
+                when=10,  # 10 minutes in seconds
+                context={'chat_id': chat_id, 'message_id': msg.message_id, 'user_id': user_id}
+            )
 
             if updates:
                 group_doc.update(updates)
@@ -3315,41 +3312,17 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
         text="Authentication failed. Please start the authentication process again by clicking on the 'Start Authentication' button."
     )
 
-# def clear_unverified_users(context: CallbackContext):
-#     # Get current time
-#     now = datetime.now(timezone.utc)
-#     print("Clearing unverified users in all groups")
+def delete_join_message(context: CallbackContext) -> None:
+    job_data = context.job.context
+    chat_id = job_data['chat_id']
+    message_id = job_data['message_id']
+    user_id = job_data['user_id']
 
-#     # Get all group documents that potentially have unverified users
-#     group_docs = db.collection('groups').where('unverified_users', '!=', {}).get()
-
-#     for group_doc in group_docs:
-#         group_id = group_doc.id
-#         group_data = group_doc.to_dict()
-#         unverified_users = group_data.get('unverified_users', {})
-
-#         # Prepare update data for Firestore
-#         update_data = {}
-
-#         for user_id, user_info in unverified_users.items():
-#             user_time = datetime.fromisoformat(user_info['timestamp'])
-#             # Check if the user has been unverified for too long (e.g., more than 10 minutes)
-#             if (now - user_time).total_seconds() > 60:
-#                 try:
-#                     # Attempt to kick the unverified user
-#                     context.bot.ban_chat_member(chat_id=group_id, user_id=user_id)
-#                     print(f"Kicked unverified user {user_id} from group {group_id}")
-#                     # Mark for clearing from the database
-#                     update_data[f'unverified_users.{user_id}'] = firestore.DELETE_FIELD
-#                 except Exception as e:
-#                     print(f"Failed to kick user {user_id} from group {group_id}: {e}")
-
-#         # Clear the unverified_users mapping in the group document if necessary
-#         if update_data:
-#             group_doc.reference.update(update_data)
-
-#     # Wait for some time before next run, consider using a scheduled job instead of sleep
-#     time.sleep(60)
+    try:
+        context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        print(f"Deleted join message {message_id} for user {user_id} in chat {chat_id}.")
+    except Exception as e:
+        print(f"Failed to delete join message {message_id} for user {user_id} in chat {chat_id}: {e}")
 
 # endregion User Authentication
 
