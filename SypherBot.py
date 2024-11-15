@@ -3125,7 +3125,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         index = original_challenges.index(word_challenge)  # Get the index of the word challenge in the original list
 
         blob = bucket.blob(f'sypherbot/private/auth/word_{index}.jpg')
-        image_url = blob.generate_signed_url(duration=datetime.timedelta(minutes=15), version="v4")
+        image_url = blob.generate_signed_url(duration=timedelta(minutes=15), version="v4")
     
         keyboard = []
 
