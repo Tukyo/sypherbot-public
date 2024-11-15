@@ -3141,7 +3141,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
     
         context.bot.send_photo(
             chat_id=update.effective_chat.id,
-            photo=open(image_url),
+            photo=image_url,
             caption="Identify the correct word in the image:",
             reply_markup=reply_markup
         )
