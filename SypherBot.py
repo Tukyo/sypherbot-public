@@ -4360,13 +4360,13 @@ def ca(update: Update, context: CallbackContext) -> None:
 
 def get_liquidity_data(chain, lp_address):
     """
-    Fetch liquidity data from Uniswap V3 and calculate the total liquidity in USD.
+    Fetch liquidity data from Uniswap V3 and calculate reserves in ETH and token units.
     """
     try:
         web3_instance = web3_instances.get(chain)
         if not web3_instance:
             print(f"Web3 instance for chain {chain} not found or not connected.")
-            return None
+            return None, None
 
         pool_contract = web3_instance.eth.contract(
             address=web3_instance.to_checksum_address(lp_address),
@@ -4405,12 +4405,11 @@ def get_liquidity_data(chain, lp_address):
         print(f"sqrtPriceX96: {sqrt_price_x96}")
 
         # Calculate reserves using liquidity and sqrtPriceX96
-        price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192)
-        reserve_token = raw_liquidity / sqrt_price_x96
-        reserve_eth = raw_liquidity * sqrt_price_x96 / (2 ** 192)
+        reserve_eth = raw_liquidity / sqrt_price_x96 ** 2 * (2 ** 96)
+        reserve_token = raw_liquidity * sqrt_price_x96 ** 2 / (2 ** 192)
 
-        print(f"Reserve Token: {reserve_token}")
         print(f"Reserve ETH: {reserve_eth}")
+        print(f"Reserve Token: {reserve_token}")
 
         return reserve_eth, reserve_token
     except Exception as e:
