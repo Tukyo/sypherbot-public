@@ -3417,26 +3417,18 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
         try:
             latest_block = web3_instance.eth.block_number # Get the latest block number
             if last_seen_block >= latest_block:
-                
                 time.sleep(5) # If no new blocks, wait and retry
                 continue
 
             print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
 
-            filter_params = { # Create the filter parameters for logs
-                "fromBlock": last_seen_block + 1,
-                "toBlock": latest_block,
-                "address": contract_address,
-                "topics": [
-                    contract.events.Transfer.signature,  # Event signature for Transfer
-                    web3_instance.keccak(text=f"0x{liquidity_address.lower()[2:]}").hex()  # 'from' argument filter
-                ],
-            }
+            transfer_filter = contract.events.Transfer.createFilter(
+                fromBlock=last_seen_block + 1,
+                toBlock=latest_block,
+                argument_filters={'from': liquidity_address}
+            )
 
-            logs = web3_instance.eth.get_logs(filter_params) # Fetch Transfer logs
-
-            for log in logs: # Decode each log and handle it
-                event = contract.events.Transfer().process_log(log)  # Decode the log
+            for event in transfer_filter.get_all_entries():
                 handle_transfer_event(event, group_data)
 
             last_seen_block = latest_block
