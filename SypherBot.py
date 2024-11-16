@@ -3410,25 +3410,33 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     abi = group_data['token']['abi']
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
-    lookback_range = 100 # Initialize last_seen_block locally (start from lookback range)
+    lookback_range = 100  # Initialize last_seen_block locally (start from a lookback range)
     last_seen_block = web3_instance.eth.block_number - lookback_range
 
     while True:  # Continuous monitoring loop
         try:
             latest_block = web3_instance.eth.block_number # Get the latest block number
             if last_seen_block >= latest_block:
+                
                 time.sleep(5) # If no new blocks, wait and retry
                 continue
 
             print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
 
-            events = contract.events.Transfer.getLogs( # Fetch Transfer events from last_seen_block + 1 to latest_block
-                fromBlock=last_seen_block + 1,
-                toBlock=latest_block,
-                argument_filters={'from': liquidity_address}
-            )
+            filter_params = { # Create the filter parameters for logs
+                "fromBlock": last_seen_block + 1,
+                "toBlock": latest_block,
+                "address": contract_address,
+                "topics": [
+                    contract.events.Transfer.signature,  # Event signature for Transfer
+                    web3_instance.keccak(text=f"0x{liquidity_address.lower()[2:]}").hex()  # 'from' argument filter
+                ],
+            }
 
-            for event in events:
+            logs = web3_instance.eth.get_logs(filter_params) # Fetch Transfer logs
+
+            for log in logs: # Decode each log and handle it
+                event = contract.events.Transfer().process_log(log)  # Decode the log
                 handle_transfer_event(event, group_data)
 
             last_seen_block = latest_block
@@ -3450,7 +3458,7 @@ def handle_transfer_event(event, group_data):
     if token_price_in_usd is not None:
         token_price_in_usd = Decimal(token_price_in_usd)
         total_value_usd = token_amount * token_price_in_usd
-        if total_value_usd < 1:
+        if total_value_usd < 500:
             print("Ignoring small buy")
             return
         value_message = f" ({total_value_usd:.2f} USD)"
