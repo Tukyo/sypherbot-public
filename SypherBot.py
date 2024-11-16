@@ -3505,52 +3505,16 @@ def check_eth_price(update, context):
         print(f"Failed to get ETH price: {e}")
         return None
 
-def get_token_price(update: Update, context: CallbackContext) -> None:
-    print("Fetching token price using Uniswap V3...")
-
-    args = context.args
-    modifier = args[0].upper() if args else "USD"  # Default to "USD" if no modifier provided
-
-    if modifier not in ["USD", "ETH"]:
-        print(f"Invalid modifier: {modifier}")
-        update.message.reply_text("Invalid modifier! Use /price USD or /price ETH.")
-        return
-
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        print("Group data not found.")
-        update.message.reply_text("Group data not found.")
-        return
-
-    token_data = group_data.get('token')
-    if not token_data:
-        print("Token data not found for this group.")
-        update.message.reply_text("Token data not found for this group.")
-        return
-
-    lp_address = token_data.get('liquidity_address') # Extract token details
-    chain = token_data.get('chain')
-
-    if not lp_address or not chain:
-        print("Liquidity address or chain not found for this group.")
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
-
+def get_uniswap_v3_position_data(chain, lp_address):
+    """
+    Fetch Uniswap V3 position data (sqrtPriceX96) for a given liquidity pool address on the specified chain.
+    Returns the token price in WETH.
+    """
     try:
-        print("Fetching ETH price in USD using Chainlink...")
-        eth_price_in_usd = check_eth_price(update, context) # Step 1: Get ETH price in USD using Chainlink
-        if eth_price_in_usd is None:
-            print("Failed to fetch ETH price from Chainlink.")
-            update.message.reply_text("Failed to fetch ETH price.")
-            return
-
-        print(f"ETH price in USD: {eth_price_in_usd}")
-
-        web3_instance = web3_instances.get(chain) # Connect to the Uniswap V3 liquidity pool
+        web3_instance = web3_instances.get(chain)  # Connect to the Uniswap V3 liquidity pool
         if not web3_instance:
             print(f"Web3 instance for chain {chain} not found or not connected.")
-            update.message.reply_text(f"Web3 instance for chain {chain} is unavailable.")
-            return
+            return None
 
         pair_contract = web3_instance.eth.contract(
             address=web3_instance.to_checksum_address(lp_address),
@@ -3574,21 +3538,66 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
             ]
         )
 
-        try: # Fetch slot0 data
-            slot0 = pair_contract.functions.slot0().call()
-            sqrt_price_x96 = slot0[0]
-        except Exception as e:
-            print(f"Error fetching slot0 data: {e}")
-            update.message.reply_text("Failed to fetch slot0 data.")
+        # Fetch slot0 data (contains sqrtPriceX96)
+        slot0 = pair_contract.functions.slot0().call()
+        sqrt_price_x96 = slot0[0]
+
+        # Calculate the token price in WETH
+        price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192)
+        return price_in_weth
+    except Exception as e:
+        print(f"Error fetching Uniswap V3 position data: {e}")
+        return None
+
+def get_token_price(update: Update, context: CallbackContext) -> None:
+    print("Fetching token price using Uniswap V3...")
+
+    args = context.args
+    modifier = args[0].upper() if args else "USD"  # Default to "USD" if no modifier provided
+
+    if modifier not in ["USD", "ETH"]:
+        print(f"Invalid modifier: {modifier}")
+        update.message.reply_text("Invalid modifier! Use /price USD or /price ETH.")
+        return
+
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        print("Group data not found.")
+        update.message.reply_text("Group data not found.")
+        return
+
+    token_data = group_data.get('token')
+    if not token_data:
+        print("Token data not found for this group.")
+        update.message.reply_text("Token data not found for this group.")
+        return
+
+    lp_address = token_data.get('liquidity_address')  # Extract token details
+    chain = token_data.get('chain')
+
+    if not lp_address or not chain:
+        print("Liquidity address or chain not found for this group.")
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    try:
+        print("Fetching ETH price in USD using Chainlink...")
+        eth_price_in_usd = check_eth_price(update, context)  # Step 1: Get ETH price in USD using Chainlink
+        if eth_price_in_usd is None:
+            print("Failed to fetch ETH price from Chainlink.")
+            update.message.reply_text("Failed to fetch ETH price.")
             return
 
-        try:
-            price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192) # Calculate the token price in WETH
-            print(f"Token price in WETH: {price_in_weth}")
-        except Exception as e:
-            print(f"Error calculating token price in WETH: {e}")
-            update.message.reply_text("Failed to calculate token price in WETH.")
+        print(f"ETH price in USD: {eth_price_in_usd}")
+
+        # Use the new function to fetch Uniswap V3 position data
+        price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
+        if price_in_weth is None:
+            print("Failed to fetch Uniswap V3 position data.")
+            update.message.reply_text("Failed to fetch Uniswap V3 position data.")
             return
+
+        print(f"Token price in WETH: {price_in_weth}")
 
         if modifier == "USD":
             try:
@@ -3608,6 +3617,7 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
         update.message.reply_text("An unexpected error occurred while fetching the token price.")
+
 
 
 
@@ -4367,29 +4377,22 @@ def liquidity(update: Update, context: CallbackContext) -> None:
         return
 
     if rate_limit_check():
-        liquidity_usd = get_liquidity(chain, lp_address)
-        if liquidity_usd:
-            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
-        else:
+        price_in_weth = get_uniswap_v3_position_data(chain, lp_address) # Get the Uniswap V3 position data
+        if price_in_weth is None:
             msg = update.message.reply_text("Failed to fetch liquidity data.")
+        else:
+            eth_price_in_usd = check_eth_price(update, context) # Fetch ETH price in USD
+            if eth_price_in_usd is None:
+                msg = update.message.reply_text("Failed to fetch ETH price.")
+            else:
+                liquidity_usd = price_in_weth * eth_price_in_usd # Calculate liquidity in USD
+                msg = update.message.reply_text(f"Liquidity: ${liquidity_usd:.2f}")
     else:
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     
     if msg is not None:
         track_message(msg)
 
-def get_liquidity(chain, lp_address):
-    try:
-        chain_lower = chain.lower()
-        url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lower}/pools/{lp_address}"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        liquidity_usd = data['data']['attributes']['reserve_in_usd']
-        return liquidity_usd
-    except requests.RequestException as e:
-        print(f"Failed to fetch liquidity data: {str(e)}")
-        return None
     
 def volume(update: Update, context: CallbackContext) -> None:
     msg = None
