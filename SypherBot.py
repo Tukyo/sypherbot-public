@@ -4360,8 +4360,7 @@ def ca(update: Update, context: CallbackContext) -> None:
 
 def get_liquidity_data(chain, lp_address):
     """
-    Fetches liquidity data from the Uniswap V3 pool using the given liquidity address.
-    Returns the total liquidity value in USD.
+    Fetch liquidity data from Uniswap V3 and calculate the total liquidity in USD.
     """
     try:
         web3_instance = web3_instances.get(chain)
@@ -4397,26 +4396,27 @@ def get_liquidity_data(chain, lp_address):
             ]
         )
 
-        # Fetch liquidity value
-        liquidity = pool_contract.functions.liquidity().call()
-        print(f"Liquidity (raw): {liquidity}")
-
-        # Fetch slot0 to get sqrtPriceX96
+        # Fetch raw liquidity and slot0 data
+        raw_liquidity = pool_contract.functions.liquidity().call()
         slot0 = pool_contract.functions.slot0().call()
         sqrt_price_x96 = slot0[0]
+
+        print(f"Raw Liquidity: {raw_liquidity}")
         print(f"sqrtPriceX96: {sqrt_price_x96}")
 
-        # Calculate price in WETH using sqrtPriceX96
+        # Calculate reserves using liquidity and sqrtPriceX96
         price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192)
+        reserve_token = raw_liquidity / sqrt_price_x96
+        reserve_eth = raw_liquidity * sqrt_price_x96 / (2 ** 192)
 
-        # Calculate total liquidity in ETH terms
-        liquidity_in_eth = liquidity * price_in_weth
-        print(f"Liquidity in ETH: {liquidity_in_eth}")
+        print(f"Reserve Token: {reserve_token}")
+        print(f"Reserve ETH: {reserve_eth}")
 
-        return liquidity_in_eth
+        return reserve_eth, reserve_token
     except Exception as e:
         print(f"Error fetching liquidity data: {e}")
-        return None
+        return None, None
+
 
 def liquidity(update: Update, context: CallbackContext) -> None:
     print("Fetching liquidity using Uniswap V3...")
@@ -4447,13 +4447,13 @@ def liquidity(update: Update, context: CallbackContext) -> None:
         print(f"ETH price in USD: {eth_price_in_usd}")
 
         # Fetch liquidity data
-        liquidity_in_eth = get_liquidity_data(chain, lp_address)
-        if liquidity_in_eth is None:
+        reserve_eth, reserve_token = get_liquidity_data(chain, lp_address)
+        if reserve_eth is None or reserve_token is None:
             update.message.reply_text("Failed to fetch liquidity data.")
             return
 
-        # Convert liquidity to USD
-        liquidity_in_usd = liquidity_in_eth * eth_price_in_usd
+        # Convert ETH reserves to USD
+        liquidity_in_usd = reserve_eth * eth_price_in_usd
         print(f"Liquidity in USD: {liquidity_in_usd}")
 
         update.message.reply_text(f"Liquidity: ${liquidity_in_usd:.2f}")
