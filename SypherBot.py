@@ -449,6 +449,19 @@ def fetch_group_info(update: Update, context: CallbackContext):
     
     return None
 
+def is_allowed(message, allowlist, pattern):
+    """
+    Check if any detected matches in the message are present in the allowlist.
+    """
+
+    print(f"Pattern found, checking message...")
+
+    matches = pattern.findall(message)
+    for match in matches:
+        if match in allowlist:
+            return True
+    return False
+
 #region Message Handling
 def rate_limit_check():
     global last_check_time, command_count
@@ -483,6 +496,39 @@ def handle_message(update: Update, context: CallbackContext) -> None:
 
     if anti_spam.is_spam(user_id, chat_id):
         handle_spam(update, context, chat_id, user_id, username)
+
+    detected_patterns = []
+    if ETH_ADDRESS_PATTERN.search(msg):
+        detected_patterns.append("eth_address")
+    if URL_PATTERN.search(msg):
+        detected_patterns.append("url")
+    if DOMAIN_PATTERN.search(msg):
+        detected_patterns.append("domain")
+
+    # Check the allowlist if any patterns matched
+    if detected_patterns:
+        group_id = update.effective_chat.id
+        group_doc = db.collection('groups').document(str(group_id))
+        group_data = group_doc.get().to_dict()
+
+        group_data = group_doc.get().to_dict()
+
+        if not group_data or not group_data.get('admin', {}).get('allowlist', False):  # Default to False
+            print("Allowlist check is disabled in admin settings. Skipping allowlist verification.")
+            return
+
+        allowlist = group_data.get('allowlist', [])
+
+        for pattern in detected_patterns:
+            if pattern == "eth_address" and not is_allowed(msg, allowlist, ETH_ADDRESS_PATTERN):
+                context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+                return
+            elif pattern == "url" and not is_allowed(msg, allowlist, URL_PATTERN):
+                context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+                return
+            elif pattern == "domain" and not is_allowed(msg, allowlist, DOMAIN_PATTERN):
+                context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+                return
 
     delete_blocked_addresses(update, context)
     delete_blocked_phrases(update, context)
