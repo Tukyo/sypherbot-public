@@ -104,7 +104,7 @@ for network, web3_instance in web3_instances.items():
     else:
         print(f"Failed to connect to {network}")
 
-web3_websockets = {network: Web3(Web3.WebsocketProvider(endpoint)) for network, endpoint in websockets.items()}
+web3_websockets = {network: Web3(Web3.LegacyWebSocketProvider(endpoint)) for network, endpoint in websockets.items()}
 for network, web3_instance in web3_websockets.items():
     if web3_instance.is_connected():
         print(f"Successfully connected to {network} via WebSocket")
@@ -112,7 +112,6 @@ for network, web3_instance in web3_websockets.items():
         print(f"Failed to connect to {network} via WebSocket")
 
 eth_web3 = web3_instances['ETHEREUM']
-##
 
 # region Chainlink
 chainlink_address = eth_web3.to_checksum_address('0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419')
