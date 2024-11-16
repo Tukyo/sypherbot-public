@@ -254,17 +254,19 @@ anti_raid = AntiRaid(user_amount=25, time_out=30, anti_raid_time=180)
 
 scheduler = BackgroundScheduler()
 
-eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
-url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
-domain_pattern = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
+ETH_ADDRESS_PATTERN = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
+URL_PATTERN = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+DOMAIN_PATTERN = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
 
-RATE_LIMIT = 100  # Maximum number of allowed commands
-TIME_PERIOD = 60  # Time period in seconds
+RATE_LIMIT = 100  # Maximum number of allowed commands per {TIME_PERIOD}
+TIME_PERIOD = 60  # Time period in (seconds)
+JOB_INTERVAL = 60 # Interval for monitoring jobs (seconds)
+BLOB_EXPIRATION = 15 # Expiration time for uploaded files (minutes)
+
 last_check_time = time.time()
 command_count = 0
 
 bot_messages = []
-
 def track_message(message):
     bot_messages.append((message.chat.id, message.message_id))
     print(f"Tracked message: {message.message_id}")
@@ -370,7 +372,7 @@ def schedule_group_monitoring(group_data):
             scheduler.add_job(
                 monitor_transfers,
                 'interval',
-                seconds=10,
+                seconds=JOB_INTERVAL,
                 args=[web3_instance, liquidity_address, group_data],
                 id=job_id,  # Unique ID for the job
                 timezone=pytz.utc  # Use the UTC timezone from the pytz library
@@ -557,7 +559,7 @@ def delete_blocked_addresses(update: Update, context: CallbackContext):
         print("No text in message.")
         return
 
-    found_addresses = eth_address_pattern.findall(message_text)
+    found_addresses = ETH_ADDRESS_PATTERN.findall(message_text)
 
     if not found_addresses:
         print("No addresses found in message.")
@@ -594,10 +596,10 @@ def delete_blocked_links(update: Update, context: CallbackContext):
     allowlist_items = [item.strip() for item in allowlist_string.split(',') if item.strip()]
 
     # Regular expression to match all URLs
-    found_links = url_pattern.findall(message_text)
+    found_links = URL_PATTERN.findall(message_text)
     
     # Regular expression to match any word with .[domain]
-    found_domains = domain_pattern.findall(message_text)
+    found_domains = DOMAIN_PATTERN.findall(message_text)
 
     if not found_links and not found_domains:
         print("No links or domains found in message.")
@@ -1403,10 +1405,9 @@ def enable_allowlist_callback(update: Update, context: CallbackContext) -> None:
     query.answer()
     user_id = query.from_user.id
 
-    update = Update(update.update_id, message=query.message)
-
     if query.data == 'enable_allowlist':
         if is_user_owner(update, context, user_id):
+            print("User is owner. Proceeding to enable allowlist.")
             enable_allowlist(update, context)
         else:
             print("User is not the owner.")
@@ -1417,25 +1418,33 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    group_data = group_doc.get().to_dict()
+    try:
+        group_data = group_doc.get().to_dict()
+        print(f"Group data retrieved: {group_data}")
 
-    if group_data is None:
-        group_doc.set({
-            'admin': {
-                'allowlisting': True
-            }
-        })
-    else:
-        group_doc.update({
-            'admin.allowlisting': True
-        })
+        if group_data is None:
+            print(f"Creating new document for group {group_id}.")
+            group_doc.set({
+                'admin': {
+                    'allowlisting': True
+                }
+            })
+        else:
+            print(f"Updating allowlisting for group {group_id}.")
+            group_doc.update({
+                'admin.allowlisting': True
+            })
 
-    menu_change(context, update)
+        menu_change(context, update)
 
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='✔️ Allowlisting has been enabled in this group ✔️'
-    )
+        # Inform the user
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='✔️ Allowlisting has been enabled in this group ✔️'
+        )
+    except Exception as e:
+        print(f"Error while enabling allowlisting for group {group_id}: {e}")
+
     context.user_data['setup_stage'] = None
     context.user_data['enable_allowlist_message'] = msg.message_id
     store_message_id(context, msg.message_id)
@@ -1448,10 +1457,9 @@ def disable_allowlist_callback(update: Update, context: CallbackContext) -> None
     query.answer()
     user_id = query.from_user.id
 
-    update = Update(update.update_id, message=query.message)
-
     if query.data == 'disable_allowlist':
         if is_user_owner(update, context, user_id):
+            print("User is owner. Proceeding to disable allowlist.")
             disable_allowlist(update, context)
         else:
             print("User is not the owner.")
@@ -1462,25 +1470,32 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    group_data = group_doc.get().to_dict()
+    try:
+        group_data = group_doc.get().to_dict()
+        print(f"Group data retrieved: {group_data}")
 
-    if group_data is None:
-        group_doc.set({
-            'admin': {
-                'allowlisting': False
-            }
-        })
-    else:
-        group_doc.update({
-            'admin.allowlisting': False
-        })
+        if group_data is None:
+            print(f"Creating new document for group {group_id}.")
+            group_doc.set({
+                'admin': {
+                    'allowlisting': False
+                }
+            })
+        else:
+            print(f"Updating allowlisting for group {group_id}.")
+            group_doc.update({
+                'admin.allowlisting': False
+            })
 
-    menu_change(context, update)
+        menu_change(context, update)
 
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='❌ Allowlisting has been disabled in this group ❌'
-    )
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='❌ Allowlisting has been disabled in this group ❌'
+        )
+    except Exception as e:
+        print(f"Error while disabling allowlisting for group {group_id}: {e}")
+        
     context.user_data['setup_stage'] = None
     context.user_data['disable_allowlist_message'] = msg.message_id
 
@@ -3018,7 +3033,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
                 blob = bucket.blob(f'sypherbot/public/welcome_message_header/welcome_message_header_{group_id}.jpg')
-                welcome_image_url = blob.generate_signed_url(expiration=timedelta(minutes=15))
+                welcome_image_url = blob.generate_signed_url(expiration=timedelta(minutes=BLOB_EXPIRATION))
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 msg = update.message.reply_photo(
@@ -3094,7 +3109,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         math_challenge = challenges[index]
 
         blob = bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
-        image_url = blob.generate_signed_url(expiration=timedelta(minutes=15))
+        image_url = blob.generate_signed_url(expiration=timedelta(minutes=BLOB_EXPIRATION))
 
         print(f"image_url: {image_url}")
 
@@ -3442,7 +3457,6 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     except Exception as e:
         print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
 
-
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
 
@@ -3469,7 +3483,7 @@ def handle_transfer_event(event, group_data):
         return
 
     token_name = group_data['token'].get('symbol', 'TOKEN')
-    
+
     # Format message with Markdown
     message = f"{header_emoji} BUY ALERT {header_emoji}\n\n{buyer_emoji} {token_amount:.4f} {token_name}{value_message}"
     print(f"Sending buy message for group {group_data['group_id']}")
