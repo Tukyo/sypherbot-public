@@ -3462,14 +3462,16 @@ def handle_transfer_event(event, group_data):
         if total_value_usd < 1:
             print("Ignoring small buy")
             return
-        value_message = f" ({total_value_usd:.2f} USD)"
+        value_message = f" (${total_value_usd:.2f})"
         header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
     else:
         print("Failed to fetch token price in USD.")
         return
 
+    token_name = group_data['token'].get('symbol', 'TOKEN')
+    
     # Format message with Markdown
-    message = f"{header_emoji} BUY ALERT {header_emoji}\n\n{buyer_emoji} {token_amount} TOKEN{value_message}"
+    message = f"{header_emoji} BUY ALERT {header_emoji}\n\n{buyer_emoji} {token_amount:.4f} {token_name}{value_message}"
     print(f"Sending buy message for group {group_data['group_id']}")
     send_buy_message(message, group_data['group_id'])
 
@@ -3490,7 +3492,7 @@ def send_buy_message(text, group_id):
 #endregion Buybot
 
 #region Price Fetching
-def get_token_price_in_weth(contract_address):
+def get_token_price_in_weth(contract_address): # OLD TODO: PHASE THIS OUT
     apiUrl = f"https://api.dexscreener.com/latest/dex/tokens/{contract_address}"
     try:
         response = requests.get(apiUrl)
@@ -3514,7 +3516,7 @@ def get_token_price_in_weth(contract_address):
         print(f"Error fetching token price from DexScreener: {e}")
         return None
     
-def get_weth_price_in_fiat(currency):
+def get_weth_price_in_fiat(currency): # OLD TODO: PHASE THIS OUT
     apiUrl = f"https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies={currency}"
     try:
         response = requests.get(apiUrl)
@@ -3525,7 +3527,7 @@ def get_weth_price_in_fiat(currency):
         print(f"Error fetching WETH price from CoinGecko: {e}")
         return None
     
-def get_token_price_in_fiat(contract_address, currency):
+def get_token_price_in_fiat(contract_address, currency): # OLD TODO: PHASE THIS OUT
     # Fetch price of token in WETH
     token_price_in_weth = get_token_price_in_weth(contract_address)
     if token_price_in_weth is None:
@@ -3659,7 +3661,7 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
 
     try:
         print("Fetching ETH price in USD using Chainlink...")
-        eth_price_in_usd = check_eth_price(update, context)  # Step 1: Get ETH price in USD using Chainlink
+        eth_price_in_usd = check_eth_price()  # Step 1: Get ETH price in USD using Chainlink
         if eth_price_in_usd is None:
             print("Failed to fetch ETH price from Chainlink.")
             update.message.reply_text("Failed to fetch ETH price.")
