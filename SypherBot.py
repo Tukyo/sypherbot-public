@@ -4404,9 +4404,13 @@ def get_liquidity_data(chain, lp_address):
         print(f"Raw Liquidity: {raw_liquidity}")
         print(f"sqrtPriceX96: {sqrt_price_x96}")
 
-        # Calculate reserves using liquidity and sqrtPriceX96
-        reserve_eth = raw_liquidity / sqrt_price_x96 ** 2 * (2 ** 96)
-        reserve_token = raw_liquidity * sqrt_price_x96 ** 2 / (2 ** 192)
+        # Convert sqrtPriceX96 to actual price
+        price = (sqrt_price_x96 / (2 ** 96)) ** 2
+        print(f"Derived Price: {price}")
+
+        # Calculate reserves using price and liquidity
+        reserve_eth = raw_liquidity / sqrt_price_x96 * (2 ** 96)
+        reserve_token = raw_liquidity * price / (2 ** 96)
 
         print(f"Reserve ETH: {reserve_eth}")
         print(f"Reserve Token: {reserve_token}")
