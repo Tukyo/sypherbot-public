@@ -1375,6 +1375,7 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
     keyboard = [
         [
             InlineKeyboardButton("Enable Allowlist", callback_data='enable_allowlist'),
+            InlineKeyboardButton("Website", callback_data='add_website'),
             InlineKeyboardButton("Disable Allowlist", callback_data='disable_allowlist')
         ],
         [
@@ -1392,7 +1393,7 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='*✅ Allowlist Setup ✅*\n\n'
-        'Here, you may add or remove links from the allowlist, check the current allowlist or disable allowlisting for links.\n\n'
+        'Here, you may add or remove links from the allowlist, check the current allowlist, disable allowlisting for links, or add your website link.\n\n'
         '_Please Note: If you disable link allowlisting, any links will be allowed in the group._\n\n'
         '*How To Allow Links:*\n'
         'To allow specific links in your group type: /allow <link>\n\n'
@@ -1499,6 +1500,66 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
+
+def add_website_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    # Verify the user is the owner
+    if query.data == 'add_website':
+        if is_user_owner(update, context, user_id):
+            prompt_website(update, context)
+        else:
+            print("User is not the owner.")
+
+def prompt_website(update: Update, context: CallbackContext) -> None:
+    # Send the prompt asking for the website URL
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Please send the website link you want to add to the allowlist."
+    )
+    context.user_data['setup_stage'] = 'add_website'
+    store_message_id(context, msg.message_id)
+
+    if msg is not None:
+        track_message(msg)
+
+def handle_website_input(update: Update, context: CallbackContext) -> None:
+    if context.user_data.get('setup_stage') == 'add_website':
+        # Get the provided URL from the user's message
+        website_url = update.message.text.strip()
+
+        # Validate the URL (basic validation here; expand as needed)
+        if not (website_url.startswith('http://') or website_url.startswith('https://')):
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Invalid URL. Please provide a valid website starting with http:// or https://"
+            )
+            return
+
+        # Update Firestore with the website URL
+        group_id = update.effective_chat.id
+        group_doc = db.collection('groups').document(str(group_id))
+
+        print(f"Updating website for group {group_id}: {website_url}")
+        group_doc.set({
+            'group_info': {
+                'group_website': website_url
+            }
+        }, merge=True)
+
+        # Confirm the update to the user
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"Website added to allowlist: {website_url}"
+        )
+
+        # Clear setup stage
+        context.user_data['setup_stage'] = None
+
 
 def check_allowlist_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -4501,6 +4562,43 @@ def fetch_random_word() -> str:
         return random.choice(words)
 #endregion Play Game
 
+video_cache = {}
+def send_rick_video(update: Update, context: CallbackContext) -> None:
+    chat_id = update.effective_chat.id
+    args = context.args
+
+    # Map arguments to specific videos
+    video_mapping = {
+        "duncan": "assets/RICK_DUNCAN.mp4",
+        "saintlaurent": "assets/RICK_SAINTLAURENT.mp4",
+        "shoenice": "assets/RICK_SHOENICE.mp4"
+    }
+
+    if not args:  # If no arguments are passed, send a random video
+        video_path = random.choice(list(video_mapping.values()))
+    else:
+        # Check if the argument matches a key in the mapping
+        video_key = args[0].lower()
+        video_path = video_mapping.get(video_key)
+
+    if not video_path:
+        # If no match is found, send a default response
+        keyboard = [[InlineKeyboardButton("Rick", url="https://www.instagram.com/bigf0ck/")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        context.bot.send_message(chat_id=chat_id, text="\u200b", reply_markup=reply_markup)
+        return
+
+    if video_path in video_cache:
+        # Use cached file_id if available
+        file_id = video_cache[video_path]
+        context.bot.send_video(chat_id=chat_id, video=file_id)
+    else:
+        # Upload the video and cache the file_id
+        with open(video_path, 'rb') as video_file:
+            message = context.bot.send_video(chat_id=chat_id, video=video_file)
+        file_id = message.video.file_id
+        video_cache[video_path] = file_id
+
 def ca(update: Update, context: CallbackContext) -> None:
     msg = None
     if rate_limit_check():
@@ -4859,46 +4957,6 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
         liquidity(update, context)
     elif query.data == 'commands_volume':
         volume(update, context)
-
-
-
-
-video_cache = {}
-def send_rick_video(update: Update, context: CallbackContext) -> None:
-    chat_id = update.effective_chat.id
-    args = context.args
-
-    # Map arguments to specific videos
-    video_mapping = {
-        "duncan": "assets/RICK_DUNCAN.mp4",
-        "saintlaurent": "assets/RICK_SAINTLAURENT.mp4",
-        "shoenice": "assets/RICK_SHOENICE.mp4"
-    }
-
-    if not args:  # If no arguments are passed, send a random video
-        video_path = random.choice(list(video_mapping.values()))
-    else:
-        # Check if the argument matches a key in the mapping
-        video_key = args[0].lower()
-        video_path = video_mapping.get(video_key)
-
-    if not video_path:
-        # If no match is found, send a default response
-        keyboard = [[InlineKeyboardButton("Rick", url="https://www.instagram.com/bigf0ck/")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        context.bot.send_message(chat_id=chat_id, text="\u200b", reply_markup=reply_markup)
-        return
-
-    if video_path in video_cache:
-        # Use cached file_id if available
-        file_id = video_cache[video_path]
-        context.bot.send_video(chat_id=chat_id, video=file_id)
-    else:
-        # Upload the video and cache the file_id
-        with open(video_path, 'rb') as video_file:
-            message = context.bot.send_video(chat_id=chat_id, video=video_file)
-        file_id = message.video.file_id
-        video_cache[video_path] = file_id
 
 
 
