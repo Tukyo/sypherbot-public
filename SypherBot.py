@@ -3445,15 +3445,17 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
-    web3_instance = web3_instances.get(group_data['token']['chain'])
 
-    decimals = group_data['token'].get('decimals', 18) # Convert amount to token decimal
+    decimals = group_data['token'].get('decimals', 18)  # Convert amount to token decimal
     token_amount = Decimal(amount) / (10 ** decimals)
 
     print(f"Received transfer event for {token_amount} tokens.")
 
-    # Fetch the USD price of the token
-    token_price_in_usd = get_token_price_in_fiat(group_data['token']['contract_address'], 'usd', web3_instance)
+    # Fetch the USD price of the token using Uniswap V3 and Chainlink
+    chain = group_data['token']['chain']
+    lp_address = group_data['token']['liquidity_address']
+    token_price_in_usd = get_token_price_in_usd(chain, lp_address)
+
     if token_price_in_usd is not None:
         token_price_in_usd = Decimal(token_price_in_usd)
         total_value_usd = token_amount * token_price_in_usd
@@ -3540,7 +3542,37 @@ def get_token_price_in_fiat(contract_address, currency):
     token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
     return token_price_in_fiat
 
-def check_eth_price(update, context):
+def get_token_price_in_usd(chain, lp_address):
+    """
+    Fetch the token price in USD using Uniswap V3 position data and Chainlink for ETH price.
+    """
+    try:
+        # Step 1: Get ETH price in USD using Chainlink
+        eth_price_in_usd = check_eth_price()  # Assume no need for update/context
+        if eth_price_in_usd is None:
+            print("Failed to fetch ETH price from Chainlink.")
+            return None
+
+        print(f"ETH price in USD: {eth_price_in_usd}")
+
+        # Step 2: Get token price in WETH using Uniswap V3 position data
+        price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
+        if price_in_weth is None:
+            print("Failed to fetch token price in WETH from Uniswap V3.")
+            return None
+
+        print(f"Token price in WETH: {price_in_weth}")
+
+        # Step 3: Convert token price from WETH to USD
+        token_price_in_usd = price_in_weth * eth_price_in_usd
+        print(f"Token price in USD: {token_price_in_usd}")
+        return token_price_in_usd
+
+    except Exception as e:
+        print(f"Error fetching token price in USD: {e}")
+        return None
+
+def check_eth_price():
     try:
         latest_round_data = chainlink_contract.functions.latestRoundData().call()
         price = latest_round_data[1] / 10 ** 8
