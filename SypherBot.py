@@ -4868,25 +4868,26 @@ def main() -> None:
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
     
-    # General Slash Command Handlers
+    #region Slash Command Handlers
+    #
+    #region User Slash Command Handlers
     dispatcher.add_handler(CommandHandler("commands", commands))
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
-    dispatcher.add_handler(CommandHandler("contract", ca))
-    dispatcher.add_handler(CommandHandler("ca", ca))
+    dispatcher.add_handler(CommandHandler(['contract', 'ca'], ca))
     dispatcher.add_handler(CommandHandler("price", get_token_price, pass_args=True))
     dispatcher.add_handler(CommandHandler("chart", chart))
-    dispatcher.add_handler(CommandHandler("liquidity", liquidity))
-    dispatcher.add_handler(CommandHandler("lp", liquidity))
+    dispatcher.add_handler(CommandHandler(['liquidity', 'lp'], liquidity))
     dispatcher.add_handler(CommandHandler("volume", volume))
     dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
-
-    # Admin Slash Command Handlers
+    #endregion User Slash Command Handlers
+    ##
+    #region Admin Slash Command Handlers
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("setup", start))
     dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
-    dispatcher.add_handler(CommandHandler('cleanbot', cleanbot))
+    dispatcher.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
     dispatcher.add_handler(CommandHandler("kick", kick))
     dispatcher.add_handler(CommandHandler("block", block))
@@ -4901,7 +4902,9 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("warnlist", check_warn_list))
     dispatcher.add_handler(CommandHandler('clearwarns', clear_warns_for_user))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
-
+    #endregion Admin Slash Command Handlers
+    #
+    #endregion Slash Command Handlers
 
     # General Callbacks
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
@@ -4976,11 +4979,6 @@ def main() -> None:
 
     # Start the Bot
     updater.start_polling()
-
-    # Start Threads
-    # clear_unverified_users_with_context = partial(clear_unverified_users, context=updater.dispatcher)
-    # monitoring_thread = threading.Thread(target=clear_unverified_users_with_context)
-    # monitoring_thread.start()
     start_monitoring_groups()
 
     # Run the bot until stopped
