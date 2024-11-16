@@ -3,6 +3,5 @@ serviceAccountKey.json
 config.json
 .vscode
 ignore
-/assets
 abi.json
 todo

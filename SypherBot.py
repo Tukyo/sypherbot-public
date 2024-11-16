@@ -4623,7 +4623,7 @@ def volume(update: Update, context: CallbackContext) -> None:
     if rate_limit_check():
         volume_24h_usd = get_volume(chain, lp_address)
         if volume_24h_usd:
-            msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd}")
+            msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd:.4f}")
         else:
             msg = update.message.reply_text("Failed to fetch volume data.")
     else:
@@ -4855,9 +4855,31 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
         volume(update, context)
 
 
+rick_videos = [
+    "assets/RICK_DUNCAN.mp4",
+    "assets/RICK_SAINTLAURENT.mp4",
+    "assets/RICK_SHOENICE.mp4"
+]
 
+def send_rick_video(update: Update, context: CallbackContext) -> None:
+    chat_id = update.effective_chat.id
+    args = context.args
 
+    if not args:  # If no arguments are passed, send a random video
+        random_video = random.choice(rick_videos)
+        context.bot.send_video(chat_id=chat_id, video=open(random_video, 'rb'))
+        return
 
+    # If an argument is passed, search for the corresponding video
+    video_name = args[0].lower()  # Convert the argument to lowercase for consistency
+    matching_video = next((video for video in rick_videos if video_name in video.lower()), None)
+
+    if matching_video:
+        context.bot.send_video(chat_id=chat_id, video=open(matching_video, 'rb'))
+    else:
+        keyboard = [[InlineKeyboardButton("Rick's Instagram", url="https://www.instagram.com/bigf0ck/")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        context.bot.send_message(chat_id=chat_id, reply_markup=reply_markup)
 
 
 
@@ -4871,7 +4893,7 @@ def main() -> None:
     #region Slash Command Handlers
     #
     #region User Slash Command Handlers
-    dispatcher.add_handler(CommandHandler("commands", commands))
+    dispatcher.add_handler(CommandHandler(['commands', 'help'], commands))
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
     dispatcher.add_handler(CommandHandler(['contract', 'ca'], ca))
@@ -4881,6 +4903,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("volume", volume))
     dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
+    dispatcher.add_handler(CommandHandler('rick', send_rick_video, pass_args=True))
     #endregion User Slash Command Handlers
     ##
     #region Admin Slash Command Handlers
