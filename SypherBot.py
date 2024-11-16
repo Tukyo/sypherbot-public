@@ -122,6 +122,19 @@ for network, web3_instance in web3_websockets.items():
 
 eth_web3 = web3_instances['ETHEREUM']
 
+blockscanners = { #Later TODO: Add blockscanners that are commented out
+    "ARBITRUM": "arbiscan.io",
+    # "AVALANCHE": "snowtrace.io",
+    "BASE": "basescan.org",
+    # "BSC": "bscscan.com",
+    "ETHEREUM": "etherscan.io",
+    "FANTOM": "ftmscan.com",
+    # "HARMONY": "explorer.harmony.one",
+    # "MANTLE": "mantlescan.info",
+    "OPTIMISM": "optimistic.etherscan.io",
+    "POLYGON": "polygonscan.com"
+}
+
 # region Chainlink
 chainlink_address = eth_web3.to_checksum_address('0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419')
 
@@ -262,6 +275,10 @@ RATE_LIMIT = 100  # Maximum number of allowed commands per {TIME_PERIOD}
 TIME_PERIOD = 60  # Time period in (seconds)
 JOB_INTERVAL = 60 # Interval for monitoring jobs (seconds)
 BLOB_EXPIRATION = 15 # Expiration time for uploaded files (minutes)
+MINIMUM_BUY_AMOUNT = 1 # Minimum amount in USD for the buybot to trigger TODO: Change to higher after testing
+SMALL_BUY_AMOUNT = 2500 # Below this amount in USD will trigger 🐟
+MEDIUM_BUY_AMOUNT = 5000 # Below this amount in USD will trigger 🐬
+
 
 last_check_time = time.time()
 command_count = 0
@@ -464,6 +481,7 @@ def is_allowed(message, allowlist, pattern):
 
 #region Message Handling
 def rate_limit_check():
+    print("Checking rate limit...")
     global last_check_time, command_count
     current_time = time.time()
 
@@ -3653,11 +3671,13 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
+    tx_hash = event['transactionHash'].hex()
 
     decimals = group_data['token'].get('decimals', 18)  # Convert amount to token decimal
     token_amount = Decimal(amount) / (10 ** decimals)
 
     print(f"Received transfer event for {token_amount} tokens.")
+    print(f"Transaction hash: {tx_hash}")
 
     # Fetch the USD price of the token using Uniswap V3 and Chainlink
     chain = group_data['token']['chain']
@@ -3667,7 +3687,7 @@ def handle_transfer_event(event, group_data):
     if token_price_in_usd is not None:
         token_price_in_usd = Decimal(token_price_in_usd)
         total_value_usd = token_amount * token_price_in_usd
-        if total_value_usd < 1:
+        if total_value_usd < MINIMUM_BUY_AMOUNT:
             print("Ignoring small buy")
             return
         value_message = f" (${total_value_usd:.2f})"
@@ -3677,25 +3697,45 @@ def handle_transfer_event(event, group_data):
         return
 
     token_name = group_data['token'].get('symbol', 'TOKEN')
+    blockscanner = group_data.get(chain.upper())
+    transaction_link = f"https://{blockscanner}/tx/{tx_hash}"
 
-    # Format message with Markdown
-    message = f"{header_emoji} BUY ALERT {header_emoji}\n\n{buyer_emoji} {token_amount:.4f} {token_name}{value_message}"
+
+    message = (
+        f"{header_emoji} BUY ALERT {header_emoji}\n\n"
+        f"{buyer_emoji} {token_amount:.4f} {token_name}{value_message}"
+    )
     print(f"Sending buy message for group {group_data['group_id']}")
-    send_buy_message(message, group_data['group_id'])
+
+    # Create an inline keyboard with a button for the transaction link
+    keyboard = [[InlineKeyboardButton("View Transaction", url=transaction_link)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    send_buy_message(message, group_data['group_id'], reply_markup)
 
 def categorize_buyer(usd_value):
-    if usd_value < 2500:
+    if usd_value < SMALL_BUY_AMOUNT:
         return "💸", "🐟"
-    elif usd_value < 5000:
+    elif usd_value < MEDIUM_BUY_AMOUNT:
         return "💰", "🐬"
     else:
         return "🤑", "🐳"
     
-def send_buy_message(text, group_id):
+def send_buy_message(text, group_id, reply_markup=None):
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    msg = bot.send_message(chat_id=group_id, text=text, parse_mode='Markdown')
-    if msg is not None:
-        track_message(msg)
+    if rate_limit_check():
+        try:
+            msg = bot.send_message(chat_id=group_id, text=text, parse_mode='Markdown', reply_markup=reply_markup)
+            if msg is not None:
+                track_message(msg)
+        except Exception as e:
+            print(f"Error sending message: {e}")
+    else:
+        try:
+            bot.send_message(chat_id=group_id, text="Bot rate limit exceeded. Please try again later.")
+        except Exception as e:
+            print(f"Error sending rate limit message: {e}")
+
 
 #endregion Buybot
 
