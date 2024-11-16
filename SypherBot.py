@@ -370,7 +370,7 @@ def schedule_group_monitoring(group_data):
             scheduler.add_job(
                 monitor_transfers,
                 'interval',
-                seconds=10,
+                seconds=60,
                 args=[web3_instance, liquidity_address, group_data],
                 id=job_id,  # Unique ID for the job
                 timezone=pytz.utc  # Use the UTC timezone from the pytz library
@@ -3437,9 +3437,6 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
             print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
             time.sleep(5)  # Wait before retrying
 
-
-
-
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
     web3_instance = web3_instances.get(group_data['token']['chain'])
@@ -3454,7 +3451,7 @@ def handle_transfer_event(event, group_data):
     if token_price_in_usd is not None:
         token_price_in_usd = Decimal(token_price_in_usd)
         total_value_usd = token_amount * token_price_in_usd
-        if total_value_usd < 500:
+        if total_value_usd < 1:
             print("Ignoring small buy")
             return
         value_message = f" ({total_value_usd:.2f} USD)"
