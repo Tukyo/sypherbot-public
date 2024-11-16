@@ -306,9 +306,10 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     admins = context.bot.get_chat_administrators(group_id)  
     inviter_is_admin = any(admin.user.id == inviter.id for admin in admins)
 
+    print(f"Bot added to group {group_id} by {inviter.id} ({inviter.username})")
+
     if inviter_is_admin:
-        # Store group info only if the inviter is an admin
-        owner_id = inviter.id
+        owner_id = inviter.id # Store group info only if the inviter is an admin
         owner_username = inviter.username
         print(f"Adding group {group_id} to database with owner {owner_id} ({owner_username})")
         group_doc = db.collection('groups').document(str(group_id))
@@ -331,17 +332,19 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
             }
         })
 
+        print(f"Group {group_id} added to database.")
+
         bot_member = context.bot.get_chat_member(group_id, context.bot.id)  # Get bot's member info
 
         if bot_member.status == "administrator":
-            # Bot is admin, send the "Thank you" message
-            setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
+            setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]] # Bot is admin, send the "Thank you" message
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
             msg = update.message.reply_text(
                 "Thank you for adding me to your group! Please click 'Setup' to continue.",
                 reply_markup=setup_markup
             )
             store_message_id(context, msg.message_id)
+            print(f"Sent setup message to group {group_id}")
         else:
             # Bot is not admin, send the "Give me admin perms" message
             setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
@@ -350,6 +353,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 "Hey, please give me admin permissions, then click 'Setup' to get started.",
                 reply_markup=setup_markup
             )
+            print(f"Bot does not have admin permissions in group: {group_id}")
             store_message_id(context, msg.message_id)
  
         if msg is not None:
@@ -454,6 +458,8 @@ def fetch_group_info(update: Update, context: CallbackContext):
     
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
+
+    print(f"Fetching group info for group {group_id}")
 
     try:
         doc_snapshot = group_doc.get()
@@ -1632,7 +1638,6 @@ def handle_website_input(update: Update, context: CallbackContext) -> None:
 
         # Clear setup stage
         context.user_data['setup_stage'] = None
-
 
 def check_allowlist_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -3212,6 +3217,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
     group_data = fetch_group_info(update, context)
     if group_data is None:
         group_name = "the group"  # Default text if group name not available
+        print("Group data not found.")
     else:
         group_name = group_data.get('group_info', {}).get('group_username', "the group")
 
@@ -3223,12 +3229,16 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             if user_id == context.bot.id:
                 return
+            
+            print(f"New user {user_id} joined group {chat_id}")
 
             context.bot.restrict_chat_member( # Mute the new user
                 chat_id=chat_id,
                 user_id=user_id,
                 permissions=ChatPermissions(can_send_messages=False)
             )
+
+            print(f"User {user_id} restricted in group {chat_id}")
 
             if anti_raid.is_raid():
                 msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
@@ -3237,6 +3247,8 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
                 context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id) # Kick the user that just joined
                 return
+            else: # If not a raid
+                print(f"No raid detected... Allowing user {user_id} to join.")
 
             current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
             
@@ -3246,6 +3258,8 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
                 blob = bucket.blob(f'sypherbot/public/welcome_message_header/welcome_message_header_{group_id}.jpg')
                 welcome_image_url = blob.generate_signed_url(expiration=timedelta(minutes=BLOB_EXPIRATION))
+
+                print(f"Group {group_id} has premium features enabled, and has a header uploaded... Sending welcome message with image.")
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 msg = update.message.reply_photo(
@@ -3258,6 +3272,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                     f"Welcome to {group_name}! Please press the button below to authenticate.",
                     reply_markup=reply_markup
                 )
+                print(f"Group {group_id} does not have premium features enabled. Sending welcome message without image.")
 
             updates[f'unverified_users.{user_id}'] = { # Collect updates for Firestore
                 'timestamp': current_time,
@@ -3639,7 +3654,7 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
 
     # Initialize static tracking of the last seen block
     if not hasattr(monitor_transfers, "last_seen_block"):
-        lookback_range = 100
+        lookback_range = 100 # Check the last 100 blocks on boot
         monitor_transfers.last_seen_block = web3_instance.eth.block_number - lookback_range
 
     last_seen_block = monitor_transfers.last_seen_block
@@ -3746,8 +3761,6 @@ def send_buy_message(text, group_id, reply_markup=None):
             bot.send_message(chat_id=group_id, text="Bot rate limit exceeded. Please try again later.")
         except Exception as e:
             print(f"Error sending rate limit message: {e}")
-
-
 #endregion Buybot
 
 #region Price Fetching
