@@ -1422,7 +1422,6 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
 
     try:
         group_data = group_doc.get().to_dict()
-        print(f"Group data retrieved: {group_data}")
 
         if group_data is None:
             print(f"Creating new document for group {group_id}.")
@@ -1436,8 +1435,6 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
             group_doc.update({
                 'admin.allowlist': True
             })
-
-        menu_change(context, update)
 
         # Inform the user
         context.bot.send_message(
@@ -1476,7 +1473,6 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
 
     try:
         group_data = group_doc.get().to_dict()
-        print(f"Group data retrieved: {group_data}")
 
         if group_data is None:
             print(f"Creating new document for group {group_id}.")
@@ -1490,8 +1486,6 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
             group_doc.update({
                 'admin.allowlist': False
             })
-
-        menu_change(context, update)
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -1564,7 +1558,6 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
 
     try:
         group_data = group_doc.get().to_dict()
-        print(f"Group data retrieved: {group_data}")
 
         if group_data is None:
             print(f"Creating new document for group {group_id}.")
@@ -1578,8 +1571,6 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
             group_doc.update({
                 'admin.allowlist': []
             })
-
-        menu_change(context, update)
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
