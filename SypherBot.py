@@ -370,7 +370,7 @@ def schedule_group_monitoring(group_data):
             scheduler.add_job(
                 monitor_transfers,
                 'interval',
-                seconds=60,
+                seconds=10,
                 args=[web3_instance, liquidity_address, group_data],
                 id=job_id,  # Unique ID for the job
                 timezone=pytz.utc  # Use the UTC timezone from the pytz library
@@ -3410,32 +3410,38 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     abi = group_data['token']['abi']
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
-    # Initialize block tracking
-    lookback_range = 100  # Number of blocks to look back
-    last_seen_block = web3_instance.eth.block_number - lookback_range
+    # Initialize static tracking of the last seen block
+    if not hasattr(monitor_transfers, "last_seen_block"):
+        lookback_range = 100
+        monitor_transfers.last_seen_block = web3_instance.eth.block_number - lookback_range
 
-    while True:  # Continuous monitoring loop
-        try:
-            # Get the latest block number
-            latest_block = web3_instance.eth.block_number
-            if last_seen_block >= latest_block:
-                time.sleep(5)  # Wait and retry if no new blocks
-                continue
+    last_seen_block = monitor_transfers.last_seen_block
+    latest_block = web3_instance.eth.block_number
 
-            print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
+    if last_seen_block >= latest_block:
+        print(f"No new blocks to process for group {group_data['group_id']}.")
+        return  # Exit if no new blocks
 
-            # Fetch Transfer events in the specified block range
-            logs = contract.events.Transfer().get_logs(from_block=last_seen_block + 1, to_block=latest_block)
+    print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
 
-            # Process each log
-            for log in logs:
-                handle_transfer_event(log, group_data)  # Pass the decoded log to your handler
+    try:
+        # Fetch Transfer events in the specified block range
+        logs = contract.events.Transfer().get_logs(
+            from_block=last_seen_block + 1,
+            to_block=latest_block,
+            argument_filters={'from': liquidity_address}
+        )
 
-            # Update last_seen_block
-            last_seen_block = latest_block
-        except Exception as e:
-            print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
-            time.sleep(5)  # Wait before retrying
+        # Process each log
+        for log in logs:
+            handle_transfer_event(log, group_data)  # Pass the decoded log to your handler
+
+        # Update static last_seen_block
+        monitor_transfers.last_seen_block = latest_block
+
+    except Exception as e:
+        print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
+
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
