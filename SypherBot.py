@@ -271,6 +271,12 @@ def track_message(message):
     bot_messages.append((message.chat.id, message.message_id))
     print(f"Tracked message: {message.message_id}")
 
+rick_videos = [
+    "assets/RICK_DUNCAN.mp4",
+    "assets/RICK_SAINTLAURENT.mp4",
+    "assets/RICK_SHOENICE.mp4"
+]
+
 #region Bot Logic
 def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     new_members = update.message.new_chat_members
@@ -4855,31 +4861,44 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
         volume(update, context)
 
 
-rick_videos = [
-    "assets/RICK_DUNCAN.mp4",
-    "assets/RICK_SAINTLAURENT.mp4",
-    "assets/RICK_SHOENICE.mp4"
-]
 
+
+video_cache = {}
 def send_rick_video(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
     args = context.args
 
+    # Map arguments to specific videos
+    video_mapping = {
+        "duncan": "assets/RICK_DUNCAN.mp4",
+        "saintlaurent": "assets/RICK_SAINTLAURENT.mp4",
+        "shoenice": "assets/RICK_SHOENICE.mp4"
+    }
+
     if not args:  # If no arguments are passed, send a random video
-        random_video = random.choice(rick_videos)
-        context.bot.send_video(chat_id=chat_id, video=open(random_video, 'rb'))
-        return
-
-    # If an argument is passed, search for the corresponding video
-    video_name = args[0].lower()  # Convert the argument to lowercase for consistency
-    matching_video = next((video for video in rick_videos if video_name in video.lower()), None)
-
-    if matching_video:
-        context.bot.send_video(chat_id=chat_id, video=open(matching_video, 'rb'))
+        video_path = random.choice(list(video_mapping.values()))
     else:
-        keyboard = [[InlineKeyboardButton("Rick's Instagram", url="https://www.instagram.com/bigf0ck/")]]
+        # Check if the argument matches a key in the mapping
+        video_key = args[0].lower()
+        video_path = video_mapping.get(video_key)
+
+    if not video_path:
+        # If no match is found, send a default response
+        keyboard = [[InlineKeyboardButton("Rick", url="https://www.instagram.com/bigf0ck/")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         context.bot.send_message(chat_id=chat_id, reply_markup=reply_markup)
+        return
+
+    if video_path in video_cache:
+        # Use cached file_id if available
+        file_id = video_cache[video_path]
+        context.bot.send_video(chat_id=chat_id, video=file_id)
+    else:
+        # Upload the video and cache the file_id
+        with open(video_path, 'rb') as video_file:
+            message = context.bot.send_video(chat_id=chat_id, video=video_file)
+        file_id = message.video.file_id
+        video_cache[video_path] = file_id
 
 
 
