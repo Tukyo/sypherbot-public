@@ -1405,6 +1405,8 @@ def enable_allowlist_callback(update: Update, context: CallbackContext) -> None:
     query.answer()
     user_id = query.from_user.id
 
+    update = Update(update.update_id, message=query.message)
+
     if query.data == 'enable_allowlist':
         if is_user_owner(update, context, user_id):
             print("User is owner. Proceeding to enable allowlist.")
@@ -1457,6 +1459,8 @@ def disable_allowlist_callback(update: Update, context: CallbackContext) -> None
     query.answer()
     user_id = query.from_user.id
 
+    update = Update(update.update_id, message=query.message)
+
     if query.data == 'disable_allowlist':
         if is_user_owner(update, context, user_id):
             print("User is owner. Proceeding to disable allowlist.")
@@ -1498,6 +1502,94 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
 
     context.user_data['setup_stage'] = None
     context.user_data['disable_allowlist_message'] = msg.message_id
+
+    if msg is not None:
+        track_message(msg)
+
+def check_allowlist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    if query.data == 'check_allowlist':
+        if is_user_owner(update, context, user_id):
+            check_allowlist(update, context)
+        else:
+            print("User is not the owner.")
+
+def check_allowlist(update: Update, context: CallbackContext) -> None:
+    msg = None
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    group_data = group_doc.get().to_dict()
+
+    allowlist_text = '*Current Allowlist:*\n\n'
+    if group_data is None or 'allowlist' not in group_data or not group_data['allowlist']:
+        allowlist_text += 'No links are currently allowed.'
+    else:
+        for link in group_data['allowlist']:
+            allowlist_text += f'- {link}\n'
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=allowlist_text,
+        parse_mode='Markdown'
+    )
+    context.user_data['setup_stage'] = None
+    store_message_id(context, msg.message_id)
+
+    if msg is not None:
+        track_message(msg)
+
+def clear_allowlist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'clear_allowlist':
+        if is_user_owner(update, context, user_id):
+            clear_allowlist(update, context)
+        else:
+            print("User is not the owner.")
+
+def clear_allowlist(update: Update, context: CallbackContext) -> None:
+    msg = None
+
+    group_id = update.effective_chat.id
+    group_doc = db.collection('groups').document(str(group_id))
+
+    try:
+        group_data = group_doc.get().to_dict()
+        print(f"Group data retrieved: {group_data}")
+
+        if group_data is None:
+            print(f"Creating new document for group {group_id}.")
+            group_doc.set({
+                'admin': {
+                    'allowlist': []
+                }
+            })
+        else:
+            print(f"Clearing allowlist for group {group_id}.")
+            group_doc.update({
+                'admin.allowlist': []
+            })
+
+        menu_change(context, update)
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='❌ Allowlist has been cleared in this group ❌'
+        )
+    except Exception as e:
+        print(f"Error while clearing allowlist for group {group_id}: {e}")
+
+    context.user_data['setup_stage'] = None
+    context.user_data['clear_allowlist_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -4856,6 +4948,10 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(set_max_warns_callback, pattern='^set_max_warns$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
+    dispatcher.add_handler(CallbackQueryHandler(enable_allowlist_callback, pattern='^enable_allowlist$'))
+    dispatcher.add_handler(CallbackQueryHandler(disable_allowlist_callback, pattern='^disable_allowlist$'))
+    dispatcher.add_handler(CallbackQueryHandler(check_allowlist_callback, pattern='^check_allowlist$'))
+    dispatcher.add_handler(CallbackQueryHandler(clear_allowlist_callback, pattern='^clear_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(reset_admin_settings_callback, pattern='^reset_admin_settings$'))
     
     # Setup Crypto Callbacks
