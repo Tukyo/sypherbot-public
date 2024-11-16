@@ -3673,13 +3673,16 @@ def handle_transfer_event(event, group_data):
     amount = event['args']['value']
     tx_hash = event['transactionHash'].hex()
 
+    if not tx_hash.startswith("0x"):
+        tx_hash = "0x" + tx_hash
+
     decimals = group_data['token'].get('decimals', 18)  # Convert amount to token decimal
     token_amount = Decimal(amount) / (10 ** decimals)
 
     print(f"Received transfer event for {token_amount} tokens.")
     print(f"Transaction hash: {tx_hash}")
 
-    # Fetch the USD price of the token using Uniswap V3 and Chainlink
+    # Fetch the USD price of the token using Uniswap V3 and Chainlink1
     chain = group_data['token']['chain']
     lp_address = group_data['token']['liquidity_address']
     token_price_in_usd = get_token_price_in_usd(chain, lp_address)
