@@ -540,7 +540,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     handle_guess(update, context)
     
     if msg is not None:
-        track_message(msg)
+        track_message(update.msg)
 
 def handle_image(update: Update, context: CallbackContext) -> None:
     if is_user_admin(update, context):
