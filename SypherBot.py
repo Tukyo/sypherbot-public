@@ -4886,7 +4886,7 @@ def send_rick_video(update: Update, context: CallbackContext) -> None:
         # If no match is found, send a default response
         keyboard = [[InlineKeyboardButton("Rick", url="https://www.instagram.com/bigf0ck/")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        context.bot.send_message(chat_id=chat_id, text=".", reply_markup=reply_markup)
+        context.bot.send_message(chat_id=chat_id, text="\u200b", reply_markup=reply_markup)
         return
 
     if video_path in video_cache:
