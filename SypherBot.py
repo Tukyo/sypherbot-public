@@ -523,8 +523,8 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         allowlist = group_data.get('allowlist', [])
 
         for pattern in detected_patterns:
-            if pattern == "eth_address" and not is_allowed(msg, allowlist, ETH_ADDRESS_PATTERN):
-                context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+            if pattern == "eth_address":
+                delete_blocked_addresses(update, context)
                 return
             elif pattern == "url" and not is_allowed(msg, allowlist, URL_PATTERN):
                 context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
@@ -600,10 +600,6 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
     print("Checking message for unallowed addresses...")
-
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return
     
     message_text = update.message.text
     
@@ -615,6 +611,10 @@ def delete_blocked_addresses(update: Update, context: CallbackContext):
 
     if not found_addresses:
         print("No addresses found in message.")
+        return
+
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
         return
 
     # Retrieve the contract and LP addresses from the fetched group info
