@@ -123,130 +123,6 @@ chainlink_abi = """
     """
 chainlink_contract = eth_web3.eth.contract(address=chainlink_address, abi=chainlink_abi)
 
-def check_eth_price(update, context):
-    try:
-        latest_round_data = chainlink_contract.functions.latestRoundData().call()
-        price = latest_round_data[1] / 10 ** 8
-        print(f"ETH price: {price}")
-        return price
-    except Exception as e:
-        print(f"Failed to get ETH price: {e}")
-        return None
-
-def get_token_price(update: Update, context: CallbackContext) -> None:
-    print("Fetching token price using Uniswap V3...")
-
-    args = context.args
-    modifier = args[0].upper() if args else "USD"  # Default to "USD" if no modifier provided
-
-    if modifier not in ["USD", "ETH"]:
-        print(f"Invalid modifier: {modifier}")
-        update.message.reply_text("Invalid modifier! Use /price USD or /price ETH.")
-        return
-
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        print("Group data not found.")
-        update.message.reply_text("Group data not found.")
-        return
-
-    token_data = group_data.get('token')
-    if not token_data:
-        print("Token data not found for this group.")
-        update.message.reply_text("Token data not found for this group.")
-        return
-
-    lp_address = token_data.get('liquidity_address') # Extract token details
-    chain = token_data.get('chain')
-
-    if not lp_address or not chain:
-        print("Liquidity address or chain not found for this group.")
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
-
-    try:
-        print("Fetching ETH price in USD using Chainlink...")
-        eth_price_in_usd = check_eth_price(update, context) # Step 1: Get ETH price in USD using Chainlink
-        if eth_price_in_usd is None:
-            print("Failed to fetch ETH price from Chainlink.")
-            update.message.reply_text("Failed to fetch ETH price.")
-            return
-
-        print(f"ETH price in USD: {eth_price_in_usd}")
-
-        web3_instance = web3_instances.get(chain) # Connect to the Uniswap V3 liquidity pool
-        if not web3_instance:
-            print(f"Web3 instance for chain {chain} not found or not connected.")
-            update.message.reply_text(f"Web3 instance for chain {chain} is unavailable.")
-            return
-
-        pair_contract = web3_instance.eth.contract(
-            address=web3_instance.to_checksum_address(lp_address),
-            abi=[
-                {
-                    "constant": True,
-                    "inputs": [],
-                    "name": "slot0",
-                    "outputs": [
-                        {"name": "sqrtPriceX96", "type": "uint160"},
-                        {"name": "tick", "type": "int24"},
-                        {"name": "observationIndex", "type": "uint16"},
-                        {"name": "observationCardinality", "type": "uint16"},
-                        {"name": "observationCardinalityNext", "type": "uint16"},
-                        {"name": "feeProtocol", "type": "uint8"},
-                        {"name": "unlocked", "type": "bool"}
-                    ],
-                    "stateMutability": "view",
-                    "type": "function"
-                }
-            ]
-        )
-
-        try: # Fetch slot0 data
-            slot0 = pair_contract.functions.slot0().call()
-            sqrt_price_x96 = slot0[0]
-        except Exception as e:
-            print(f"Error fetching slot0 data: {e}")
-            update.message.reply_text("Failed to fetch slot0 data.")
-            return
-
-        try:
-            price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192) # Calculate the token price in WETH
-            print(f"Token price in WETH: {price_in_weth}")
-        except Exception as e:
-            print(f"Error calculating token price in WETH: {e}")
-            update.message.reply_text("Failed to calculate token price in WETH.")
-            return
-
-        if modifier == "USD":
-            try:
-                token_price_in_usd = price_in_weth * eth_price_in_usd  # Convert to USD
-                print(f"Token price in USD: {token_price_in_usd}")
-                update.message.reply_text(
-                    f"Token price in WETH: {price_in_weth:.8f}\n"
-                    f"Token price in USD: ${token_price_in_usd:.4f}"
-                )
-            except Exception as e:
-                print(f"Error converting token price to USD: {e}")
-                update.message.reply_text("Failed to calculate token price in USD.")
-                return
-        elif modifier == "ETH":
-            update.message.reply_text(
-                f"Token price in WETH: {price_in_weth:.8f}\n"
-                f"(ETH Equivalent)"
-            )
-    except Exception as e:
-        print(f"Unexpected error occurred: {e}")
-        update.message.reply_text("An unexpected error occurred while fetching the token price.")
-
-
-
-
-
-
-
-
-
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID')
@@ -3561,6 +3437,8 @@ def handle_transfer_event(event, group_data):
 #endregion Buybot
 
 #region Price Fetching
+
+# OLD OLD OLD 
 def get_token_price_in_weth(contract_address):
     apiUrl = f"https://api.dexscreener.com/latest/dex/tokens/{contract_address}"
     try:
@@ -3612,6 +3490,131 @@ def get_token_price_in_fiat(contract_address, currency):
     # Calculate token price in the specified currency
     token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
     return token_price_in_fiat
+# OLD OLD OLD
+
+
+
+# NEW NEW NEW
+def check_eth_price(update, context):
+    try:
+        latest_round_data = chainlink_contract.functions.latestRoundData().call()
+        price = latest_round_data[1] / 10 ** 8
+        print(f"ETH price: {price}")
+        return price
+    except Exception as e:
+        print(f"Failed to get ETH price: {e}")
+        return None
+
+def get_token_price(update: Update, context: CallbackContext) -> None:
+    print("Fetching token price using Uniswap V3...")
+
+    args = context.args
+    modifier = args[0].upper() if args else "USD"  # Default to "USD" if no modifier provided
+
+    if modifier not in ["USD", "ETH"]:
+        print(f"Invalid modifier: {modifier}")
+        update.message.reply_text("Invalid modifier! Use /price USD or /price ETH.")
+        return
+
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
+        print("Group data not found.")
+        update.message.reply_text("Group data not found.")
+        return
+
+    token_data = group_data.get('token')
+    if not token_data:
+        print("Token data not found for this group.")
+        update.message.reply_text("Token data not found for this group.")
+        return
+
+    lp_address = token_data.get('liquidity_address') # Extract token details
+    chain = token_data.get('chain')
+
+    if not lp_address or not chain:
+        print("Liquidity address or chain not found for this group.")
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    try:
+        print("Fetching ETH price in USD using Chainlink...")
+        eth_price_in_usd = check_eth_price(update, context) # Step 1: Get ETH price in USD using Chainlink
+        if eth_price_in_usd is None:
+            print("Failed to fetch ETH price from Chainlink.")
+            update.message.reply_text("Failed to fetch ETH price.")
+            return
+
+        print(f"ETH price in USD: {eth_price_in_usd}")
+
+        web3_instance = web3_instances.get(chain) # Connect to the Uniswap V3 liquidity pool
+        if not web3_instance:
+            print(f"Web3 instance for chain {chain} not found or not connected.")
+            update.message.reply_text(f"Web3 instance for chain {chain} is unavailable.")
+            return
+
+        pair_contract = web3_instance.eth.contract(
+            address=web3_instance.to_checksum_address(lp_address),
+            abi=[
+                {
+                    "constant": True,
+                    "inputs": [],
+                    "name": "slot0",
+                    "outputs": [
+                        {"name": "sqrtPriceX96", "type": "uint160"},
+                        {"name": "tick", "type": "int24"},
+                        {"name": "observationIndex", "type": "uint16"},
+                        {"name": "observationCardinality", "type": "uint16"},
+                        {"name": "observationCardinalityNext", "type": "uint16"},
+                        {"name": "feeProtocol", "type": "uint8"},
+                        {"name": "unlocked", "type": "bool"}
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                }
+            ]
+        )
+
+        try: # Fetch slot0 data
+            slot0 = pair_contract.functions.slot0().call()
+            sqrt_price_x96 = slot0[0]
+        except Exception as e:
+            print(f"Error fetching slot0 data: {e}")
+            update.message.reply_text("Failed to fetch slot0 data.")
+            return
+
+        try:
+            price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192) # Calculate the token price in WETH
+            print(f"Token price in WETH: {price_in_weth}")
+        except Exception as e:
+            print(f"Error calculating token price in WETH: {e}")
+            update.message.reply_text("Failed to calculate token price in WETH.")
+            return
+
+        if modifier == "USD":
+            try:
+                token_price_in_usd = price_in_weth * eth_price_in_usd  # Convert to USD
+                print(f"Token price in USD: {token_price_in_usd}")
+                update.message.reply_text(
+                    f"Token price in WETH: {price_in_weth:.8f}\n"
+                    f"Token price in USD: ${token_price_in_usd:.4f}"
+                )
+            except Exception as e:
+                print(f"Error converting token price to USD: {e}")
+                update.message.reply_text("Failed to calculate token price in USD.")
+                return
+        elif modifier == "ETH":
+            update.message.reply_text(
+                f"Token price in WETH: {price_in_weth:.8f}\n"
+                f"(ETH Equivalent)"
+            )
+    except Exception as e:
+        print(f"Unexpected error occurred: {e}")
+        update.message.reply_text("An unexpected error occurred while fetching the token price.")
+
+
+
+
+
 #endregion Price Fetching
 
 #endregion Ethereum Logic
@@ -4702,7 +4705,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("endgame", end_game))
     dispatcher.add_handler(CommandHandler("contract", ca))
     dispatcher.add_handler(CommandHandler("ca", ca))
-    # dispatcher.add_handler(CommandHandler("price", price))
+    dispatcher.add_handler(CommandHandler("price", get_token_price, pass_args=True))
     dispatcher.add_handler(CommandHandler("chart", chart))
     dispatcher.add_handler(CommandHandler("liquidity", liquidity))
     dispatcher.add_handler(CommandHandler("lp", liquidity))
@@ -4729,10 +4732,6 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("warnlist", check_warn_list))
     dispatcher.add_handler(CommandHandler('clearwarns', clear_warns_for_user))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
-
-
-    # dispatcher.add_handler(CommandHandler("test", check_eth_price))
-    dispatcher.add_handler(CommandHandler("price", get_token_price))
 
 
     # General Callbacks
