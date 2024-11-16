@@ -93,15 +93,27 @@ endpoints = {
     "POLYGON": os.getenv('POLYGON_ENDPOINT')
 }
 
-web3_instances = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in endpoints.items()}
+websockets = {
+    "BASE": os.getenv('BASE_WEBSOCKET'),
+}
 
+web3_instances = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in endpoints.items()}
 for network, web3_instance in web3_instances.items():
     if web3_instance.is_connected():
         print(f"Successfully connected to {network}")
     else:
         print(f"Failed to connect to {network}")
 
+web3_websockets = {network: Web3(Web3.WebsocketProvider(endpoint)) for network, endpoint in websockets.items()}
+for network, web3_instance in web3_websockets.items():
+    if web3_instance.is_connected():
+        print(f"Successfully connected to {network} via WebSocket")
+    else:
+        print(f"Failed to connect to {network} via WebSocket")
+
 eth_web3 = web3_instances['ETHEREUM']
+
+# region Chainlink
 chainlink_address = eth_web3.to_checksum_address('0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419')
 
 chainlink_abi = """
@@ -122,6 +134,7 @@ chainlink_abi = """
     ]
     """
 chainlink_contract = eth_web3.eth.contract(address=chainlink_address, abi=chainlink_abi)
+#endregion Chainlink
 
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
@@ -315,7 +328,6 @@ def start_monitoring_groups():
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
         group_data['group_id'] = group_doc.id
-        print("Remove this code to start monitoring groups.")
         # schedule_group_monitoring(group_data)
 
     scheduler.start()
@@ -331,11 +343,9 @@ def schedule_group_monitoring(group_data):
         web3_instance = web3_instances.get(chain)
 
         if web3_instance and web3_instance.is_connected():
-            # Check for existing job with ID
-            existing_job = scheduler.get_job(job_id)
+            existing_job = scheduler.get_job(job_id) # Check for existing job with ID
             if existing_job:
-                # Remove existing job to update with new information
-                existing_job.remove()
+                existing_job.remove() # Remove existing job to update with new information
 
             scheduler.add_job(
                 monitor_transfers,
@@ -3377,16 +3387,22 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     abi = group_data['token']['abi']
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
-    block_to_check = 14896750
+    latest_block = web3_instance.eth.block_number
+    print(f"Latest block: {latest_block}")
+
+    lookback_range = 5000  # Number of blocks to look back
     
     print(f"Checking transfers from block {block_to_check} for group {group_data['group_id']}")
-
-    # --- Filter for events in the specific block ---
-    transfer_filter = contract.events.Transfer.createFilter(
-        fromBlock=block_to_check,
-        toBlock=block_to_check,  # Only check this specific block
-        argument_filters={'from': liquidity_address}
-    )
+    
+    try: 
+        transfer_filter = contract.events.Transfer.createFilter( # Filter for events in the specific block
+            fromBlock=block_to_check,
+            toBlock=block_to_check,  # Only check this specific block
+            argument_filters={'from': liquidity_address}
+        )
+    except Exception as e:
+        print(f"Error creating filter for group {group_data['group_id']}: {e}")
+        return
 
     for event in transfer_filter.get_new_entries():
         handle_transfer_event(event, group_data)
@@ -3394,51 +3410,48 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
     web3_instance = web3_instances.get(group_data['token']['chain'])
-    
-    # Convert amount to token decimal
-    decimals = group_data['token'].get('decimals', 18)
+
+    decimals = group_data['token'].get('decimals', 18) # Convert amount to token decimal
     token_amount = Decimal(amount) / (10 ** decimals)
 
     print(f"Received transfer event for {token_amount} tokens.")
 
-    # # Fetch the USD price of the token
-    # token_price_in_usd = get_token_price_in_fiat(group_data['token']['contract_address'], 'usd', web3_instance)
-    # if token_price_in_usd is not None:
-    #     token_price_in_usd = Decimal(token_price_in_usd)
-    #     total_value_usd = token_amount * token_price_in_usd
-    #     if total_value_usd < 500:
-    #         print("Ignoring small buy")
-    #         return
-    #     value_message = f" ({total_value_usd:.2f} USD)"
-    #     header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
-    # else:
-    #     print("Failed to fetch token price in USD.")
-    #     return
+    # Fetch the USD price of the token
+    token_price_in_usd = get_token_price_in_fiat(group_data['token']['contract_address'], 'usd', web3_instance)
+    if token_price_in_usd is not None:
+        token_price_in_usd = Decimal(token_price_in_usd)
+        total_value_usd = token_amount * token_price_in_usd
+        if total_value_usd < 500:
+            print("Ignoring small buy")
+            return
+        value_message = f" ({total_value_usd:.2f} USD)"
+        header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
+    else:
+        print("Failed to fetch token price in USD.")
+        return
 
-    # # Format message with Markdown
-    # message = f"{header_emoji} BUY ALERT {header_emoji}\n\n{buyer_emoji} {token_amount} TOKEN{value_message}"
-    # print(f"Sending buy message for group {group_data['group_id']}")
-    # send_buy_message(message, group_data['group_id'])
+    # Format message with Markdown
+    message = f"{header_emoji} BUY ALERT {header_emoji}\n\n{buyer_emoji} {token_amount} TOKEN{value_message}"
+    print(f"Sending buy message for group {group_data['group_id']}")
+    send_buy_message(message, group_data['group_id'])
 
-# def categorize_buyer(usd_value):
-#     if usd_value < 2500:
-#         return "💸", "🐟"
-#     elif usd_value < 5000:
-#         return "💰", "🐬"
-#     else:
-#         return "🤑", "🐳"
+def categorize_buyer(usd_value):
+    if usd_value < 2500:
+        return "💸", "🐟"
+    elif usd_value < 5000:
+        return "💰", "🐬"
+    else:
+        return "🤑", "🐳"
     
-# def send_buy_message(text, group_id):
-#     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-#     msg = bot.send_message(chat_id=group_id, text=text, parse_mode='Markdown')
-#     if msg is not None:
-#         track_message(msg)
+def send_buy_message(text, group_id):
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    msg = bot.send_message(chat_id=group_id, text=text, parse_mode='Markdown')
+    if msg is not None:
+        track_message(msg)
 
 #endregion Buybot
 
 #region Price Fetching
-
-# OLD OLD OLD 
 def get_token_price_in_weth(contract_address):
     apiUrl = f"https://api.dexscreener.com/latest/dex/tokens/{contract_address}"
     try:
@@ -3490,11 +3503,7 @@ def get_token_price_in_fiat(contract_address, currency):
     # Calculate token price in the specified currency
     token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
     return token_price_in_fiat
-# OLD OLD OLD
 
-
-
-# NEW NEW NEW
 def check_eth_price(update, context):
     try:
         latest_round_data = chainlink_contract.functions.latestRoundData().call()
@@ -3617,12 +3626,6 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
         update.message.reply_text("An unexpected error occurred while fetching the token price.")
-
-
-
-
-
-
 #endregion Price Fetching
 
 #endregion Ethereum Logic
@@ -4358,74 +4361,47 @@ def ca(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def get_liquidity_data(chain, lp_address):
-    """
-    Fetch liquidity data from Uniswap V3 and calculate reserves in ETH and token units.
-    """
-    try:
-        web3_instance = web3_instances.get(chain)
-        if not web3_instance:
-            print(f"Web3 instance for chain {chain} not found or not connected.")
-            return None, None
-
-        pool_contract = web3_instance.eth.contract(
-            address=web3_instance.to_checksum_address(lp_address),
-            abi=[
-                {
-                    "inputs": [],
-                    "name": "liquidity",
-                    "outputs": [{"name": "", "type": "uint128"}],
-                    "stateMutability": "view",
-                    "type": "function"
-                },
-                {
-                    "inputs": [],
-                    "name": "slot0",
-                    "outputs": [
-                        {"name": "sqrtPriceX96", "type": "uint160"},
-                        {"name": "tick", "type": "int24"},
-                        {"name": "observationIndex", "type": "uint16"},
-                        {"name": "observationCardinality", "type": "uint16"},
-                        {"name": "observationCardinalityNext", "type": "uint16"},
-                        {"name": "feeProtocol", "type": "uint8"},
-                        {"name": "unlocked", "type": "bool"}
-                    ],
-                    "stateMutability": "view",
-                    "type": "function"
-                },
-            ]
-        )
-
-        # Fetch raw liquidity and slot0 data
-        raw_liquidity = pool_contract.functions.liquidity().call()
-        slot0 = pool_contract.functions.slot0().call()
-        sqrt_price_x96 = slot0[0]
-
-        print(f"Raw Liquidity: {raw_liquidity}")
-        print(f"sqrtPriceX96: {sqrt_price_x96}")
-
-        # Convert sqrtPriceX96 to actual price
-        price = (sqrt_price_x96 / (2 ** 96)) ** 2
-        print(f"Derived Price: {price}")
-
-        # Calculate reserves using price and liquidity
-        reserve_eth = raw_liquidity / sqrt_price_x96 * (2 ** 96)
-        reserve_token = raw_liquidity * price / (2 ** 96)
-
-        print(f"Reserve ETH: {reserve_eth}")
-        print(f"Reserve Token: {reserve_token}")
-
-        return reserve_eth, reserve_token
-    except Exception as e:
-        print(f"Error fetching liquidity data: {e}")
-        return None, None
-
-
-def liquidity(update: Update, context: CallbackContext) -> None:
-    print("Fetching liquidity using Uniswap V3...")
+def price(update: Update, context: CallbackContext) -> None: # UNUSED TODO: Save this for fetching v2 prices as a fallback later
+    # Fetch group-specific contract information
     group_data = fetch_group_info(update, context)
     if group_data is None:
-        update.message.reply_text("Group data not found.")
+        return  # Early exit if no data found
+    
+    token_data = group_data.get('token')
+    if not token_data:
+        update.message.reply_text("Token data not found for this group.")
+        return
+
+    contract_address = token_data.get('contract_address')
+
+    if not contract_address:
+        update.message.reply_text("Contract address not found for this group.")
+        return
+
+    # Proceed with price fetching
+    currency = context.args[0].lower() if context.args else 'usd'
+    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
+        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
+        return
+    
+    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
+    
+    symbol = token_data.get('symbol')
+    if not symbol:
+        formatted_price = format(token_price_in_fiat, '.4f')
+        update.message.reply_text(f"{currency.upper()}: {formatted_price}")
+        return
+
+    if token_price_in_fiat is not None:
+        formatted_price = format(token_price_in_fiat, '.4f')
+        update.message.reply_text(f"{symbol} • {currency.upper()}: {formatted_price}")
+    else:
+        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
+
+def liquidity(update: Update, context: CallbackContext) -> None:
+    msg = None
+    group_data = fetch_group_info(update, context)
+    if group_data is None:
         return
 
     token_data = group_data.get('token')
@@ -4440,30 +4416,30 @@ def liquidity(update: Update, context: CallbackContext) -> None:
         update.message.reply_text("Liquidity address or chain not found for this group.")
         return
 
+    if rate_limit_check():
+        liquidity_usd = get_liquidity(chain, lp_address)
+        if liquidity_usd:
+            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
+        else:
+            msg = update.message.reply_text("Failed to fetch liquidity data.")
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+
+def get_liquidity(chain, lp_address):
     try:
-        # Fetch ETH price in USD
-        eth_price_in_usd = check_eth_price(update, context)
-        if eth_price_in_usd is None:
-            update.message.reply_text("Failed to fetch ETH price.")
-            return
-
-        print(f"ETH price in USD: {eth_price_in_usd}")
-
-        # Fetch liquidity data
-        reserve_eth, reserve_token = get_liquidity_data(chain, lp_address)
-        if reserve_eth is None or reserve_token is None:
-            update.message.reply_text("Failed to fetch liquidity data.")
-            return
-
-        # Convert ETH reserves to USD
-        liquidity_in_usd = reserve_eth * eth_price_in_usd
-        print(f"Liquidity in USD: {liquidity_in_usd}")
-
-        update.message.reply_text(f"Liquidity: ${liquidity_in_usd:.2f}")
-    except Exception as e:
-        print(f"Unexpected error occurred: {e}")
-        update.message.reply_text("An unexpected error occurred while fetching liquidity.")
-
+        chain_lower = chain.lower()
+        url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lower}/pools/{lp_address}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        liquidity_usd = data['data']['attributes']['reserve_in_usd']
+        return liquidity_usd
+    except requests.RequestException as e:
+        print(f"Failed to fetch liquidity data: {str(e)}")
+        return None
     
 def volume(update: Update, context: CallbackContext) -> None:
     msg = None
