@@ -133,9 +133,17 @@ def check_eth_price(update, context):
         print(f"Failed to get ETH price: {e}")
         return None
 
-
 def get_token_price(update: Update, context: CallbackContext) -> None:
     print("Fetching token price using Uniswap V3...")
+
+    args = context.args
+    modifier = args[0].upper() if args else "USD"  # Default to "USD" if no modifier provided
+
+    if modifier not in ["USD", "ETH"]:
+        print(f"Invalid modifier: {modifier}")
+        update.message.reply_text("Invalid modifier! Use /price USD or /price ETH.")
+        return
+
     group_data = fetch_group_info(update, context)
     if group_data is None:
         print("Group data not found.")
@@ -148,11 +156,8 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
         update.message.reply_text("Token data not found for this group.")
         return
 
-    # Extract token details
-    lp_address = token_data.get('liquidity_address')
+    lp_address = token_data.get('liquidity_address') # Extract token details
     chain = token_data.get('chain')
-
-    print(f"Token data: {token_data}")
 
     if not lp_address or not chain:
         print("Liquidity address or chain not found for this group.")
@@ -160,9 +165,8 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
         return
 
     try:
-        # Step 1: Get ETH price in USD using Chainlink
         print("Fetching ETH price in USD using Chainlink...")
-        eth_price_in_usd = check_eth_price(update, context)
+        eth_price_in_usd = check_eth_price(update, context) # Step 1: Get ETH price in USD using Chainlink
         if eth_price_in_usd is None:
             print("Failed to fetch ETH price from Chainlink.")
             update.message.reply_text("Failed to fetch ETH price.")
@@ -170,15 +174,11 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
 
         print(f"ETH price in USD: {eth_price_in_usd}")
 
-        # Step 2: Connect to the Uniswap V3 liquidity pool
-        print(f"Connecting to Uniswap V3 pool at address: {lp_address} on chain: {chain}")
-        web3_instance = web3_instances.get(chain)
+        web3_instance = web3_instances.get(chain) # Connect to the Uniswap V3 liquidity pool
         if not web3_instance:
             print(f"Web3 instance for chain {chain} not found or not connected.")
             update.message.reply_text(f"Web3 instance for chain {chain} is unavailable.")
             return
-
-        print(f"Web3 instance for chain {chain} is connected: {web3_instance.is_connected()}")
 
         pair_contract = web3_instance.eth.contract(
             address=web3_instance.to_checksum_address(lp_address),
@@ -202,48 +202,39 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
             ]
         )
 
-        print("Successfully connected to the liquidity pool contract.")
-
-        # Step 3: Fetch slot0 data
-        print("Fetching slot0 data from the liquidity pool contract...")
-        try:
+        try: # Fetch slot0 data
             slot0 = pair_contract.functions.slot0().call()
             sqrt_price_x96 = slot0[0]
-            print(f"slot0 data fetched: {slot0}")
-            print(f"Square root price (sqrtPriceX96): {sqrt_price_x96}")
         except Exception as e:
             print(f"Error fetching slot0 data: {e}")
             update.message.reply_text("Failed to fetch slot0 data.")
             return
 
-        # Step 4: Calculate the token price in WETH
         try:
-            print("Calculating token price in WETH...")
-            price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192)
+            price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192) # Calculate the token price in WETH
             print(f"Token price in WETH: {price_in_weth}")
         except Exception as e:
             print(f"Error calculating token price in WETH: {e}")
             update.message.reply_text("Failed to calculate token price in WETH.")
             return
 
-        # Step 5: Convert to USD
-        try:
-            print("Calculating token price in USD...")
-            token_price_in_usd = price_in_weth * eth_price_in_usd
-            print(f"Token price in USD: {token_price_in_usd}")
-        except Exception as e:
-            print(f"Error converting token price to USD: {e}")
-            update.message.reply_text("Failed to calculate token price in USD.")
-            return
-
-        # Step 6: Output results
-        print("Sending results to the user...")
-        update.message.reply_text(
-            f"Token price in WETH: {price_in_weth:.8f}\n"
-            f"Token price in USD: ${token_price_in_usd:.2f}"
-        )
-        print("Token price sent to the user successfully.")
-
+        if modifier == "USD":
+            try:
+                token_price_in_usd = price_in_weth * eth_price_in_usd  # Convert to USD
+                print(f"Token price in USD: {token_price_in_usd}")
+                update.message.reply_text(
+                    f"Token price in WETH: {price_in_weth:.8f}\n"
+                    f"Token price in USD: ${token_price_in_usd:.4f}"
+                )
+            except Exception as e:
+                print(f"Error converting token price to USD: {e}")
+                update.message.reply_text("Failed to calculate token price in USD.")
+                return
+        elif modifier == "ETH":
+            update.message.reply_text(
+                f"Token price in WETH: {price_in_weth:.8f}\n"
+                f"(ETH Equivalent)"
+            )
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
         update.message.reply_text("An unexpected error occurred while fetching the token price.")
@@ -4711,7 +4702,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("endgame", end_game))
     dispatcher.add_handler(CommandHandler("contract", ca))
     dispatcher.add_handler(CommandHandler("ca", ca))
-    dispatcher.add_handler(CommandHandler("price", price))
+    # dispatcher.add_handler(CommandHandler("price", price))
     dispatcher.add_handler(CommandHandler("chart", chart))
     dispatcher.add_handler(CommandHandler("liquidity", liquidity))
     dispatcher.add_handler(CommandHandler("lp", liquidity))
@@ -4741,7 +4732,7 @@ def main() -> None:
 
 
     # dispatcher.add_handler(CommandHandler("test", check_eth_price))
-    dispatcher.add_handler(CommandHandler("test", get_token_price))
+    dispatcher.add_handler(CommandHandler("price", get_token_price))
 
 
     # General Callbacks
