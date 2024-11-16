@@ -483,7 +483,10 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
     username = update.message.from_user.username or update.message.from_user.first_name
-    msg = None
+    msg = update.message.text or None
+
+    if not msg:
+        return
 
     if is_user_admin(update, context):
         handle_setup_inputs_from_admin(update, context)
@@ -506,7 +509,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         detected_patterns.append("domain")
 
     # Check the allowlist if any patterns matched
-    if detected_patterns:
+    if detected_patterns and msg is not None:
         group_id = update.effective_chat.id
         group_doc = db.collection('groups').document(str(group_id))
         group_data = group_doc.get().to_dict()
