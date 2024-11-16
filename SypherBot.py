@@ -639,17 +639,7 @@ def delete_blocked_links(update: Update, context: CallbackContext):
     if message_text is None:
         print("No text in message.")
         return
-
-    # Fetch the group-specific allowlist
-    group_info = fetch_group_info(update, context)
-    if not group_info:
-        print("No group info available.")
-        return
-
-    allowlist_field = 'allowlist'
-    allowlist_string = group_info.get(allowlist_field, "")
-    allowlist_items = [item.strip() for item in allowlist_string.split(',') if item.strip()]
-
+    
     # Regular expression to match all URLs
     found_links = URL_PATTERN.findall(message_text)
     
@@ -659,6 +649,20 @@ def delete_blocked_links(update: Update, context: CallbackContext):
     if not found_links and not found_domains:
         print("No links or domains found in message.")
         return
+
+    # Fetch the group-specific allowlist
+    group_info = fetch_group_info(update, context)
+    if not group_info:
+        print("No group info available.")
+        return
+
+    # Get the allowlist
+    allowlist_field = 'allowlist'
+    allowlist_items = group_info.get(allowlist_field, [])
+    
+    # Ensure allowlist_items is a list
+    if isinstance(allowlist_items, str):
+        allowlist_items = [item.strip() for item in allowlist_items.split(',') if item.strip()]
 
     # Combine the found links and domains
     found_items = found_links + found_domains
@@ -690,10 +694,14 @@ def delete_blocked_phrases(update: Update, context: CallbackContext):
         print("No group info available.")
         return
 
-    # Get the blocklist from the group info
+    # Get the blocklist as an array from the group info
     blocklist_field = 'blocklist'
-    blocklist_string = group_info.get(blocklist_field, "")
-    blocklist_items = [item.strip() for item in blocklist_string.split(',') if item.strip()]
+    blocklist_items = group_info.get(blocklist_field, [])
+
+    # Ensure blocklist_items is a list
+    if not isinstance(blocklist_items, list):
+        print("Blocklist is not properly formatted as an array.")
+        return
 
     # Check each blocked phrase in the group's blocklist
     for phrase in blocklist_items:
@@ -705,6 +713,7 @@ def delete_blocked_phrases(update: Update, context: CallbackContext):
             except Exception as e:
                 print(f"Error deleting message: {e}")
             break  # Exit loop after deleting the message to prevent multiple deletions for one message
+
 
 def delete_service_messages(update, context):
     non_deletable_message_id = context.chat_data.get('non_deletable_message_id')
@@ -4156,7 +4165,9 @@ def remove_block(update: Update, context: CallbackContext):
         command_text = update.message.text[len('/removeblock '):].strip().lower()
 
         if not command_text:
-            msg = update.message.reply_text("Please provide some text to remove.")
+            msg = update.message.reply_text("Please provide a valid blocklist item to remove.")
+            if msg is not None:
+                track_message(msg)
             return
 
         group_id = str(update.effective_chat.id)
@@ -4164,26 +4175,11 @@ def remove_block(update: Update, context: CallbackContext):
         blocklist_field = 'blocklist'
 
         try:
-            # Fetch the current blocklist from the group's document
-            doc_snapshot = group_doc.get()
-            if doc_snapshot.exists:
-                group_data = doc_snapshot.to_dict()
-                current_blocklist = group_data.get(blocklist_field, "")
-                # Create a list from the blocklist string, remove the word, and convert back to string
-                blocklist_items = current_blocklist.split(', ')
-                if command_text in blocklist_items:
-                    blocklist_items.remove(command_text)
-                    new_blocklist = ', '.join(blocklist_items)
-                    # Update the blocklist in the group's document
-                    group_doc.update({blocklist_field: new_blocklist})
-                    msg = update.message.reply_text(f"'{command_text}' removed from blocklist!")
-                    print("Updated blocklist after removal:", new_blocklist)
-                else:
-                    msg = update.message.reply_text(f"'{command_text}' is not in the blocklist.")
-
-            else:
-                msg = update.message.reply_text("No blocklist found for this group.")
-
+            # Use Firestore's arrayRemove to remove the item from the blocklist array
+            group_doc.update({blocklist_field: firestore.ArrayRemove([command_text])})
+            msg = update.message.reply_text(f"'{command_text}' removed from the blocklist!")
+            print(f"Removed '{command_text}' from the blocklist.")
+        
         except Exception as e:
             msg = update.message.reply_text(f"Failed to remove from blocklist: {str(e)}")
             print(f"Error removing from blocklist: {e}")
@@ -4202,18 +4198,19 @@ def blocklist(update: Update, context: CallbackContext):
             if doc_snapshot.exists:
                 group_data = doc_snapshot.to_dict()
                 blocklist_field = 'blocklist'
-                current_blocklist = group_data.get(blocklist_field, "")
+
+                # Fetch blocklist as an array
+                blocklist_items = group_data.get(blocklist_field, [])
                 
-                if current_blocklist:
-                    # Split the blocklist string by commas and strip spaces
-                    blocklist_items = [item.strip() for item in current_blocklist.split(',') if item.strip()]
-                    message = "\n".join(blocklist_items)
+                if isinstance(blocklist_items, list) and blocklist_items:
+                    # Format the blocklist for display
+                    message = "Current blocklist:\n" + "\n".join(blocklist_items)
                     update.message.reply_text(message)
                 else:
                     msg = update.message.reply_text("The blocklist is currently empty.")
             else:
                 msg = update.message.reply_text("No blocklist found for this group.")
-        
+
         except Exception as e:
             msg = update.message.reply_text(f"Failed to retrieve blocklist: {str(e)}")
             print(f"Error retrieving blocklist: {e}")
@@ -4231,7 +4228,7 @@ def allow(update: Update, context: CallbackContext):
                 URL_PATTERN.match(command_text) or 
                 DOMAIN_PATTERN.match(command_text)):
             msg = update.message.reply_text(
-                f"Invalid format. Only Ethereum addresses, URLs, or domain names can be added to the allowlist."
+                "Invalid format. Only Ethereum addresses, URLs, or domain names can be added to the allowlist."
             )
             if msg is not None:
                 track_message(msg)
@@ -4242,28 +4239,20 @@ def allow(update: Update, context: CallbackContext):
         allowlist_field = 'allowlist'
 
         try:
-            # Fetch current allowlist from the group's document
-            doc_snapshot = group_doc.get()
-            if doc_snapshot.exists:
-                group_data = doc_snapshot.to_dict()
-                current_allowlist = group_data.get(allowlist_field, "")
-                if command_text in current_allowlist:
-                    msg = update.message.reply_text(f"'{command_text}' is already in the allowlist!")
-                else:
-                    new_allowlist = current_allowlist + command_text + ", "
-                    # Update the allowlist in the group's document
-                    group_doc.update({allowlist_field: new_allowlist})
-                    msg = update.message.reply_text(f"'{command_text}' added to allowlist!")
-                    print("Updated allowlist:", new_allowlist)
-            else:
-                # If no allowlist exists, create it with the current command text
-                group_doc.set({allowlist_field: command_text + ", "})
-                msg = update.message.reply_text(f"'{command_text}' allowlisted!")
-                print("Created new allowlist with:", command_text)
+            # Use Firestore's arrayUnion to add the item to the allowlist array
+            group_doc.update({allowlist_field: firestore.ArrayUnion([command_text])})
+            msg = update.message.reply_text(f"'{command_text}' added to the allowlist!")
+            print(f"Added '{command_text}' to allowlist.")
 
         except Exception as e:
-            msg = update.message.reply_text(f"Failed to update allowlist: {str(e)}")
-            print(f"Error updating allowlist: {e}")
+            # Handle the case where the document doesn't exist
+            if 'NOT_FOUND' in str(e):
+                group_doc.set({allowlist_field: [command_text]})
+                msg = update.message.reply_text(f"'{command_text}' added to a new allowlist!")
+                print(f"Created new allowlist with: {command_text}")
+            else:
+                msg = update.message.reply_text(f"Failed to update allowlist: {str(e)}")
+                print(f"Error updating allowlist: {e}")
 
     if msg is not None:
         track_message(msg)
@@ -4275,16 +4264,18 @@ def allowlist(update: Update, context: CallbackContext):
         group_doc = db.collection('groups').document(group_id)
 
         try:
+            # Fetch the group's document
             doc_snapshot = group_doc.get()
             if doc_snapshot.exists:
                 group_data = doc_snapshot.to_dict()
                 allowlist_field = 'allowlist'
-                current_allowlist = group_data.get(allowlist_field, "")
+
+                # Fetch allowlist as an array
+                allowlist_items = group_data.get(allowlist_field, [])
                 
-                if current_allowlist:
-                    # Split the allowlist string by commas and strip spaces
-                    allowlist_items = [item.strip() for item in current_allowlist.split(',') if item.strip()]
-                    message = "\n".join(allowlist_items)
+                if isinstance(allowlist_items, list) and allowlist_items:
+                    # Format the allowlist for display
+                    message = "Current allowlist:\n" + "\n".join(allowlist_items)
                     update.message.reply_text(message)
                 else:
                     msg = update.message.reply_text("The allowlist is currently empty.")
