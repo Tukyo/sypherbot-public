@@ -1426,13 +1426,13 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
             print(f"Creating new document for group {group_id}.")
             group_doc.set({
                 'admin': {
-                    'allowlisting': True
+                    'allowlist': True
                 }
             })
         else:
             print(f"Updating allowlisting for group {group_id}.")
             group_doc.update({
-                'admin.allowlisting': True
+                'admin.allowlist': True
             })
 
         menu_change(context, update)
@@ -1478,13 +1478,13 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
             print(f"Creating new document for group {group_id}.")
             group_doc.set({
                 'admin': {
-                    'allowlisting': False
+                    'allowlist': False
                 }
             })
         else:
             print(f"Updating allowlisting for group {group_id}.")
             group_doc.update({
-                'admin.allowlisting': False
+                'admin.allowlist': False
             })
 
         menu_change(context, update)
@@ -1495,7 +1495,7 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
         )
     except Exception as e:
         print(f"Error while disabling allowlisting for group {group_id}: {e}")
-        
+
     context.user_data['setup_stage'] = None
     context.user_data['disable_allowlist_message'] = msg.message_id
 
@@ -3722,7 +3722,7 @@ def mute(update: Update, context: CallbackContext) -> None:
     group_doc = db.collection('groups').document(str(chat_id))
     group_data = group_doc.get().to_dict()
 
-    if group_data is None or not group_data.get('admin', {}).get('mute_command', False):
+    if group_data is None or not group_data.get('admin', {}).get('mute', False):
         msg = update.message.reply_text("Admins are not allowed to use the mute command in this group.")
         if msg is not None:
             track_message(msg)
@@ -3742,8 +3742,7 @@ def mute(update: Update, context: CallbackContext) -> None:
         context.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=ChatPermissions(can_send_messages=False))
         msg = update.message.reply_text(f"User {username} has been muted.")
 
-        # Add the user to the muted_users mapping in the database
-        group_doc.update({
+        group_doc.update({ # Add the user to the muted_users mapping in the database
             f'muted_users.{user_id}': datetime.now().isoformat()
         })
     else:
@@ -3759,7 +3758,7 @@ def unmute(update: Update, context: CallbackContext) -> None:
     group_doc = db.collection('groups').document(str(chat_id))
     group_data = group_doc.get().to_dict()
 
-    if group_data is None or not group_data.get('admin', {}).get('mute_command', False):
+    if group_data is None or not group_data.get('admin', {}).get('mute', False):
         msg = update.message.reply_text("Admins are not allowed to use the unmute command in this group.")
         if msg is not None:
             track_message(msg)
@@ -3780,8 +3779,7 @@ def unmute(update: Update, context: CallbackContext) -> None:
                     context.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=ChatPermissions(can_send_messages=True))
                     msg = update.message.reply_text(f"User @{username_to_unmute} has been unmuted.")
 
-                    # Remove the user from the muted_users mapping in the database
-                    group_doc.update({
+                    group_doc.update({ # Remove the user from the muted_users mapping in the database
                         f'muted_users.{user_id}': firestore.DELETE_FIELD
                     })
                     break
