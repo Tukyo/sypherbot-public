@@ -4358,10 +4358,71 @@ def ca(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+def get_liquidity_data(chain, lp_address):
+    """
+    Fetches liquidity data from the Uniswap V3 pool using the given liquidity address.
+    Returns the total liquidity value in USD.
+    """
+    try:
+        web3_instance = web3_instances.get(chain)
+        if not web3_instance:
+            print(f"Web3 instance for chain {chain} not found or not connected.")
+            return None
+
+        pool_contract = web3_instance.eth.contract(
+            address=web3_instance.to_checksum_address(lp_address),
+            abi=[
+                {
+                    "inputs": [],
+                    "name": "liquidity",
+                    "outputs": [{"name": "", "type": "uint128"}],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "slot0",
+                    "outputs": [
+                        {"name": "sqrtPriceX96", "type": "uint160"},
+                        {"name": "tick", "type": "int24"},
+                        {"name": "observationIndex", "type": "uint16"},
+                        {"name": "observationCardinality", "type": "uint16"},
+                        {"name": "observationCardinalityNext", "type": "uint16"},
+                        {"name": "feeProtocol", "type": "uint8"},
+                        {"name": "unlocked", "type": "bool"}
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+            ]
+        )
+
+        # Fetch liquidity value
+        liquidity = pool_contract.functions.liquidity().call()
+        print(f"Liquidity (raw): {liquidity}")
+
+        # Fetch slot0 to get sqrtPriceX96
+        slot0 = pool_contract.functions.slot0().call()
+        sqrt_price_x96 = slot0[0]
+        print(f"sqrtPriceX96: {sqrt_price_x96}")
+
+        # Calculate price in WETH using sqrtPriceX96
+        price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192)
+
+        # Calculate total liquidity in ETH terms
+        liquidity_in_eth = liquidity * price_in_weth
+        print(f"Liquidity in ETH: {liquidity_in_eth}")
+
+        return liquidity_in_eth
+    except Exception as e:
+        print(f"Error fetching liquidity data: {e}")
+        return None
+
 def liquidity(update: Update, context: CallbackContext) -> None:
-    msg = None
+    print("Fetching liquidity using Uniswap V3...")
     group_data = fetch_group_info(update, context)
     if group_data is None:
+        update.message.reply_text("Group data not found.")
         return
 
     token_data = group_data.get('token')
@@ -4376,22 +4437,29 @@ def liquidity(update: Update, context: CallbackContext) -> None:
         update.message.reply_text("Liquidity address or chain not found for this group.")
         return
 
-    if rate_limit_check():
-        price_in_weth = get_uniswap_v3_position_data(chain, lp_address) # Get the Uniswap V3 position data
-        if price_in_weth is None:
-            msg = update.message.reply_text("Failed to fetch liquidity data.")
-        else:
-            eth_price_in_usd = check_eth_price(update, context) # Fetch ETH price in USD
-            if eth_price_in_usd is None:
-                msg = update.message.reply_text("Failed to fetch ETH price.")
-            else:
-                liquidity_usd = price_in_weth * eth_price_in_usd # Calculate liquidity in USD
-                msg = update.message.reply_text(f"Liquidity: ${liquidity_usd:.2f}")
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
+    try:
+        # Fetch ETH price in USD
+        eth_price_in_usd = check_eth_price(update, context)
+        if eth_price_in_usd is None:
+            update.message.reply_text("Failed to fetch ETH price.")
+            return
+
+        print(f"ETH price in USD: {eth_price_in_usd}")
+
+        # Fetch liquidity data
+        liquidity_in_eth = get_liquidity_data(chain, lp_address)
+        if liquidity_in_eth is None:
+            update.message.reply_text("Failed to fetch liquidity data.")
+            return
+
+        # Convert liquidity to USD
+        liquidity_in_usd = liquidity_in_eth * eth_price_in_usd
+        print(f"Liquidity in USD: {liquidity_in_usd}")
+
+        update.message.reply_text(f"Liquidity: ${liquidity_in_usd:.2f}")
+    except Exception as e:
+        print(f"Unexpected error occurred: {e}")
+        update.message.reply_text("An unexpected error occurred while fetching liquidity.")
 
     
 def volume(update: Update, context: CallbackContext) -> None:
