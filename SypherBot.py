@@ -3410,7 +3410,7 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     abi = group_data['token']['abi']
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
-    # Initialize last_seen_block locally
+    # Initialize last_seen_block
     lookback_range = 100  # Number of blocks to look back
     last_seen_block = web3_instance.eth.block_number - lookback_range
 
@@ -3419,26 +3419,30 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
             # Get the latest block number
             latest_block = web3_instance.eth.block_number
             if last_seen_block >= latest_block:
-                time.sleep(5)  # Wait and retry if no new blocks
+                # If no new blocks, wait and retry
+                time.sleep(5)
                 continue
 
             print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
 
             # Create filter for Transfer event
-            transfer_filter = contract.events.Transfer.build_filter().fromBlock(
-                last_seen_block + 1
-            ).toBlock(
-                latest_block
-            ).args(
-                from_=liquidity_address
-            )
+            transfer_event_signature = contract.events.Transfer.signature  # Event signature for Transfer
+            transfer_filter = {
+                "fromBlock": last_seen_block + 1,
+                "toBlock": latest_block,
+                "address": contract_address,
+                "topics": [
+                    transfer_event_signature,  # Filter by event signature
+                    web3_instance.to_checksum_address(liquidity_address),  # Filter by `from` address
+                ],
+            }
 
-            # Fetch Transfer events
-            events = web3_instance.eth.get_logs(transfer_filter)
+            # Fetch Transfer events using get_logs
+            logs = web3_instance.eth.get_logs(transfer_filter)
 
-            # Process each event
-            for log in events:
-                event = contract.events.Transfer().process_log(log)
+            # Process each log
+            for log in logs:
+                event = contract.events.Transfer().process_log(log)  # Decode the log
                 handle_transfer_event(event, group_data)
 
             # Update last_seen_block
@@ -3446,6 +3450,7 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
         except Exception as e:
             print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
             time.sleep(5)  # Wait before retrying
+
 
 
 def handle_transfer_event(event, group_data):
