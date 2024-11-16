@@ -3697,21 +3697,29 @@ def handle_transfer_event(event, group_data):
         return
 
     token_name = group_data['token'].get('symbol', 'TOKEN')
-    blockscanner = group_data.get(chain.upper())
-    transaction_link = f"https://{blockscanner}/tx/{tx_hash}"
+    blockscanner = blockscanners.get(chain.upper())
+    
+    if blockscanner:
+        transaction_link = f"https://{blockscanner}/tx/{tx_hash}"
+        message = (
+            f"{header_emoji} BUY ALERT {header_emoji}\n\n"
+            f"{buyer_emoji} {token_amount:.4f} {token_name}{value_message}"
+        )
+        print(f"Sending buy message with transaction link for group {group_data['group_id']}")
 
-
-    message = (
-        f"{header_emoji} BUY ALERT {header_emoji}\n\n"
-        f"{buyer_emoji} {token_amount:.4f} {token_name}{value_message}"
-    )
-    print(f"Sending buy message for group {group_data['group_id']}")
-
-    # Create an inline keyboard with a button for the transaction link
-    keyboard = [[InlineKeyboardButton("View Transaction", url=transaction_link)]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    send_buy_message(message, group_data['group_id'], reply_markup)
+        # Create an inline keyboard with a button for the transaction link
+        keyboard = [[InlineKeyboardButton("View Transaction", url=transaction_link)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        send_buy_message(message, group_data['group_id'], reply_markup)
+    else:
+        # Fallback message when blockscanner is unknown
+        message = (
+            f"{header_emoji} BUY ALERT {header_emoji}\n\n"
+            f"{buyer_emoji} {token_amount:.4f} {token_name}{value_message}\n\n"
+            f"Transaction hash: {tx_hash}"
+        )
+        print(f"Sending fallback buy message for group {group_data['group_id']}")
+        send_buy_message(message, group_data['group_id'])
 
 def categorize_buyer(usd_value):
     if usd_value < SMALL_BUY_AMOUNT:
