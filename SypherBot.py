@@ -176,24 +176,33 @@ print("Firebase initialized.")
 
 #region Classes
 class AntiSpam:
-    def __init__(self, rate_limit, time_window):
+    def __init__(self, rate_limit, time_window, mute_duration): # Check if a user is spamming, if they are mute them for a set duration
         self.rate_limit = rate_limit
         self.time_window = time_window
+        self.mute_duration = mute_duration
         self.user_messages = defaultdict(list)
         self.blocked_users = defaultdict(lambda: 0)
-        print(f"Initialized AntiSpam with rate_limit={rate_limit}, time_window={time_window}")
+        print(f"Initialized AntiSpam with rate_limit={rate_limit}, time_window={time_window}, mute_duration={mute_duration}")
 
     def is_spam(self, user_id, chat_id):
         current_time = time.time()
         key = (user_id, chat_id)
+
+        # Check if user is still muted
         if current_time < self.blocked_users[key]:
+            print(f"User {user_id} in chat {chat_id} is muted until {self.blocked_users[key]} (current time: {current_time})")
             return True
+        
+        # Clean up old messages and add the new one
         self.user_messages[key] = [msg_time for msg_time in self.user_messages[key] if current_time - msg_time < self.time_window]
         self.user_messages[key].append(current_time)
+        
+        # Check if user exceeds rate limit
         if len(self.user_messages[key]) > self.rate_limit:
-            self.blocked_users[key] = current_time
-            print(f"User {user_id} in chat {chat_id} is blocked until {self.blocked_users[key]}")
+            self.blocked_users[key] = current_time + self.mute_duration
+            print(f"User {user_id} in chat {chat_id} is blocked until {self.blocked_users[key]} (block duration: {self.mute_duration} seconds)")
             return True
+        
         return False
 
 class AntiRaid:
@@ -231,7 +240,7 @@ class AntiRaid:
         return 0
 #endregion Classes
 
-anti_spam = AntiSpam(rate_limit=5, time_window=10)
+anti_spam = AntiSpam(rate_limit=5, time_window=10, mute_duration=60)
 anti_raid = AntiRaid(user_amount=25, time_out=30, anti_raid_time=180)
 
 scheduler = BackgroundScheduler()
@@ -328,7 +337,9 @@ def start_monitoring_groups():
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
         group_data['group_id'] = group_doc.id
-        # schedule_group_monitoring(group_data)
+
+        if group_data.get('premium', False):  # Check if premium is True
+            schedule_group_monitoring(group_data)
 
     scheduler.start()
 
@@ -343,9 +354,9 @@ def schedule_group_monitoring(group_data):
         web3_instance = web3_instances.get(chain)
 
         if web3_instance and web3_instance.is_connected():
-            existing_job = scheduler.get_job(job_id) # Check for existing job with ID
+            existing_job = scheduler.get_job(job_id)  # Check for existing job with ID
             if existing_job:
-                existing_job.remove() # Remove existing job to update with new information
+                existing_job.remove()  # Remove existing job to update with new information
 
             scheduler.add_job(
                 monitor_transfers,
@@ -355,6 +366,9 @@ def schedule_group_monitoring(group_data):
                 id=job_id,  # Unique ID for the job
                 timezone=pytz.utc  # Use the UTC timezone from the pytz library
             )
+            print(f"Scheduled monitoring for premium group {group_id}")
+        else:
+            print(f"Web3 instance not connected for group {group_id} on chain {chain}")
 
 def is_user_admin(update: Update, context: CallbackContext) -> bool:
     chat_id = update.effective_chat.id
