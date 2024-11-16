@@ -93,8 +93,17 @@ endpoints = {
     "POLYGON": os.getenv('POLYGON_ENDPOINT')
 }
 
-websockets = {
+websockets = { # Later, TODO: Add websocket endpoints that are commented out
+    "ARBITRUM": os.getenv('ARBITRUM_WEBSOCKET'),
+    # "AVALANCHE": os.getenv('AVALANCHE_WEBSOCKET'),
     "BASE": os.getenv('BASE_WEBSOCKET'),
+    # "BSC": os.getenv('BSC_WEBSOCKET'),
+    "ETHEREUM": os.getenv('ETHEREUM_WEBSOCKET'),
+    "FANTOM": os.getenv('FANTOM_WEBSOCKET'),
+    # "HARMONY": os.getenv('HARMONY_WEBSOCKET'),
+    # "MANTLE": os.getenv('MANTLE_WEBSOCKET'),
+    "OPTIMISM": os.getenv('OPTIMISM_WEBSOCKET'),
+    "POLYGON": os.getenv('POLYGON_WEBSOCKET')
 }
 
 web3_instances = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in endpoints.items()}
@@ -3401,25 +3410,31 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     abi = group_data['token']['abi']
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
-    latest_block = web3_instance.eth.block_number
-    print(f"Latest block: {latest_block}")
+    lookback_range = 100 # Initialize last_seen_block locally (start from lookback range)
+    last_seen_block = web3_instance.eth.block_number - lookback_range
 
-    lookback_range = 5000  # Number of blocks to look back
-    
-    print(f"Checking transfers from block {block_to_check} for group {group_data['group_id']}")
-    
-    try: 
-        transfer_filter = contract.events.Transfer.createFilter( # Filter for events in the specific block
-            fromBlock=block_to_check,
-            toBlock=block_to_check,  # Only check this specific block
-            argument_filters={'from': liquidity_address}
-        )
-    except Exception as e:
-        print(f"Error creating filter for group {group_data['group_id']}: {e}")
-        return
+    while True:  # Continuous monitoring loop
+        try:
+            latest_block = web3_instance.eth.block_number # Get the latest block number
+            if last_seen_block >= latest_block:
+                time.sleep(5) # If no new blocks, wait and retry
+                continue
 
-    for event in transfer_filter.get_new_entries():
-        handle_transfer_event(event, group_data)
+            print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
+
+            events = contract.events.Transfer.getLogs( # Fetch Transfer events from last_seen_block + 1 to latest_block
+                fromBlock=last_seen_block + 1,
+                toBlock=latest_block,
+                argument_filters={'from': liquidity_address}
+            )
+
+            for event in events:
+                handle_transfer_event(event, group_data)
+
+            last_seen_block = latest_block
+        except Exception as e:
+            print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
+            time.sleep(5)  # Wait before retrying
 
 def handle_transfer_event(event, group_data):
     amount = event['args']['value']
@@ -3435,7 +3450,7 @@ def handle_transfer_event(event, group_data):
     if token_price_in_usd is not None:
         token_price_in_usd = Decimal(token_price_in_usd)
         total_value_usd = token_amount * token_price_in_usd
-        if total_value_usd < 500:
+        if total_value_usd < 1:
             print("Ignoring small buy")
             return
         value_message = f" ({total_value_usd:.2f} USD)"
