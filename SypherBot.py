@@ -483,7 +483,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
     username = update.message.from_user.username or update.message.from_user.first_name
-    msg = update.message.text or None
+    msg = update.message.text
 
     if not msg:
         return
@@ -538,9 +538,6 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     delete_blocked_links(update, context)
 
     handle_guess(update, context)
-    
-    if msg is not None:
-        track_message(update.msg)
 
 def handle_image(update: Update, context: CallbackContext) -> None:
     if is_user_admin(update, context):
