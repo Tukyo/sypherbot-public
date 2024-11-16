@@ -1420,29 +1420,27 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    try:
-        group_data = group_doc.get().to_dict()
 
-        if group_data is None:
-            print(f"Creating new document for group {group_id}.")
-            group_doc.set({
-                'admin': {
-                    'allowlist': True
-                }
-            })
-        else:
-            print(f"Updating allowlisting for group {group_id}.")
-            group_doc.update({
-                'admin.allowlist': True
-            })
+    group_data = group_doc.get().to_dict()
 
-        # Inform the user
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='✔️ Allowlisting has been enabled in this group ✔️'
-        )
-    except Exception as e:
-        print(f"Error while enabling allowlisting for group {group_id}: {e}")
+    if group_data is None:
+        print(f"Creating new document for group {group_id}.")
+        group_doc.set({
+            'admin': {
+                'allowlist': True
+            }
+        })
+    else:
+        print(f"Updating allowlisting for group {group_id}.")
+        group_doc.update({
+            'admin.allowlist': True
+        })
+
+    # Inform the user
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='✔️ Allowlisting has been enabled in this group ✔️'
+    )
 
     context.user_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
@@ -1470,28 +1468,26 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    try:
-        group_data = group_doc.get().to_dict()
 
-        if group_data is None:
-            print(f"Creating new document for group {group_id}.")
-            group_doc.set({
-                'admin': {
-                    'allowlist': False
-                }
-            })
-        else:
-            print(f"Updating allowlisting for group {group_id}.")
-            group_doc.update({
-                'admin.allowlist': False
-            })
+    group_data = group_doc.get().to_dict()
 
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='❌ Allowlisting has been disabled in this group ❌'
-        )
-    except Exception as e:
-        print(f"Error while disabling allowlisting for group {group_id}: {e}")
+    if group_data is None:
+        print(f"Creating new document for group {group_id}.")
+        group_doc.set({
+            'admin': {
+                'allowlist': False
+            }
+        })
+    else:
+        print(f"Updating allowlisting for group {group_id}.")
+        group_doc.update({
+            'admin.allowlist': False
+        })
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='❌ Allowlisting has been disabled in this group ❌'
+    )
 
     context.user_data['setup_stage'] = None
 
@@ -1554,28 +1550,24 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    try:
-        group_data = group_doc.get().to_dict()
 
-        if group_data is None:
-            print(f"Creating new document for group {group_id}.")
-            group_doc.set({
-                'admin': {
-                    'allowlist': []
-                }
-            })
-        else:
-            print(f"Clearing allowlist for group {group_id}.")
-            group_doc.update({
-                'admin.allowlist': []
-            })
+    group_data = group_doc.get().to_dict()
 
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='❌ Allowlist has been cleared in this group ❌'
-        )
-    except Exception as e:
-        print(f"Error while clearing allowlist for group {group_id}: {e}")
+    if group_data is None:
+        print(f"Creating new document for group {group_id}.")
+        group_doc.set({
+            'allowlist': []
+        })
+    else:
+        print(f"Clearing allowlist for group {group_id}.")
+        group_doc.update({
+            'allowlist': []
+        })
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='❌ Allowlist has been cleared in this group ❌'
+    )
 
     context.user_data['setup_stage'] = None
 
@@ -4118,11 +4110,16 @@ def allow(update: Update, context: CallbackContext):
     if is_user_admin(update, context):
         command_text = update.message.text[len('/allow '):].strip()
 
-        # Normalize the URL by removing the 'http://' or 'https://'
-        if command_text.startswith('http://'):
-            command_text = command_text[7:]
-        elif command_text.startswith('https://'):
-            command_text = command_text[8:]
+        # Validate against patterns
+        if not (ETH_ADDRESS_PATTERN.match(command_text) or 
+                URL_PATTERN.match(command_text) or 
+                DOMAIN_PATTERN.match(command_text)):
+            msg = update.message.reply_text(
+                f"Invalid format. Only Ethereum addresses, URLs, or domain names can be added to the allowlist."
+            )
+            if msg is not None:
+                track_message(msg)
+            return
 
         group_id = str(update.effective_chat.id)
         group_doc = db.collection('groups').document(group_id)
@@ -4134,13 +4131,14 @@ def allow(update: Update, context: CallbackContext):
             if doc_snapshot.exists:
                 group_data = doc_snapshot.to_dict()
                 current_allowlist = group_data.get(allowlist_field, "")
-                new_allowlist = current_allowlist + command_text + ", "
-
-                # Update the allowlist in the group's document
-                group_doc.update({allowlist_field: new_allowlist})
-                msg = update.message.reply_text(f"'{command_text}' added to allowlist!")
-                print("Updated allowlist:", new_allowlist)
-
+                if command_text in current_allowlist:
+                    msg = update.message.reply_text(f"'{command_text}' is already in the allowlist!")
+                else:
+                    new_allowlist = current_allowlist + command_text + ", "
+                    # Update the allowlist in the group's document
+                    group_doc.update({allowlist_field: new_allowlist})
+                    msg = update.message.reply_text(f"'{command_text}' added to allowlist!")
+                    print("Updated allowlist:", new_allowlist)
             else:
                 # If no allowlist exists, create it with the current command text
                 group_doc.set({allowlist_field: command_text + ", "})
