@@ -3595,8 +3595,7 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
                 token_price_in_usd = price_in_weth * eth_price_in_usd  # Convert to USD
                 print(f"Token price in USD: {token_price_in_usd}")
                 update.message.reply_text(
-                    f"Token price in WETH: {price_in_weth:.8f}\n"
-                    f"Token price in USD: ${token_price_in_usd:.4f}"
+                    f"${token_price_in_usd:.4f}"
                 )
             except Exception as e:
                 print(f"Error converting token price to USD: {e}")
@@ -3604,8 +3603,7 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
                 return
         elif modifier == "ETH":
             update.message.reply_text(
-                f"Token price in WETH: {price_in_weth:.8f}\n"
-                f"(ETH Equivalent)"
+                f"{price_in_weth:.8f} ETH"
             )
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
@@ -4324,43 +4322,6 @@ def fetch_random_word() -> str:
         return random.choice(words)
 #endregion Play Game
 
-def price(update: Update, context: CallbackContext) -> None:
-    # Fetch group-specific contract information
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return  # Early exit if no data found
-    
-    token_data = group_data.get('token')
-    if not token_data:
-        update.message.reply_text("Token data not found for this group.")
-        return
-
-    contract_address = token_data.get('contract_address')
-
-    if not contract_address:
-        update.message.reply_text("Contract address not found for this group.")
-        return
-
-    # Proceed with price fetching
-    currency = context.args[0].lower() if context.args else 'usd'
-    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
-        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
-        return
-    
-    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
-    
-    symbol = token_data.get('symbol')
-    if not symbol:
-        formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"{currency.upper()}: {formatted_price}")
-        return
-
-    if token_price_in_fiat is not None:
-        formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"{symbol} • {currency.upper()}: {formatted_price}")
-    else:
-        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
-
 def ca(update: Update, context: CallbackContext) -> None:
     msg = None
     if rate_limit_check():
@@ -4675,7 +4636,7 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
     elif query.data == 'commands_website':
         website(update, context)
     elif query.data == 'commands_price':
-        price(update, context)
+        get_token_price(update, context)
     elif query.data == 'commands_chart':
         chart(update, context)
     elif query.data == 'commands_liquidity':
@@ -4696,8 +4657,6 @@ def main() -> None:
     
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
-
-    # dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, delete_service_messages))
     
     # General Slash Command Handlers
     dispatcher.add_handler(CommandHandler("commands", commands))
