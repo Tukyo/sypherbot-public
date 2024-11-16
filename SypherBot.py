@@ -1445,7 +1445,6 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
         print(f"Error while enabling allowlisting for group {group_id}: {e}")
 
     context.user_data['setup_stage'] = None
-    context.user_data['enable_allowlist_message'] = msg.message_id
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1495,7 +1494,6 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
         print(f"Error while disabling allowlisting for group {group_id}: {e}")
 
     context.user_data['setup_stage'] = None
-    context.user_data['disable_allowlist_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
@@ -1580,7 +1578,6 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
         print(f"Error while clearing allowlist for group {group_id}: {e}")
 
     context.user_data['setup_stage'] = None
-    context.user_data['clear_allowlist_message'] = msg.message_id
 
     if msg is not None:
         track_message(msg)
