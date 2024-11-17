@@ -564,7 +564,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
                 return
             elif pattern == "url":
                 matched_url = URL_PATTERN.search(msg).group()  # Extract the detected URL
-                if matched_url == group_website: # Check if the URL matches the group website
+                if matched_url.lower() == group_website.lower(): # Check if the URL matches the group website
                     print(f"URL matches group website: {matched_url}.")
                     return  # Skip deletion for matching group website URL
                 elif not is_allowed(msg, allowlist, URL_PATTERN):
@@ -577,7 +577,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
 
                 group_domain = extract_domain(group_website) if group_website else None
 
-                if msg.strip() == group_domain:  # Compare message to group domain
+                if msg.strip().lower() == group_domain.lower():  # Compare message to group domain
                     print(f"Domain matches group website: {msg}.")
                     return  # Skip deletion for matching group website domain
                 
@@ -4543,17 +4543,25 @@ def end_game(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
     key = f"{chat_id}_{user_id}"  # Unique key for each user-chat combination
 
-    # Check if there's an ongoing game for this user in this chat
-    if key in context.chat_data:
-        # Delete the game message
-        if 'game_message_id' in context.chat_data[key]:
-            context.bot.delete_message(chat_id=chat_id, message_id=context.chat_data[key]['game_message_id'])
+    is_triggered_by_bot = (
+        update.callback_query
+        and update.callback_query.from_user
+        and update.callback_query.from_user.id == context.bot.id
+    )
 
-        # Clear the game data
-        del context.chat_data[key]
+    if key in context.chat_data: # Check if there's an ongoing game for this user in this chat
+        if 'game_message_id' in context.chat_data[key]: # Delete the game message
+            context.bot.delete_message(chat_id=chat_id, message_id=context.chat_data[key]['game_message_id'])
+            print(f"Ending game for user {user_id} in chat {chat_id}")
+
+        del context.chat_data[key] # Clear the game data
         update.message.reply_text("Your game has been deleted.")
     else:
-        update.message.reply_text("You don't have an ongoing game.")
+        if is_triggered_by_bot:
+            update.message.reply_text("Please send '/endgame' to end your ongoing game.")
+        else:
+            print(f"No active game found for user {user_id} in chat {chat_id}")
+            update.message.reply_text("You don't have an ongoing game.")
 
 def handle_start_game(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
