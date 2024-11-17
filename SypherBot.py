@@ -572,6 +572,15 @@ def handle_message(update: Update, context: CallbackContext) -> None:
                     context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
                     return
             elif pattern == "domain":
+                def extract_domain(url): # Extract the domain from the group's website_url
+                    return re.sub(r'^https?://', '', url).split('/')[0]  # Strip scheme and path
+
+                group_domain = extract_domain(group_website) if group_website else None
+
+                if msg.strip() == group_domain:  # Compare message to group domain
+                    print(f"Domain matches group website: {msg}.")
+                    return  # Skip deletion for matching group website domain
+                
                 if not is_allowed(msg, allowlist, DOMAIN_PATTERN):
                     print(f"Blocked domain: {msg}")
                     context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
