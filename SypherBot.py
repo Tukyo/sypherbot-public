@@ -517,10 +517,11 @@ def rate_limit_check():
 def handle_message(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
-    username = update.message.from_user.username or update.message.from_user.first_name
+    username = update.message.from_user.username or update.message.from_user.first_name    
     msg = update.message.text
 
     if not msg:
+        print("No message text found.")
         return
 
     if is_user_admin(update, context):
@@ -534,6 +535,8 @@ def handle_message(update: Update, context: CallbackContext) -> None:
 
     if anti_spam.is_spam(user_id, chat_id):
         handle_spam(update, context, chat_id, user_id, username)
+
+    print(f"Message sent by user {user_id} in chat {chat_id}")
 
     detected_patterns = []
     if ETH_ADDRESS_PATTERN.search(msg):
@@ -596,6 +599,8 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     if is_user_admin(update, context):
         handle_setup_inputs_from_admin(update, context)
         return
+    
+    print(f"Image sent by user {update.message.from_user.id} in chat {update.message.chat.id}")
 
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
@@ -605,6 +610,24 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     if anti_spam.is_spam(user_id, chat_id):
         handle_spam(update, context, chat_id, user_id, username)
 
+    if msg is not None:
+        track_message(msg)
+
+def handle_document(update: Update, context: CallbackContext) -> None:
+    if is_user_admin(update, context):
+        handle_setup_inputs_from_admin(update, context)
+        return
+    
+    print(f"Document sent by user {update.message.from_user.id} in chat {update.message.chat.id}")
+
+    user_id = update.message.from_user.id
+    chat_id = update.message.chat.id
+    username = update.message.from_user.username or update.message.from_user.first_name
+    msg = None
+
+    if anti_spam.is_spam(user_id, chat_id):
+        handle_spam(update, context, chat_id, user_id, username)
+    
     if msg is not None:
         track_message(msg)
 
@@ -822,22 +845,29 @@ def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> 
     if not setup_stage:
         return
     if setup_stage == 'contract':
+        print(f"Received contract address in group {update.effective_chat.id}")
         handle_contract_address(update, context)
     elif setup_stage == 'liquidity':
+        print(f"Received liquidity address in group {update.effective_chat.id}")
         handle_liquidity_address(update, context)
     elif setup_stage == 'ABI':
         if update.message.text:
             update.message.reply_text("Please upload the ABI as a JSON file.")
             pass
         elif update.message.document:
+            print(f"Received ABI document in group {update.effective_chat.id}")
             handle_ABI(update, context)
     elif setup_stage == 'website':
+        print(f"Received website URL in group {update.effective_chat.id}")
         handle_website_url(update, context)
     elif setup_stage == 'welcome_message_header' and context.user_data.get('expecting_welcome_message_header_image'):
+        print(f"Received welcome message header image in group {update.effective_chat.id}")
         handle_welcome_message_image(update, context)
     elif setup_stage == 'buybot_message_header' and context.user_data.get('expecting_buybot_header_image'):
+        print(f"Received buybot message header image in group {update.effective_chat.id}")
         handle_buybot_message_image(update, context)
     elif context.user_data.get('setup_stage') == 'set_max_warns':
+        print(f"Received max warns number in group {update.effective_chat.id}")
         handle_max_warns(update, context)
 
 def start(update: Update, context: CallbackContext) -> None:
@@ -5032,7 +5062,7 @@ def website(update: Update, context: CallbackContext) -> None:
 
 
 
-def admin_commands(update: Update, context: CallbackContext) -> None:
+def admin_commands(update: Update, context: CallbackContext) -> None: # HERE TODO: UPDATE ALL THIS AND THEN ALSO UPDATE THE COMMENTS AT THE TOP TO MATCH 
     msg = None
     if is_user_admin(update, context):
         msg = update.message.reply_text(
@@ -5168,7 +5198,8 @@ def main() -> None:
     # Register the message handler for new users
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
-    dispatcher.add_handler(MessageHandler((Filters.text | Filters.document) & (~Filters.command), handle_message))
+    dispatcher.add_handler(MessageHandler((Filters.text) & (~Filters.command), handle_message))
+    dispatcher.add_handler(MessageHandler(Filters.document, handle_document))
     dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
 
     # Authentication Callbacks
