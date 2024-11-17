@@ -843,6 +843,7 @@ def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> 
     setup_stage = context.user_data.get('setup_stage')
     print("Checking if user is in setup mode.")
     if not setup_stage:
+        print("User is not in setup mode.")
         return
     if setup_stage == 'contract':
         print(f"Received contract address in group {update.effective_chat.id}")
@@ -4802,43 +4803,6 @@ def ca(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def price(update: Update, context: CallbackContext) -> None: # UNUSED TODO: Save this for fetching v2 prices as a fallback later
-    # Fetch group-specific contract information
-    group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return  # Early exit if no data found
-    
-    token_data = group_data.get('token')
-    if not token_data:
-        update.message.reply_text("Token data not found for this group.")
-        return
-
-    contract_address = token_data.get('contract_address')
-
-    if not contract_address:
-        update.message.reply_text("Contract address not found for this group.")
-        return
-
-    # Proceed with price fetching
-    currency = context.args[0].lower() if context.args else 'usd'
-    if currency not in ['usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', 'mxn']:
-        update.message.reply_text("Unsupported currency. Please use 'usd', 'eur', 'jpy', 'gbp', 'aud', 'cad', or 'mxn'.")
-        return
-    
-    token_price_in_fiat = get_token_price_in_fiat(contract_address, currency)
-    
-    symbol = token_data.get('symbol')
-    if not symbol:
-        formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"{currency.upper()}: {formatted_price}")
-        return
-
-    if token_price_in_fiat is not None:
-        formatted_price = format(token_price_in_fiat, '.4f')
-        update.message.reply_text(f"{symbol} • {currency.upper()}: {formatted_price}")
-    else:
-        update.message.reply_text(f"Failed to retrieve the price of the token in {currency.upper()}.")
-
 def liquidity(update: Update, context: CallbackContext) -> None:
     msg = None
     group_data = fetch_group_info(update, context)
@@ -4904,6 +4868,7 @@ def volume(update: Update, context: CallbackContext) -> None:
     if rate_limit_check():
         volume_24h_usd = get_volume(chain, lp_address)
         if volume_24h_usd:
+            volume_24h_usd = float(volume_24h_usd) # Ensure the value is treated as a float for formatting
             msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd:.4f}")
         else:
             msg = update.message.reply_text("Failed to fetch volume data.")
