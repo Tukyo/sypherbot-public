@@ -4534,7 +4534,12 @@ def play(update: Update, context: CallbackContext) -> None:
         photo_path = os.path.join(base_dir, 'assets', 'banner.gif')
         
         with open(photo_path, 'rb') as photo:
-            context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo, caption='Welcome to deSypher! Click the button below to start a game!', reply_markup=reply_markup)
+            context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=photo,
+                caption='Welcome to deSypher! Click the button below to start a game!\n\nTo end an ongoing game, use the command /endgame.',
+                reply_markup=reply_markup
+            )
     else:
         update.message.reply_text('Bot rate limit exceeded. Please try again later.')
 
@@ -4542,12 +4547,6 @@ def end_game(update: Update, context: CallbackContext) -> None:
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     key = f"{chat_id}_{user_id}"  # Unique key for each user-chat combination
-
-    is_triggered_by_bot = (
-        update.callback_query
-        and update.callback_query.from_user
-        and update.callback_query.from_user.id == context.bot.id
-    )
 
     if key in context.chat_data: # Check if there's an ongoing game for this user in this chat
         if 'game_message_id' in context.chat_data[key]: # Delete the game message
@@ -4557,11 +4556,8 @@ def end_game(update: Update, context: CallbackContext) -> None:
         del context.chat_data[key] # Clear the game data
         update.message.reply_text("Your game has been deleted.")
     else:
-        if is_triggered_by_bot:
-            update.message.reply_text("Please send '/endgame' to end your ongoing game.")
-        else:
-            print(f"No active game found for user {user_id} in chat {chat_id}")
-            update.message.reply_text("You don't have an ongoing game.")
+        print(f"No active game found for user {user_id} in chat {chat_id}")
+        update.message.reply_text("You don't have an ongoing game.")
 
 def handle_start_game(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -5062,7 +5058,6 @@ def commands(update: Update, context: CallbackContext) -> None:
         keyboard = [
             [
                 InlineKeyboardButton("/play", callback_data='commands_play'),
-                InlineKeyboardButton("/endgame", callback_data='commands_endgame')
             ],
             [
                 InlineKeyboardButton("/website", callback_data='commands_website'),
@@ -5095,8 +5090,6 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
 
     if query.data == 'commands_play':
         play(update, context)
-    elif query.data == 'commands_endgame':
-        end_game(update, context)
     elif query.data == 'commands_contract':
         ca(update, context)
     elif query.data == 'commands_website':
