@@ -1632,7 +1632,7 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
                 group_id = update.effective_chat.id
                 print(f"Adding website URL {website_url} to group {group_id}")
                 group_doc = db.collection('groups').document(str(group_id))
-                group_doc.update({'allowlist.website_url': website_url})
+                group_doc.update({'group_info.website_url': website_url})
                 context.user_data['setup_stage'] = None
 
                 if update.message is not None:
