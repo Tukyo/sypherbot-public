@@ -477,9 +477,9 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         return None  # Private chats have no group data
 
     if update_attr: # Determines wether or not the group_id is fetched from a message update or chat
-        group_id = update.message.chat.id
+        group_id = str(update.message.chat.id)
     else:
-        group_id = update.effective_chat.id
+        group_id = str(update.effective_chat.id)
 
     cached_info = fetch_cached_group_info(group_id)
 
@@ -523,6 +523,7 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
 
 group_info_cache = {}
 def cache_group_info(group_id: str, group_data: dict, group_doc: object) -> None: # Caches the group data and document reference for a specific group ID.
+    group_id = str(group_id)
     group_info_cache[group_id] = {
         "group_data": group_data,
         "group_doc": group_doc
@@ -531,6 +532,7 @@ def cache_group_info(group_id: str, group_data: dict, group_doc: object) -> None
     print(f"Cached info for group {group_id}.")
 
 def fetch_cached_group_info(group_id: str) -> dict | None: # Retrieves cached group data and document reference for a specific group ID.
+    group_id = str(group_id)
     cached_info = group_info_cache.get(group_id)
 
     if cached_info:
@@ -541,6 +543,7 @@ def fetch_cached_group_info(group_id: str) -> dict | None: # Retrieves cached gr
         return None
 
 def clear_group_cache(group_id: str) -> None: # Clears the cache for a specific group ID.
+    group_id = str(group_id)
     if group_id in group_info_cache:
         del group_info_cache[group_id]
         print(f"Cache cleared for group {group_id}.")
