@@ -5075,7 +5075,16 @@ def commands(update: Update, context: CallbackContext) -> None:
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        msg = update.message.reply_text('Welcome to Sypher Bot! Below you will find all my commands:', reply_markup=reply_markup)
+        base_dir = os.path.dirname(__file__)
+        image_path = os.path.join(base_dir, 'assets', 'banner.jpg')
+
+        with open(image_path, 'rb') as photo:
+            context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=photo,
+                caption="Welcome to Sypher Bot! Below you will find all my commands:",
+                reply_markup=reply_markup
+            )
     else:
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
     
