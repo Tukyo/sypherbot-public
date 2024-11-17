@@ -813,6 +813,8 @@ def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> 
             pass
         elif update.message.document:
             handle_ABI(update, context)
+    elif setup_stage == 'website':
+        handle_website_url(update, context)
     elif setup_stage == 'welcome_message_header' and context.user_data.get('expecting_welcome_message_header_image'):
         handle_welcome_message_image(update, context)
     elif setup_stage == 'buybot_message_header' and context.user_data.get('expecting_buybot_header_image'):
@@ -1600,7 +1602,7 @@ def setup_website_callback(update: Update, context: CallbackContext) -> None:
     if is_user_owner(update, context, user_id):
 
         keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+            [InlineKeyboardButton("Back", callback_data='setup_allowlist')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
