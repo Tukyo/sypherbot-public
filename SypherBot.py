@@ -1591,7 +1591,7 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def setup_website(update: Update, context: CallbackContext) -> None:
+def setup_website_callback(update: Update, context: CallbackContext) -> None:
     msg = None
     query = update.callback_query
     query.answer()
@@ -5162,7 +5162,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_allowlist_callback, pattern='^enable_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(disable_allowlist_callback, pattern='^disable_allowlist$'))
-    dispatcher.add_handler(CallbackQueryHandler(add_website_callback, pattern='^add_website$'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_website_callback, pattern='^setup_website$'))
     dispatcher.add_handler(CallbackQueryHandler(check_allowlist_callback, pattern='^check_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(clear_allowlist_callback, pattern='^clear_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(reset_admin_settings_callback, pattern='^reset_admin_settings$'))
