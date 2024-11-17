@@ -543,12 +543,9 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     if DOMAIN_PATTERN.search(msg):
         detected_patterns.append("domain")
 
-    # Check the allowlist if any patterns matched
-    if detected_patterns and msg is not None:
+    if detected_patterns and msg is not None: # Check the allowlist if any patterns matched
         group_id = update.effective_chat.id
         group_doc = db.collection('groups').document(str(group_id))
-        group_data = group_doc.get().to_dict()
-
         group_data = group_doc.get().to_dict()
 
         if not group_data or not group_data.get('admin', {}).get('allowlist', False):  # Default to False
@@ -556,17 +553,29 @@ def handle_message(update: Update, context: CallbackContext) -> None:
             return
 
         allowlist = group_data.get('allowlist', [])
+        group_info = group_data.get('group_info', {})
+
+        group_website = group_info.get('website_url', None)
 
         for pattern in detected_patterns:
             if pattern == "eth_address":
+                print(f"Detected Ethereum address: {msg}")
                 delete_blocked_addresses(update, context)
                 return
-            elif pattern == "url" and not is_allowed(msg, allowlist, URL_PATTERN):
-                context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
-                return
-            elif pattern == "domain" and not is_allowed(msg, allowlist, DOMAIN_PATTERN):
-                context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
-                return
+            elif pattern == "url":
+                matched_url = URL_PATTERN.search(msg).group()  # Extract the detected URL
+                if matched_url == group_website: # Check if the URL matches the group website
+                    print(f"URL matches group website: {matched_url}.")
+                    return  # Skip deletion for matching group website URL
+                elif not is_allowed(msg, allowlist, URL_PATTERN):
+                    print(f"Blocked URL: {msg}")
+                    context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+                    return
+            elif pattern == "domain":
+                if not is_allowed(msg, allowlist, DOMAIN_PATTERN):
+                    print(f"Blocked domain: {msg}")
+                    context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+                    return
 
     delete_blocked_addresses(update, context)
     delete_blocked_phrases(update, context)
@@ -4953,6 +4962,7 @@ def chart(update: Update, context: CallbackContext) -> None:
 
 def website(update: Update, context: CallbackContext) -> None:
     msg = None
+    
     if rate_limit_check():
         group_data = fetch_group_info(update, context)
         if group_data is None:
@@ -4964,7 +4974,7 @@ def website(update: Update, context: CallbackContext) -> None:
             msg = update.message.reply_text("Group info not found.")
             return
         
-        group_website = group_info.get('group_website')
+        group_website = group_info.get('website_url')
 
         if group_website is None:
             msg = update.message.reply_text("Group link not found.")
@@ -5103,6 +5113,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("chart", chart))
     dispatcher.add_handler(CommandHandler(['liquidity', 'lp'], liquidity))
     dispatcher.add_handler(CommandHandler("volume", volume))
+    dispatcher.add_handler(CommandHandler("website", website))
     dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
     dispatcher.add_handler(CommandHandler('rick', send_rick_video, pass_args=True))
