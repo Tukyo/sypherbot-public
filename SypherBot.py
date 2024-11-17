@@ -267,6 +267,8 @@ anti_raid = AntiRaid(user_amount=25, time_out=30, anti_raid_time=180)
 
 scheduler = BackgroundScheduler()
 
+BOT_USERNAME = "sypher_robot"
+
 ETH_ADDRESS_PATTERN = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 URL_PATTERN = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 DOMAIN_PATTERN = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
@@ -338,6 +340,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 'blocklist': False
             }
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         print(f"Group {group_id} added to database.")
 
@@ -352,8 +355,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
             )
             store_message_id(context, msg.message_id)
             print(f"Sent setup message to group {group_id}")
-        else:
-            # Bot is not admin, send the "Give me admin perms" message
+        else: # Bot is not admin, send the "Give me admin perms" message
             setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
             msg = update.message.reply_text(
@@ -382,6 +384,7 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
     if left_member.id == context.bot.id: # Bot left. not user
         print(f"Removing group {update.effective_chat.id} from database.")
         group_doc.delete()  # Directly delete the group document
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 def start_monitoring_groups():
     groups_snapshot = db.collection('groups').get()
@@ -425,8 +428,7 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # Check if the update has a callback_query
-    if update.callback_query:
+    if update.callback_query: # Check if the update has a callback_query
         user_id = update.callback_query.from_user.id
     else:
         user_id = update.effective_user.id
@@ -436,8 +438,7 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
     
     print(f"Checking if user is admin for chat {chat_id}")
 
-    # Check if the user is an admin in this chat
-    chat_admins = context.bot.get_chat_administrators(chat_id)
+    chat_admins = context.bot.get_chat_administrators(chat_id) # Check if the user is an admin in this chat
     user_is_admin = any(admin.user.id == user_id for admin in chat_admins)
 
     return user_is_admin
@@ -448,10 +449,11 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
     if update.effective_chat.type == 'private':
         print("User is in a private chat.")
         return False
-    
+
     print(f"Checking if user is owner for chat {chat_id}")
 
-    # Retrieve the group document from the database
+    # Always retrieve the group document from the database
+    # Do not use {fetch_group_info} as it may return cached data << !!!!!
     group_doc = db.collection('groups').document(str(chat_id))
     group_data = group_doc.get().to_dict()
 
@@ -459,8 +461,7 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
         print(f"No data found for group {chat_id}. Group may not be registered.")
         return False  # Default to False if no data is found
 
-    # Check if the user is the owner of this group
-    user_is_owner = group_data['owner_id'] == user_id
+    user_is_owner = group_data['owner_id'] == user_id # Check if the user is the owner of this group
 
     print(f"UserID: {user_id} - OwnerID: {group_data['owner_id']} - IsOwner: {user_is_owner}")
 
@@ -477,6 +478,15 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         group_id = update.message.chat.id
     else:
         group_id = update.effective_chat.id
+
+    cached_info = fetch_cached_group_info(group_id)
+
+    if cached_info: # Return cached data based on the flags
+        if return_both:
+            return cached_info["group_data"], cached_info["group_doc"]
+        if return_doc:
+            return cached_info["group_doc"]
+        return cached_info["group_data"]
 
     group_doc = db.collection('groups').document(str(group_id))
 
@@ -507,11 +517,33 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         print(f"Failed to fetch group info: {e}")
         return None  # Error fetching group data
 
-def is_allowed(message, allowlist, pattern):
-    """
-    Check if any detected matches in the message are present in the allowlist.
-    """
+group_info_cache = {}
+def cache_group_info(group_id: str, group_data: dict, group_doc: object) -> None: # Caches the group data and document reference for a specific group ID.
+    group_info_cache[group_id] = {
+        "group_data": group_data,
+        "group_doc": group_doc
+    }
 
+    print(f"Cached info for group {group_id}.")
+
+def fetch_cached_group_info(group_id: str) -> dict | None: # Retrieves cached group data and document reference for a specific group ID.
+    cached_info = group_info_cache.get(group_id)
+
+    if cached_info:
+        print(f"Found cache for group {group_id}.")
+        return cached_info
+    else:
+        print(f"No cache for group {group_id}.")
+        return None
+
+def clear_group_cache(group_id: str) -> None: # Clears the cache for a specific group ID.
+    if group_id in group_info_cache:
+        del group_info_cache[group_id]
+        print(f"Cache cleared for group {group_id}.")
+    else:
+        print(f"No cache entry found for group {group_id}.")
+
+def is_allowed(message, allowlist, pattern): # Check if any detected matches in the message are present in the allowlist.
     print(f"Pattern found, checking message...")
 
     matches = pattern.findall(message)
@@ -521,7 +553,7 @@ def is_allowed(message, allowlist, pattern):
     return False
 
 #region Message Handling
-def rate_limit_check():
+def rate_limit_check(): # Later TODO: Implement rate limiting PER GROUP
     print("Checking rate limit...")
     global last_check_time, command_count
     current_time = time.time()
@@ -676,7 +708,7 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
 
     # Only send the message if the user is not in the unverified_users mapping
     if str(user_id) not in group_data.get('unverified_users', {}):
-        auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
+        auth_url = f"https://t.me/{BOT_USERNAME}?start=authenticate_{chat_id}_{user_id}"
         keyboard = [
             [InlineKeyboardButton("Remove Restrictions", url=auth_url)]
         ]
@@ -697,6 +729,7 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
         }
         group_doc.update({'unverified_users': user_data})  # Update the document with structured data
         print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 def delete_blocked_addresses(update: Update, context: CallbackContext):
     print("Checking message for unallowed addresses...")
@@ -811,7 +844,6 @@ def delete_blocked_phrases(update: Update, context: CallbackContext):
                 print(f"Error deleting message: {e}")
             break  # Exit loop after deleting the message to prevent multiple deletions for one message
 
-
 def delete_service_messages(update, context):
     non_deletable_message_id = context.chat_data.get('non_deletable_message_id')
     if update.message.message_id == non_deletable_message_id:
@@ -835,9 +867,9 @@ def store_message_id(context, message_id):
 
 #region Bot Setup
 def menu_change(context: CallbackContext, update: Update):
-    messages_to_delete = [
-        'setup_bot_message'
-    ]
+    messages_to_delete = [ 'setup_bot_message' ]
+
+    print(f"Menu change detected in group {update.effective_chat.id}")
 
     for message_to_delete in messages_to_delete:
         if message_to_delete in context.user_data:
@@ -856,7 +888,7 @@ def exit_callback(update: Update, context: CallbackContext) -> None:
     msg = None
     query = update.callback_query
     query.answer()
-    print("User pressed exit button, exiting setup.")
+    print(f"Exiting setup mode in group {update.effective_chat.id}")
     query.message.delete()
     context.user_data['setup_stage'] = None
 
@@ -894,6 +926,9 @@ def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> 
     elif context.user_data.get('setup_stage') == 'set_max_warns':
         print(f"Received max warns number in group {update.effective_chat.id}")
         handle_max_warns(update, context)
+    
+    # MAYBE clear cache here TODO
+    # clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 def start(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -910,8 +945,7 @@ def start(update: Update, context: CallbackContext) -> None:
                 user_id_from_link = command_args[2]
                 print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
 
-                group_doc = db.collection('groups').document(group_id)
-                group_data = group_doc.get()
+                group_data = fetch_group_info(update, context)
                 if group_data.exists:
                     unverified_users = group_data.to_dict().get('unverified_users', {})
                     print(f"Unverified users list: {unverified_users}")
@@ -928,7 +962,7 @@ def start(update: Update, context: CallbackContext) -> None:
             else:
                 # General start command handling when not triggered via deep link
                 keyboard = [
-                    [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/sypher_robot?startgroup=0")]
+                    [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/{BOT_USERNAME}?startgroup=0")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 msg = update.message.reply_text(
@@ -987,8 +1021,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         print(f"Error getting group link: {e}")
         group_link = None
 
-    # Get the group username
-    group_username = update.effective_chat.username
+    group_username = update.effective_chat.username # Get the group username
     if group_username is not None:
         group_username = "@" + group_username
 
@@ -1047,6 +1080,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
             'group_username': group_username,
         }
     })
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 #region Admin Setup
 def setup_admin_callback(update: Update, context: CallbackContext) -> None:
@@ -1177,6 +1211,8 @@ def enable_mute(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'admin.mute': True
         })
+    
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1221,6 +1257,8 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'admin.mute': False
         })
+
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1362,6 +1400,8 @@ def enable_warn(update: Update, context: CallbackContext) -> None:
             'admin.warn': True
         })
 
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='✔️ Warning has been enabled in this group ✔️'
@@ -1405,6 +1445,8 @@ def disable_warn(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'admin.warn': False
         })
+
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1519,6 +1561,7 @@ def handle_max_warns(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'admin.max_warns': max_warns
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -1618,6 +1661,8 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'admin.allowlist': True
         })
+    
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     # Inform the user
     msg = context.bot.send_message(
@@ -1668,6 +1713,8 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'admin.allowlist': False
         })
+    
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1719,6 +1766,7 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
                 print(f"Adding website URL {website_url} to group {group_id}")
                 group_doc = fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'group_info.website_url': website_url})
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 context.user_data['setup_stage'] = None
 
                 if update.message is not None:
@@ -1801,6 +1849,8 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'allowlist': []
         })
+
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1886,6 +1936,7 @@ def reset_admin_settings(update: Update, context: CallbackContext) -> None:
         'blocklist': False
     }
     group_doc.update({'admin': new_admin_settings})
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = update.message.reply_text("Admin settings have been reset to default.")
 
@@ -1986,6 +2037,8 @@ def enable_verification(update: Update, context: CallbackContext) -> None:
             }
         })
 
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Authentication enabled for this group.\n\n*❗ Please choose an authentication type ❗*', parse_mode='Markdown'
@@ -2033,6 +2086,8 @@ def disable_verification(update: Update, context: CallbackContext) -> None:
                 'verification_type': 'none'
             }
         })
+
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -2083,6 +2138,8 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
                 'verification_timeout': 600
             }
         })
+    
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     menu_change(context, update)
 
@@ -2142,6 +2199,8 @@ def math_verification(update: Update, context: CallbackContext) -> None:
                 'verification_timeout': 600
             }
         })
+
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     keyboard = [
         [InlineKeyboardButton("Back", callback_data='setup_verification')]
@@ -2204,7 +2263,8 @@ def word_verification(update: Update, context: CallbackContext) -> None:
             }
         })
 
-    # Set the state in user_data
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+
     context.user_data['setup_stage'] = 'setup_word_verification'
 
     menu_change(context, update)
@@ -2214,8 +2274,7 @@ def word_verification(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Ask the question for new users
-    msg = context.bot.send_message(
+    msg = context.bot.send_message( # Ask the question for new users
         chat_id=update.effective_chat.id,
         text='*🈹 Word authentication enabled for this group 🈹*',
         parse_mode='Markdown',
@@ -2447,6 +2506,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
                 print(f"Adding contract address {contract_address} to group {group_id}")
                 group_doc = fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'token.contract_address': contract_address})
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 context.user_data['setup_stage'] = None
 
                 if update.message is not None:
@@ -2504,6 +2564,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
                 print(f"Adding liquidity address {liquidity_address} to group {group_id}")
                 group_doc = fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'token.liquidity_address': liquidity_address})
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 context.user_data['setup_stage'] = None
 
                 # Check if update.message is not None before using it
@@ -2571,6 +2632,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
                     print(f"Adding ABI to group {group_id}")
                     group_doc = fetch_group_info(update, context, return_doc=True)
                     group_doc.update({'token.abi': abi})
+                    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                     context.user_data['setup_stage'] = None
                     msg = update.message.reply_text("ABI has been successfully saved.")
 
@@ -2661,6 +2723,7 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
             print(f"Adding chain {chain} to group {group_id}")
             group_doc = fetch_group_info(update, context, return_doc=True)
             group_doc.update({'token.chain': chain})
+            clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
             context.user_data['setup_stage'] = None
 
             complete_token_setup(group_id, context)
@@ -2674,7 +2737,6 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
 
 def complete_token_setup(group_id: str, context: CallbackContext):
     msg = None
-    # Fetch the group data from Firestore
     group_doc = db.collection('groups').document(str(group_id))
     group_data = group_doc.get().to_dict()
 
@@ -2683,8 +2745,7 @@ def complete_token_setup(group_id: str, context: CallbackContext):
         print("Token data not found for this group.")
         return
 
-    # Get the contract address, ABI, and chain from the group data
-    if 'abi' not in token_data:
+    if 'abi' not in token_data: # Get the contract address, ABI, and chain from the group data
         print(f"ABI not found in group {group_id}, token setup incomplete.")
         return
     abi = token_data.get('abi')
@@ -2699,17 +2760,14 @@ def complete_token_setup(group_id: str, context: CallbackContext):
         return
     chain = token_data.get('chain')
 
-    # Get the Web3 instance for the chain
-    web3 = web3_instances.get(chain)
+    web3 = web3_instances.get(chain) # Get the Web3 instance for the chain
     if not web3:
         print(f"Web3 provider not found for chain {chain}, token setup incomplete.")
         return
 
-    # Create a contract object
     contract = web3.eth.contract(address=contract_address, abi=abi)
 
-    # Call the name, symbol, and decimals functions
-    try:
+    try: # Call the name, symbol, and decimals functions
         token_name = contract.functions.name().call()
         token_symbol = contract.functions.symbol().call()
         decimals = contract.functions.decimals().call()
@@ -2718,13 +2776,14 @@ def complete_token_setup(group_id: str, context: CallbackContext):
         print(f"Failed to get token name, symbol, total supply and decimals: {e}")
         return
     
-    # Update the Firestore document with the token name, symbol, and total supply
-    group_doc.update({
+    group_doc.update({ # Update the Firestore document with the token name, symbol, and total supply
         'token.name': token_name,
         'token.symbol': token_symbol,
         'token.total_supply': total_supply,
         'token.decimals': decimals
     })
+
+    clear_group_cache(str(group_id)) # Clear the cache on all database updates
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
 
@@ -2811,6 +2870,8 @@ def reset_token_details(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'token': {}
         })
+
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2945,6 +3006,7 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
                 group_doc.update({
                     'premium_features.welcome_header': True
                 })
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
             msg = context.bot.send_message(
                 chat_id=update.effective_chat.id,
@@ -3047,6 +3109,7 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
                 group_doc.update({
                     'premium_features.buybot_header': True
                 })
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
             msg = context.bot.send_message(
                 chat_id=update.effective_chat.id,
@@ -3107,6 +3170,7 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
             'premium_features.sypher_trust': True,
             'premium_features.sypher_trust_preferences': 'moderate'
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3155,6 +3219,7 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'premium_features.sypher_trust': False
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3250,6 +3315,7 @@ def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'premium_features.sypher_trust_preferences': 'relaxed'
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3287,6 +3353,7 @@ def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'premium_features.sypher_trust_preferences': 'moderate'
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3324,6 +3391,7 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'premium_features.sypher_trust_preferences': 'strict'
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3387,7 +3455,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
             
-            auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
+            auth_url = f"https://t.me/{BOT_USERNAME}?start=authenticate_{chat_id}_{user_id}"
             keyboard = [ [InlineKeyboardButton("Start Authentication", url=auth_url)] ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -3424,6 +3492,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             if updates:
                 group_doc.update(updates)
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     if msg is not None:
         track_message(msg)
@@ -3463,7 +3532,7 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
         query.edit_message_text(text="No such group exists.")
 
 def authentication_challenge(update: Update, context: CallbackContext, verification_type, group_id, user_id):
-    group_doc = db.collection('groups').document(group_id)
+    group_doc = fetch_group_info(update, context, return_doc=True)
 
     if verification_type == 'math':
         challenges = [MATH_0, MATH_1, MATH_2, MATH_3, MATH_4]
@@ -3510,12 +3579,10 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             reply_markup=reply_markup
         )
 
-        # print(f"image_path: {image_url}")
-
-        # Update Firestore with the challenge
-        group_doc.update({
+        group_doc.update({ # Update Firestore with the challenge
             f'unverified_users.{user_id}.challenge': math_challenge
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
         print(f"Stored math challenge for user {user_id} in group {group_id}: {math_challenge}")
 
     elif verification_type == 'word':
@@ -3546,13 +3613,11 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
             caption="Identify the correct word in the image:",
             reply_markup=reply_markup
         )
-
-        # print(f"image_path: {image_url}")
     
-        # Update Firestore with the challenge
-        group_doc.update({
+        group_doc.update({ # Update Firestore with the challenge
             f'unverified_users.{user_id}.challenge': word_challenge
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
         print(f"Stored word challenge for user {user_id} in group {group_id}: {word_challenge}")
     
     else:
@@ -3638,10 +3703,12 @@ def callback_math_response(update: Update, context: CallbackContext):
         )
 
 def authenticate_user(context, group_id, user_id):
-    print(f"Authenticating user {user_id} in group {group_id}")
+    # Always check the database when authenticating the user
+    # This is to avoid using stale cached data
     group_doc = db.collection('groups').document(group_id)
-
     group_data = group_doc.get().to_dict()
+
+    print(f"Authenticating user {user_id} in group {group_id}")
 
     if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
         join_message_id = group_data['unverified_users'][user_id].get('join_message_id')
@@ -3659,6 +3726,7 @@ def authenticate_user(context, group_id, user_id):
         print(f"Removed user {user_id} from unverified users in group {group_id}")
 
         group_doc.set(group_data) # Write the updated group data back to Firestore
+        clear_group_cache(str(group_id)) # Clear the cache on all database updates
 
     context.bot.send_message(
         chat_id=user_id,
@@ -3681,7 +3749,7 @@ def authenticate_user(context, group_id, user_id):
 
 def authentication_failed(update: Update, context: CallbackContext, group_id, user_id):
     print(f"Authentication failed for user {user_id} in group {group_id}")
-    group_doc = db.collection('groups').document(group_id)
+    group_doc = fetch_group_info(update, context, return_doc=True)
     group_data = group_doc.get().to_dict() 
 
     if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
@@ -3690,6 +3758,7 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
     print(f"Reset challenge for user {user_id} in group {group_id}")
 
     group_doc.set(group_data) # Write the updated group data back to Firestore
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     context.bot.delete_message(
         chat_id=update.effective_chat.id,
@@ -4138,6 +4207,7 @@ def mute(update: Update, context: CallbackContext) -> None:
         group_doc.update({ # Add the user to the muted_users mapping in the database
             f'muted_users.{user_id}': datetime.now().isoformat()
         })
+        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
     else:
         msg = update.message.reply_text("You must be an admin to use this command.")
     
@@ -4175,6 +4245,7 @@ def unmute(update: Update, context: CallbackContext) -> None:
                     group_doc.update({ # Remove the user from the muted_users mapping in the database
                         f'muted_users.{user_id}': firestore.DELETE_FIELD
                     })
+                    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                     break
             except Exception:
                 continue
@@ -4222,6 +4293,7 @@ def warn(update: Update, context: CallbackContext):
                 warnings_dict[user_id] = current_warnings
 
                 group_doc.update({'warnings': warnings_dict}) # Update the group document with the new warnings count
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 msg = update.message.reply_text(f"{username} has been warned. Total warnings: {current_warnings}")
 
                 process_warns(update, context, user_id, current_warnings) # Check if the user has reached the warning limit
@@ -4257,6 +4329,7 @@ def clear_warns_for_user(update: Update, context: CallbackContext):
                     group_doc.update({
                         f'warnings.{user_id}': firestore.DELETE_FIELD
                     })
+                    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                     msg = update.message.reply_text(f"Warnings cleared for @{username_to_clear}.")
                     break
             except Exception:
@@ -4285,8 +4358,7 @@ def check_warnings(update: Update, context: CallbackContext):
     msg = None
     if is_user_admin(update, context) and update.message.reply_to_message:
         user_id = str(update.message.reply_to_message.from_user.id)
-        group_id = str(update.effective_chat.id)
-        group_doc = db.collection('groups').document(group_id)
+        group_doc = fetch_group_info(update, context, return_doc=True)
 
         try:
             doc_snapshot = group_doc.get()
@@ -4294,11 +4366,9 @@ def check_warnings(update: Update, context: CallbackContext):
                 group_data = doc_snapshot.to_dict()
                 warnings_dict = group_data.get('warnings', {})
 
-                # Get the warning count for the user
-                current_warnings = warnings_dict.get(user_id, 0)
+                current_warnings = warnings_dict.get(user_id, 0) # Get the warning count for the user
 
                 msg = update.message.reply_text(f"{user_id} has {current_warnings} warnings.")
-
             else:
                 msg = update.message.reply_text("Group data not found.")
 
@@ -4340,27 +4410,25 @@ def block(update: Update, context: CallbackContext):
             msg = update.message.reply_text("Please provide some text to block.")
             return
 
-        group_id = str(update.effective_chat.id)
-        group_doc = db.collection('groups').document(group_id)
+        group_doc = fetch_group_info(update, context, return_doc=True)
         blocklist_field = 'blocklist'
 
         try:
-            # Fetch current blocklist from the group's document
-            doc_snapshot = group_doc.get()
+            doc_snapshot = group_doc.get() # Fetch current blocklist from the group's document
             if doc_snapshot.exists:
                 group_data = doc_snapshot.to_dict()
                 current_blocklist = group_data.get(blocklist_field, "")
                 new_blocklist = current_blocklist + command_text + ", "
 
-                # Update the blocklist in the group's document
-                group_doc.update({blocklist_field: new_blocklist})
+                group_doc.update({blocklist_field: new_blocklist}) # Update the blocklist in the group's document
                 msg = update.message.reply_text(f"'{command_text}' added to blocklist!")
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 print("Updated blocklist:", new_blocklist)
 
             else:
-                # If no blocklist exists, create it with the current command text
-                group_doc.set({blocklist_field: command_text + ", "})
+                group_doc.set({blocklist_field: command_text + ", "}) # If no blocklist exists, create it with the current command text
                 msg = update.message.reply_text(f"'{command_text}' blocked!")
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 print("Created new blocklist with:", command_text)
 
         except Exception as e:
@@ -4381,14 +4449,13 @@ def remove_block(update: Update, context: CallbackContext):
                 track_message(msg)
             return
 
-        group_id = str(update.effective_chat.id)
-        group_doc = db.collection('groups').document(group_id)
+        group_doc = fetch_group_info(update, context, return_doc=True)
         blocklist_field = 'blocklist'
 
-        try:
-            # Use Firestore's arrayRemove to remove the item from the blocklist array
+        try: # Use Firestore's arrayRemove to remove the item from the blocklist array
             group_doc.update({blocklist_field: firestore.ArrayRemove([command_text])})
             msg = update.message.reply_text(f"'{command_text}' removed from the blocklist!")
+            clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
             print(f"Removed '{command_text}' from the blocklist.")
         
         except Exception as e:
@@ -4401,8 +4468,7 @@ def remove_block(update: Update, context: CallbackContext):
 def blocklist(update: Update, context: CallbackContext):
     msg = None
     if is_user_admin(update, context):
-        group_id = str(update.effective_chat.id)
-        group_doc = db.collection('groups').document(group_id)
+        group_doc = fetch_group_info(update, context, return_doc=True)
 
         try:
             doc_snapshot = group_doc.get()
@@ -4445,21 +4511,20 @@ def allow(update: Update, context: CallbackContext):
                 track_message(msg)
             return
 
-        group_id = str(update.effective_chat.id)
-        group_doc = db.collection('groups').document(group_id)
+        group_doc = fetch_group_info(update, context, return_doc=True)
         allowlist_field = 'allowlist'
 
-        try:
-            # Use Firestore's arrayUnion to add the item to the allowlist array
-            group_doc.update({allowlist_field: firestore.ArrayUnion([command_text])})
+        try: # Use Firestore's arrayUnion to add the item to the allowlist array
+            group_doc.update({allowlist_field: firestore.ArrayUnion([command_text])}) 
             msg = update.message.reply_text(f"'{command_text}' added to the allowlist!")
+            clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
             print(f"Added '{command_text}' to allowlist.")
 
         except Exception as e:
-            # Handle the case where the document doesn't exist
-            if 'NOT_FOUND' in str(e):
+            if 'NOT_FOUND' in str(e): # Handle the case where the document doesn't exist
                 group_doc.set({allowlist_field: [command_text]})
                 msg = update.message.reply_text(f"'{command_text}' added to a new allowlist!")
+                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 print(f"Created new allowlist with: {command_text}")
             else:
                 msg = update.message.reply_text(f"Failed to update allowlist: {str(e)}")
@@ -4471,22 +4536,18 @@ def allow(update: Update, context: CallbackContext):
 def allowlist(update: Update, context: CallbackContext):
     msg = None
     if is_user_admin(update, context):
-        group_id = str(update.effective_chat.id)
-        group_doc = db.collection('groups').document(group_id)
+        group_doc = fetch_group_info(update, context, return_doc=True)
 
         try:
-            # Fetch the group's document
-            doc_snapshot = group_doc.get()
+            doc_snapshot = group_doc.get() # Fetch the group's document
             if doc_snapshot.exists:
                 group_data = doc_snapshot.to_dict()
                 allowlist_field = 'allowlist'
 
-                # Fetch allowlist as an array
-                allowlist_items = group_data.get(allowlist_field, [])
+                allowlist_items = group_data.get(allowlist_field, []) # Fetch allowlist as an array
                 
                 if isinstance(allowlist_items, list) and allowlist_items:
-                    # Format the allowlist for display
-                    message = "Current allowlist:\n" + "\n".join(allowlist_items)
+                    message = "Current allowlist:\n" + "\n".join(allowlist_items) # Format the allowlist for display
                     update.message.reply_text(message)
                 else:
                     msg = update.message.reply_text("The allowlist is currently empty.")
