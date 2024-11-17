@@ -319,7 +319,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
         owner_id = inviter.id # Store group info only if the inviter is an admin
         owner_username = inviter.username
         print(f"Adding group {group_id} to database with owner {owner_id} ({owner_username})")
-        group_doc = db.collection('groups').document(str(group_id))
+        group_doc = fetch_group_info(update, context, return_doc=True)  # Fetch the Firestore document reference directly
         group_doc.set({
             'group_id': group_id,
             'owner_id': owner_id,
@@ -368,14 +368,20 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
 
 def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
     left_member = update.message.left_chat_member
-    if left_member.id != context.bot.id:
+
+    if left_member.id != context.bot.id:  # User left, not bot
         delete_service_messages(update, context)
-    if left_member.id == context.bot.id:
-        group_id = update.effective_chat.id
-        print(f"Removing group {group_id} from database.")
-        group_doc = db.collection('groups').document(str(group_id))
-        group_doc.delete()
-        delete_service_messages(update, context)
+        return
+
+    group_doc = fetch_group_info(update, context, return_doc=True) # Fetch the Firestore document reference directly
+
+    if not group_doc:  # If group doesn't exist in Firestore, log and skip deletion
+        print(f"Group {update.effective_chat.id} not found in database. No deletion required.")
+        return
+
+    if left_member.id == context.bot.id: # Bot left. not user
+        print(f"Removing group {update.effective_chat.id} from database.")
+        group_doc.delete()  # Directly delete the group document
 
 def start_monitoring_groups():
     groups_snapshot = db.collection('groups').get()
@@ -463,25 +469,43 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
 
     return user_is_owner
 
-def fetch_group_info(update: Update, context: CallbackContext):
+def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool = False, update_attr: bool = False, return_both: bool = False):
     if update.effective_chat.type == 'private':
-        return None
-    
-    group_id = update.effective_chat.id
+        return None  # Private chats have no group data
+
+    if update_attr: # Determines wether or not the group_id is fetched from a message update or chat
+        group_id = update.message.chat.id
+    else:
+        group_id = update.effective_chat.id
+
     group_doc = db.collection('groups').document(str(group_id))
 
-    print(f"Fetching group info for group {group_id}")
+    if return_doc:
+        print(f"Fetching group_doc for group {group_id}")
+    else:
+        print(f"Fetching group_data for group {group_id}")
 
     try:
         doc_snapshot = group_doc.get()
         if doc_snapshot.exists:
-            return doc_snapshot.to_dict()
+            group_data = doc_snapshot.to_dict()
+
+            if return_both:
+                print(f"Group document and data found for group {group_id}")
+                return group_doc, group_data  # Return both the document reference and the data
+
+            if return_doc:
+                print(f"Group document found for group {group_id}")
+                return group_doc  # Return the document reference
+            else:
+                print(f"Group data found for group {group_id}")
+                return group_data  # Return the document data
         else:
-            update.message.reply_text("Group data not found.")
+            print(f"No data found for group {group_id}. Group may not be registered.")
+            return None  # No data found for this group
     except Exception as e:
-        update.message.reply_text(f"Failed to fetch group info: {str(e)}")
-    
-    return None
+        print(f"Failed to fetch group info: {e}")
+        return None  # Error fetching group data
 
 def is_allowed(message, allowlist, pattern):
     """
@@ -547,9 +571,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         detected_patterns.append("domain")
 
     if detected_patterns and msg is not None: # Check the allowlist if any patterns matched
-        group_id = update.effective_chat.id
-        group_doc = db.collection('groups').document(str(group_id))
-        group_data = group_doc.get().to_dict()
+        group_data = fetch_group_info(update, context)
 
         if not group_data or not group_data.get('admin', {}).get('allowlist', False):  # Default to False
             print("Allowlist check is disabled in admin settings. Skipping allowlist verification.")
@@ -644,11 +666,7 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
 
     print(f"User {username} has been muted for spamming in chat {chat_id}.")
 
-    group_id = update.message.chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    # Get the group document
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context, False, True)
 
     # Only send the message if the user is not in the unverified_users mapping
     if str(user_id) not in group_data.get('unverified_users', {}):
@@ -950,8 +968,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
 def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     msg = None
     group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     try:
         group_link = context.bot.export_chat_invite_link(group_id)
@@ -1132,10 +1149,12 @@ def enable_mute_callback(update: Update, context: CallbackContext) -> None:
 def enable_mute(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         group_doc.set({
@@ -1174,10 +1193,12 @@ def disable_mute_callback(update: Update, context: CallbackContext) -> None:
 def disable_mute(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         group_doc.set({
@@ -1216,10 +1237,7 @@ def check_mute_list_callback(update: Update, context: CallbackContext) -> None:
 def check_mute_list(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     mute_list_text = '*Current Mute List:*\n\n'
     if group_data is None or 'muted_users' not in group_data or not group_data['muted_users']:
@@ -1315,10 +1333,12 @@ def enable_warn_callback(update: Update, context: CallbackContext) -> None:
 def enable_warn(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         group_doc.set({
@@ -1357,10 +1377,12 @@ def disable_warn_callback(update: Update, context: CallbackContext) -> None:
 def disable_warn(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         group_doc.set({
@@ -1403,10 +1425,7 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     warn_list_text = '*Current Warned Users List:*\n\n'
     if group_data is None or 'warnings' not in group_data or not group_data['warnings']:
@@ -1470,8 +1489,7 @@ def set_max_warns(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def handle_max_warns(update: Update, context: CallbackContext) -> None:
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    group_doc = fetch_group_info(update, context, return_doc=True)
 
     if update.message.text:
         try:
@@ -1569,10 +1587,12 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         print(f"Creating new document for group {group_id}.")
@@ -1617,10 +1637,12 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         print(f"Creating new document for group {group_id}.")
@@ -1683,7 +1705,7 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
             if URL_PATTERN.fullmatch(website_url):  # Use the global URL_PATTERN
                 group_id = update.effective_chat.id
                 print(f"Adding website URL {website_url} to group {group_id}")
-                group_doc = db.collection('groups').document(str(group_id))
+                group_doc = fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'group_info.website_url': website_url})
                 context.user_data['setup_stage'] = None
 
@@ -1713,10 +1735,7 @@ def check_allowlist_callback(update: Update, context: CallbackContext) -> None:
 def check_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     allowlist_text = '*Current Allowlist:*\n\n'
     if group_data is None or 'allowlist' not in group_data or not group_data['allowlist']:
@@ -1753,10 +1772,12 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         print(f"Creating new document for group {group_id}.")
@@ -1833,8 +1854,12 @@ def reset_admin_settings_callback(update: Update, context: CallbackContext) -> N
 
 def reset_admin_settings(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id  # Get the group ID
-    group_doc = db.collection('groups').document(str(group_id))  # Reference the Firestore document
-    group_data = group_doc.get().to_dict()
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
+
+    group_data, group_doc = result  # Unpack the tuple
 
     if not group_data: # Log if group data is missing
         print(f"No group data found for group ID {group_id}. Cannot reset admin settings.")
@@ -1924,9 +1949,12 @@ def enable_verification_callback(update: Update, context: CallbackContext) -> No
 def enable_verification(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         group_doc.set({
@@ -1971,9 +1999,12 @@ def disable_verification_callback(update: Update, context: CallbackContext) -> N
 def disable_verification(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         group_doc.set({
@@ -2016,9 +2047,12 @@ def simple_verification_callback(update: Update, context: CallbackContext) -> No
 def simple_verification(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         group_doc.set({
@@ -2072,9 +2106,12 @@ def math_verification_callback(update: Update, context: CallbackContext) -> None
 def math_verification(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         group_doc.set({
@@ -2130,9 +2167,12 @@ def word_verification_callback(update: Update, context: CallbackContext) -> None
 def word_verification(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is None:
         group_doc.set({
@@ -2270,10 +2310,7 @@ def check_verification_settings_callback(update: Update, context: CallbackContex
 
 def check_verification_settings(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     if group_data is not None:
         verification_info = group_data.get('verification_info', {})
@@ -2396,7 +2433,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
             if eth_address_pattern.fullmatch(contract_address):
                 group_id = update.effective_chat.id
                 print(f"Adding contract address {contract_address} to group {group_id}")
-                group_doc = db.collection('groups').document(str(group_id))
+                group_doc = fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'token.contract_address': contract_address})
                 context.user_data['setup_stage'] = None
 
@@ -2453,7 +2490,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
             if eth_address_pattern.fullmatch(liquidity_address):
                 group_id = update.effective_chat.id
                 print(f"Adding liquidity address {liquidity_address} to group {group_id}")
-                group_doc = db.collection('groups').document(str(group_id))
+                group_doc = fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'token.liquidity_address': liquidity_address})
                 context.user_data['setup_stage'] = None
 
@@ -2520,7 +2557,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
                     abi = json.load(file)  # Parse the ABI
                     group_id = update.effective_chat.id
                     print(f"Adding ABI to group {group_id}")
-                    group_doc = db.collection('groups').document(str(group_id))
+                    group_doc = fetch_group_info(update, context, return_doc=True)
                     group_doc.update({'token.abi': abi})
                     context.user_data['setup_stage'] = None
                     msg = update.message.reply_text("ABI has been successfully saved.")
@@ -2610,7 +2647,7 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
             chain = update.callback_query.data.upper()  # Convert chain to uppercase
             group_id = update.effective_chat.id
             print(f"Adding chain {chain} to group {group_id}")
-            group_doc = db.collection('groups').document(str(group_id))
+            group_doc = fetch_group_info(update, context, return_doc=True)
             group_doc.update({'token.chain': chain})
             context.user_data['setup_stage'] = None
 
@@ -2705,10 +2742,7 @@ def check_token_details_callback(update: Update, context: CallbackContext) -> No
 
 def check_token_details(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     if group_data is not None:
         token_info = group_data.get('token', {})
@@ -2754,10 +2788,12 @@ def reset_token_details_callback(update: Update, context: CallbackContext) -> No
 
 def reset_token_details(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is not None:
         group_doc.update({
@@ -2837,10 +2873,7 @@ def setup_welcome_message_header_callback(update: Update, context: CallbackConte
 
 def setup_welcome_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
-
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     if group_data is not None and group_data.get('premium') is not True:
         msg = context.bot.send_message(
@@ -2869,9 +2902,12 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
     msg = None
     if context.user_data.get('expecting_welcome_message_header_image'):
         group_id = update.effective_chat.id
-        group_doc = db.collection('groups').document(str(group_id))
+        result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+        if not result:
+            print("Failed to fetch group info. No action taken.")
+            return
 
-        group_data = group_doc.get().to_dict()
+        group_data, group_doc = result  # Unpack the tuple
         
         photo = update.message.photo[-1]  # Get the highest resolution photo
         file = context.bot.get_file(photo.file_id)
@@ -2935,10 +2971,7 @@ def setup_buybot_message_header_callback(update: Update, context: CallbackContex
 
 def setup_buybot_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
-
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     if group_data is not None and group_data.get('premium') is not True:
         msg = context.bot.send_message(
@@ -2968,9 +3001,12 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
     msg = None
     if context.user_data.get('expecting_buybot_header_image'):
         group_id = update.effective_chat.id
-        group_doc = db.collection('groups').document(str(group_id))
+        result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+        if not result:
+            print("Failed to fetch group info. No action taken.")
+            return
 
-        group_data = group_doc.get().to_dict()
+        group_data, group_doc = result  # Unpack the tuple
         
         photo = update.message.photo[-1]  # Get the highest resolution photo
         file = context.bot.get_file(photo.file_id)
@@ -3037,10 +3073,12 @@ def enable_sypher_trust_callback(update: Update, context: CallbackContext) -> No
 
 def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is not None and group_data.get('premium') is not True:
         msg = context.bot.send_message(
@@ -3084,11 +3122,13 @@ def disable_sypher_trust_callback(update: Update, context: CallbackContext) -> N
 
 def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
-
+    group_data, group_doc = result  # Unpack the tuple
+    
     if group_data is not None and group_data.get('premium') is not True:
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3130,10 +3170,7 @@ def sypher_trust_preferences_callback(update: Update, context: CallbackContext) 
 
 def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
-
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     if group_data is not None and group_data.get('premium') is not True:
         msg = context.bot.send_message(
@@ -3190,10 +3227,12 @@ def sypher_trust_relaxed_callback(update: Update, context: CallbackContext) -> N
 
 def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is not None:
         group_doc.update({
@@ -3225,10 +3264,12 @@ def sypher_trust_moderate_callback(update: Update, context: CallbackContext) -> 
 
 def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is not None:
         group_doc.update({
@@ -3260,10 +3301,12 @@ def sypher_trust_strict_callback(update: Update, context: CallbackContext) -> No
 
 def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = group_doc.get().to_dict()
+    group_data, group_doc = result  # Unpack the tuple
 
     if group_data is not None:
         group_doc.update({
@@ -3288,9 +3331,13 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
     msg = None
     group_id = update.message.chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
 
-    group_data = fetch_group_info(update, context)
+    group_data, group_doc = result  # Unpack the tuple
+    
     if group_data is None:
         group_name = "the group"  # Default text if group name not available
         print("Group data not found.")
@@ -3330,6 +3377,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             
             auth_url = f"https://t.me/sypher_robot?start=authenticate_{chat_id}_{user_id}"
             keyboard = [ [InlineKeyboardButton("Start Authentication", url=auth_url)] ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
 
             if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
                 blob = bucket.blob(f'sypherbot/public/welcome_message_header/welcome_message_header_{group_id}.jpg')
@@ -3337,7 +3385,6 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
                 print(f"Group {group_id} has premium features enabled, and has a header uploaded... Sending welcome message with image.")
 
-                reply_markup = InlineKeyboardMarkup(keyboard)
                 msg = update.message.reply_photo(
                     photo=welcome_image_url,
                     caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
