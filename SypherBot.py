@@ -951,6 +951,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     msg = None
     group_id = update.effective_chat.id
     group_doc = db.collection('groups').document(str(group_id))
+    group_data = group_doc.get().to_dict()
 
     try:
         group_link = context.bot.export_chat_invite_link(group_id)
@@ -962,14 +963,6 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     group_username = update.effective_chat.username
     if group_username is not None:
         group_username = "@" + group_username
-
-    # Update the group document
-    group_doc.update({
-        'group_info': {
-            'group_link': group_link,
-            'group_username': group_username,
-        }
-    })
 
     keyboard = [
         [
@@ -1016,6 +1009,16 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
 
     if msg is not None:
         track_message(msg)
+    
+    if group_data and 'group_info' in group_data:
+        return
+
+    group_doc.update({
+        'group_info': {
+            'group_link': group_link,
+            'group_username': group_username,
+        }
+    })
 
 #region Admin Setup
 def setup_admin_callback(update: Update, context: CallbackContext) -> None:
@@ -1689,7 +1692,7 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
                 elif update.callback_query is not None:
                     msg = update.callback_query.message.reply_text("Website URL added successfully!")
             else:
-                msg = update.message.reply_text("Please send a valid website URL!")
+                msg = update.message.reply_text("Please send a valid website URL! It must include 'https://' or 'http://'.")
 
         store_message_id(context, msg.message_id)
 
