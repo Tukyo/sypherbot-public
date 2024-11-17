@@ -4053,16 +4053,16 @@ def mute(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
 
-    group_doc = db.collection('groups').document(str(chat_id))
-    group_data = group_doc.get().to_dict()
-
-    if group_data is None or not group_data.get('admin', {}).get('mute', False):
-        msg = update.message.reply_text("Admins are not allowed to use the mute command in this group.")
-        if msg is not None:
-            track_message(msg)
-        return
-
     if is_user_admin(update, context):
+        group_doc = db.collection('groups').document(str(chat_id))
+        group_data = group_doc.get().to_dict()
+
+        if group_data is None or not group_data.get('admin', {}).get('mute', False):
+            msg = update.message.reply_text("Muting is not enabled in this group.")
+            if msg is not None:
+                track_message(msg)
+            return
+        
         if update.message.reply_to_message is None:
             msg = update.message.reply_text("This command must be used in response to another message!")
             if msg is not None:
@@ -4129,34 +4129,49 @@ def unmute(update: Update, context: CallbackContext) -> None:
 
 def warn(update: Update, context: CallbackContext):
     msg = None
-    if is_user_admin(update, context) and update.message.reply_to_message:
-        user_id = str(update.message.reply_to_message.from_user.id)
-        group_id = str(update.effective_chat.id)
-        group_doc = db.collection('groups').document(group_id)
+    chat_id = update.effective_chat.id
+
+    if is_user_admin(update, context):
+        group_doc = db.collection('groups').document(str(chat_id))
+        group_data = group_doc.get().to_dict()
+
+        if group_data is None or not group_data.get('admin', {}).get('warn', False): # Check if warns enabled
+            msg = update.message.reply_text("Warning system is not enabled in this group.")
+            if msg is not None:
+                track_message(msg)
+            return
+        
+        if update.message.reply_to_message is None:
+            msg = update.message.reply_text("This command must be used in response to another message!")
+            if msg is not None:
+                track_message(msg)
+            return
+        
+        reply_to_message = update.message.reply_to_message
+        if reply_to_message:
+            user_id = str(reply_to_message.from_user.id)
+            username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
         
         try:
             doc_snapshot = group_doc.get()
             if doc_snapshot.exists:
                 group_data = doc_snapshot.to_dict()
                 warnings_dict = group_data.get('warnings', {})
-                
-                # Increment the warning count for the user
-                current_warnings = warnings_dict.get(user_id, 0)
+
+                current_warnings = warnings_dict.get(user_id, 0) # Increment the warning count for the user
                 current_warnings += 1
                 warnings_dict[user_id] = current_warnings
 
-                # Update the group document with the new warnings count
-                group_doc.update({'warnings': warnings_dict})
-                msg = update.message.reply_text(f"{user_id} has been warned. Total warnings: {current_warnings}")
-                
-                # Check if the user has reached the warning limit
-                process_warns(update, context, user_id, current_warnings)
+                group_doc.update({'warnings': warnings_dict}) # Update the group document with the new warnings count
+                msg = update.message.reply_text(f"{username} has been warned. Total warnings: {current_warnings}")
 
+                process_warns(update, context, user_id, current_warnings) # Check if the user has reached the warning limit
             else:
                 msg = update.message.reply_text("Group data not found.")
-        
         except Exception as e:
             msg = update.message.reply_text(f"Failed to update warnings: {str(e)}")
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
 
     if msg is not None:
         track_message(msg)
