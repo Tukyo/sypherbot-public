@@ -492,7 +492,7 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
 
             if return_both:
                 print(f"Group document and data found for group {group_id}")
-                return group_doc, group_data  # Return both the document reference and the data
+                return group_data, group_doc  # Return both the document reference and the data
 
             if return_doc:
                 print(f"Group document found for group {group_id}")
@@ -666,7 +666,13 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
 
     print(f"User {username} has been muted for spamming in chat {chat_id}.")
 
-    group_data = fetch_group_info(update, context, False, True)
+    group_id = update.effective_chat.id
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
+
+    group_data, group_doc = result  # Unpack the tuple
 
     # Only send the message if the user is not in the unverified_users mapping
     if str(user_id) not in group_data.get('unverified_users', {}):
@@ -968,7 +974,12 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
 def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     msg = None
     group_id = update.effective_chat.id
-    group_data = fetch_group_info(update, context)
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
+
+    group_data, group_doc = result  # Unpack the tuple
 
     try:
         group_link = context.bot.export_chat_invite_link(group_id)
@@ -1236,7 +1247,7 @@ def check_mute_list_callback(update: Update, context: CallbackContext) -> None:
 
 def check_mute_list(update: Update, context: CallbackContext) -> None:
     msg = None
-
+    group_id = update.effective_chat.id
     group_data = fetch_group_info(update, context)
 
     mute_list_text = '*Current Mute List:*\n\n'
@@ -1425,6 +1436,7 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    group_id = update.effective_chat.id
     group_data = fetch_group_info(update, context)
 
     warn_list_text = '*Current Warned Users List:*\n\n'
