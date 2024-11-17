@@ -1465,7 +1465,7 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
     keyboard = [
         [
             InlineKeyboardButton("Enable Allowlist", callback_data='enable_allowlist'),
-            InlineKeyboardButton("Website", callback_data='add_website'),
+            InlineKeyboardButton("Website", callback_data='setup_website'),
             InlineKeyboardButton("Disable Allowlist", callback_data='disable_allowlist')
         ],
         [
@@ -1591,64 +1591,59 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def add_website_callback(update: Update, context: CallbackContext) -> None:
+def setup_website(update: Update, context: CallbackContext) -> None:
+    msg = None
     query = update.callback_query
     query.answer()
     user_id = query.from_user.id
 
-    update = Update(update.update_id, message=query.message)
+    if is_user_owner(update, context, user_id):
 
-    # Verify the user is the owner
-    if query.data == 'add_website':
-        if is_user_owner(update, context, user_id):
-            prompt_website(update, context)
-        else:
-            print("User is not the owner.")
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-def prompt_website(update: Update, context: CallbackContext) -> None:
-    # Send the prompt asking for the website URL
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="Please send the website link you want to add to the allowlist."
-    )
-    context.user_data['setup_stage'] = 'add_website'
-    store_message_id(context, msg.message_id)
+        menu_change(context, update)
 
-    if msg is not None:
-        track_message(msg)
-
-def handle_website_input(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('setup_stage') == 'add_website':
-        # Get the provided URL from the user's message
-        website_url = update.message.text.strip()
-
-        # Validate the URL (basic validation here; expand as needed)
-        if not (website_url.startswith('http://') or website_url.startswith('https://')):
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="Invalid URL. Please provide a valid website starting with http:// or https://"
-            )
-            return
-
-        # Update Firestore with the website URL
-        group_id = update.effective_chat.id
-        group_doc = db.collection('groups').document(str(group_id))
-
-        print(f"Updating website for group {group_id}: {website_url}")
-        group_doc.set({
-            'group_info': {
-                'group_website': website_url
-            }
-        }, merge=True)
-
-        # Confirm the update to the user
-        context.bot.send_message(
+        msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"Website added to allowlist: {website_url}"
+            text='Please respond with your website URL.',
+            reply_markup=reply_markup
         )
+        context.user_data['setup_stage'] = 'website'
+        print("Requesting website URL.")
+        store_message_id(context, msg.message_id)
 
-        # Clear setup stage
-        context.user_data['setup_stage'] = None
+        if msg is not None:
+            track_message(msg)
+
+def handle_website_url(update: Update, context: CallbackContext) -> None:
+    msg = None
+    user_id = update.message.from_user.id
+
+    if is_user_owner(update, context, user_id):
+        if context.user_data.get('setup_stage') == 'website':
+            website_url = update.message.text.strip()
+
+            if URL_PATTERN.fullmatch(website_url):  # Use the global URL_PATTERN
+                group_id = update.effective_chat.id
+                print(f"Adding website URL {website_url} to group {group_id}")
+                group_doc = db.collection('groups').document(str(group_id))
+                group_doc.update({'allowlist.website_url': website_url})
+                context.user_data['setup_stage'] = None
+
+                if update.message is not None:
+                    msg = update.message.reply_text("Website URL added successfully!")
+                elif update.callback_query is not None:
+                    msg = update.callback_query.message.reply_text("Website URL added successfully!")
+            else:
+                msg = update.message.reply_text("Please send a valid website URL!")
+
+        store_message_id(context, msg.message_id)
+
+        if msg is not None:
+            track_message(msg)
 
 def check_allowlist_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -1783,11 +1778,27 @@ def reset_admin_settings_callback(update: Update, context: CallbackContext) -> N
             print("User is not the owner.")
 
 def reset_admin_settings(update: Update, context: CallbackContext) -> None:
-    msg = None
-    # group_id = update.effective_chat.id
-    # group_doc = db.collection('groups').document(str(group_id))
+    group_id = update.effective_chat.id  # Get the group ID
+    group_doc = db.collection('groups').document(str(group_id))  # Reference the Firestore document
+    group_data = group_doc.get().to_dict()
 
-    print("Resetting admin settings...")
+    if not group_data: # Log if group data is missing
+        print(f"No group data found for group ID {group_id}. Cannot reset admin settings.")
+        update.message.reply_text("Group settings not found. Please ensure the group is properly registered.")
+        return
+
+    new_admin_settings = { # Reset admin settings
+        'mute': False,
+        'warn': False,
+        'max_warns': 3,
+        'allowlist': False,
+        'blocklist': False
+    }
+    group_doc.update({'admin': new_admin_settings})
+
+    msg = update.message.reply_text("Admin settings have been reset to default.")
+
+    print(f"Admin settings for group {group_id} have been reset to: {new_admin_settings}")
 
     if msg is not None:
         track_message(msg)
