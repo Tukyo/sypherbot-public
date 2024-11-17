@@ -441,6 +441,8 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
     chat_admins = context.bot.get_chat_administrators(chat_id) # Check if the user is an admin in this chat
     user_is_admin = any(admin.user.id == user_id for admin in chat_admins)
 
+    print(f"UserID: {user_id} - IsAdmin: {user_is_admin}")
+
     return user_is_admin
 
 def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> bool:
@@ -499,6 +501,8 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         doc_snapshot = group_doc.get()
         if doc_snapshot.exists:
             group_data = doc_snapshot.to_dict()
+
+            cache_group_info(group_id, group_data, group_doc) # Cache the group data and document reference
 
             if return_both:
                 print(f"Group document and data found for group {group_id}")
