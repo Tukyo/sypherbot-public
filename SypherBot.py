@@ -303,10 +303,17 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
         return  # Bot wasn't added
 
     group_id = update.effective_chat.id
+    group_type = update.effective_chat.type
+
     admins = context.bot.get_chat_administrators(group_id)  
     inviter_is_admin = any(admin.user.id == inviter.id for admin in admins)
 
     print(f"Bot added to group {group_id} by {inviter.id} ({inviter.username})")
+
+    if group_type not in ["group", "supergroup"]:
+        msg = update.message.reply_text("Sorry, I don't support private chats or channels.")
+        print(f"Bot was added to a non-group chat type: {group_type}. Ignoring.")
+        return  # Ignore private or unsupported chat types
 
     if inviter_is_admin:
         owner_id = inviter.id # Store group info only if the inviter is an admin
@@ -441,6 +448,10 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
     # Retrieve the group document from the database
     group_doc = db.collection('groups').document(str(chat_id))
     group_data = group_doc.get().to_dict()
+
+    if not group_data:
+        print(f"No data found for group {chat_id}. Group may not be registered.")
+        return False  # Default to False if no data is found
 
     # Check if the user is the owner of this group
     user_is_owner = group_data['owner_id'] == user_id
