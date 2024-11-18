@@ -490,10 +490,10 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         print(f"Private chat detected when attempting to fetch group info. No group_id provided either.")
         return None  # Private chats have no group data and no group_id was provided
 
-    if update_attr and group_id is not None: # Determines wether or not the group_id is fetched from a message update or chat
+    if update_attr and group_id is None: # Determines wether or not the group_id is fetched from a message update or chat
         print(f"group_id not manually provided, fetching from message.")
         group_id = str(update.message.chat.id)
-    elif group_id is not None:
+    elif group_id is None:
         print(f"group_id not manually provided, fetching from chat.")
         group_id = str(update.effective_chat.id)
     else:
