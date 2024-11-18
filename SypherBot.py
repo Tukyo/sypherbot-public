@@ -3432,13 +3432,9 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
     msg = None
     group_id = update.message.chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
-    if not result:
-        print("Failed to fetch group info. No action taken.")
-        return
+    group_doc = db.collection('groups').document(str(group_id))
 
-    group_data, group_doc = result  # Unpack the tuple
-    
+    group_data = fetch_group_info(update, context)
     if group_data is None:
         group_name = "the group"  # Default text if group name not available
         print("Group data not found.")
