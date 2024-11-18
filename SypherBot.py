@@ -572,7 +572,7 @@ def clear_group_cache(group_id: str) -> None: # Clears the cache for a specific 
         print(f"No cache entry found for group {group_id}.")
 
 def is_allowed(message, allowlist, pattern): # Check if any detected matches in the message are present in the allowlist.
-    print(f"Pattern found, checking message...")
+    print(f"Pattern found, checking message: {message}")
 
     matches = pattern.findall(message)
     for match in matches:
