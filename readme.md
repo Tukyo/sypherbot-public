@@ -139,8 +139,8 @@ Sypherbot offers a plethora of features to manage and control your group. The bo
 - `/warnlist` - Get a list of all warnings
 - `/clearwarns` - Clear warnings for a specific user
 - `/warnings` - Check warnings for a specific user
-- `/block` - Block a user or contract address
-- `/removeblock` - Remove a user or contract address from the block list
-- `/blocklist` - View the block list
+- `/block | /filter` - Block a user or contract address
+- `/removeblock | /unblock | unfilter` - Remove a user or contract address from the block list
+- `/blocklist | /filterlist` - View the block list
 - `/allow` - Allow a specific user or contract
 - `/allowlist` - View the allow list

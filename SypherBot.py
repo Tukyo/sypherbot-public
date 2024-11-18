@@ -61,8 +61,8 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 ### /clearwarns - Clear warnings for a specific user
 ### /warnings - Check warnings for a specific user
 ### /block - Block a user or contract address
-### /removeblock - Remove a user or contract address from the block list
-### /blocklist - View the block list
+### /removeblock /unblock /unfilter - Remove a user or contract address from the block list
+### /blocklist /filterlist - View the block list
 ### /allow - Allow a specific user or contract
 ### /allowlist - View the allow list
 ##
@@ -1697,7 +1697,6 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
     
     clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
-    # Inform the user
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='✔️ Allowlisting has been enabled in this group ✔️'
@@ -1894,7 +1893,6 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
 #endregion Allowlist Setup
 
 #region Blocklist Setup
@@ -1914,6 +1912,16 @@ def setup_blocklist_callback(update: Update, context: CallbackContext) -> None:
 def setup_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
+        [
+            InlineKeyboardButton("Enable Blocklist", callback_data='enable_blocklist'),
+            InlineKeyboardButton("Disable Blocklist", callback_data='disable_blocklist')
+        ],
+        [
+            InlineKeyboardButton("Check Blocklist", callback_data='check_blocklist')
+        ],
+        [
+            InlineKeyboardButton("❗ Clear Blocklist ❗", callback_data='clear_blocklist')
+        ],
         [InlineKeyboardButton("Back", callback_data='setup_admin')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1922,7 +1930,11 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*⛔ Blocklist Setup ⛔*',
+        text='*⛔ Blocklist Setup ⛔*\n\n'
+        'Here, you can view your current blocklist, or enable/disable the blocklist entirely.\n\n'
+        '*How To Block Phrases:*\n'
+        'To block specific phrases in your group type: /block <phrase>\n\n'
+        '_Clearing the blocklist will remove all phrases and reset the blocklist._',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -1932,6 +1944,198 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+def enable_blocklist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'enable_blocklist':
+        if is_user_owner(update, context, user_id):
+            enable_blocklist(update, context)
+        else:
+            print("User is not the owner.")
+
+def enable_blocklist(update: Update, context: CallbackContext) -> None:
+    msg = None
+
+    group_id = update.effective_chat.id
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
+
+    group_data, group_doc = result  # Unpack the tuple
+
+    if group_data is None:
+        print(f"Creating new document for group {group_id}.")
+        group_doc.set({
+            'admin': {
+                'blocklist': True
+            }
+        })
+    else:
+        print(f"Updating blocklisting for group {group_id}.")
+        group_doc.update({
+            'admin.blocklist': True
+        })
+
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='✔️ Blocklisting has been enabled in this group ✔️'
+    )
+    context.user_data['setup_stage'] = None
+    store_message_id(context, msg.message_id)
+
+    if msg is not None:
+        track_message(msg)
+
+def disable_blocklist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'disable_blocklist':
+        if is_user_owner(update, context, user_id):
+            disable_blocklist(update, context)
+        else:
+            print("User is not the owner.")
+
+def disable_blocklist(update: Update, context: CallbackContext) -> None:
+    msg = None
+
+    group_id = update.effective_chat.id
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
+
+    group_data, group_doc = result  # Unpack the tuple
+
+    if group_data is None:
+        print(f"Creating new document for group {group_id}.")
+        group_doc.set({
+            'admin': {
+                'blocklist': False
+            }
+        })
+    else:
+        print(f"Updating blocklisting for group {group_id}.")
+        group_doc.update({
+            'admin.blocklist': False
+        })
+
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='❌ Blocklisting has been disabled in this group ❌'
+    )
+    context.user_data['setup_stage'] = None
+    store_message_id(context, msg.message_id)
+
+    if msg is not None:
+        track_message(msg)
+
+def check_blocklist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'check_blocklist':
+        if is_user_owner(update, context, user_id):
+            check_blocklist(update, context)
+        else:
+            print("User is not the owner.")
+
+def check_blocklist(update: Update, context: CallbackContext) -> None:
+    msg = None
+
+    group_id = update.effective_chat.id
+    group_data = fetch_group_info(update, context)
+
+    if group_data is None:
+        print(f"Failed to fetch blocklist data for group {group_id}.")
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Error fetching blocklist data.',
+            parse_mode='Markdown'
+        )
+        return
+
+    blocklist_text = '*Current Blocklist:*\n\n'
+    if group_data is None or 'blocklist' not in group_data or not group_data['blocklist']:
+        print(f"No blocklist found for group {group_id}.")
+        blocklist_text += 'No phrases are currently blocked.'
+    else:
+        for phrase in group_data['blocklist']:
+            blocklist_text += f'- {phrase}\n'
+
+    print(f"Sending blocklist data for group {group_id}.")
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=blocklist_text,
+        parse_mode='Markdown'
+    )
+    context.user_data['setup_stage'] = None
+    store_message_id(context, msg.message_id)
+
+    if msg is not None:
+        track_message(msg)
+
+def clear_blocklist_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'clear_blocklist':
+        if is_user_owner(update, context, user_id):
+            clear_blocklist(update, context)
+        else:
+            print("User is not the owner.")
+
+def clear_blocklist(update: Update, context: CallbackContext) -> None:
+    msg = None
+
+    group_id = update.effective_chat.id
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
+
+    group_data, group_doc = result  # Unpack the tuple
+
+    if group_data is None:
+        print(f"Creating new document for group {group_id}.")
+        group_doc.set({
+            'blocklist': []
+        })
+    else:
+        print(f"Clearing blocklist for group {group_id}.")
+        group_doc.update({
+            'blocklist': []
+        })
+
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='❌ Blocklist has been cleared in this group ❌'
+    )
+    context.user_data['setup_stage'] = None
+    store_message_id(context, msg.message_id)
+
+    if msg is not None:
+        track_message(msg)
 #endregion Blocklist Setup
 
 def reset_admin_settings_callback(update: Update, context: CallbackContext) -> None:
@@ -4497,7 +4701,6 @@ def block(update: Update, context: CallbackContext):
     if msg is not None:
         track_message(msg)
 
-
 def remove_block(update: Update, context: CallbackContext):
     msg = None
     if is_user_admin(update, context):
@@ -5279,12 +5482,12 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
     dispatcher.add_handler(CommandHandler("kick", kick))
-    dispatcher.add_handler(CommandHandler("block", block))
-    dispatcher.add_handler(CommandHandler("removeblock", remove_block))
-    dispatcher.add_handler(CommandHandler("blocklist", blocklist))
+    dispatcher.add_handler(CommandHandler(['block', 'filter'], block))
+    dispatcher.add_handler(CommandHandler(['removeblock', 'unblock', 'unfilter'], remove_block))
+    dispatcher.add_handler(CommandHandler(['blocklist', 'filterlist'], blocklist))
     dispatcher.add_handler(CommandHandler("allow", allow))
     dispatcher.add_handler(CommandHandler("allowlist", allowlist))
-    dispatcher.add_handler(CommandHandler("mute", mute))
+    dispatcher.add_handler(CommandHandler(['mute', 'stfu'], mute))
     dispatcher.add_handler(CommandHandler("unmute", unmute))
     dispatcher.add_handler(CommandHandler("mutelist", check_mute_list))
     dispatcher.add_handler(CommandHandler("warn", warn))
@@ -5333,6 +5536,10 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(check_warn_list_callback, pattern='^check_warn_list$'))
     dispatcher.add_handler(CallbackQueryHandler(set_max_warns_callback, pattern='^set_max_warns$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
+    dispatcher.add_handler(CallbackQueryHandler(enable_blocklist_callback, pattern='^enable_blocklist$'))
+    dispatcher.add_handler(CallbackQueryHandler(disable_blocklist_callback, pattern='^disable_blocklist$'))
+    dispatcher.add_handler(CallbackQueryHandler(check_blocklist_callback, pattern='^check_blocklist$'))
+    dispatcher.add_handler(CallbackQueryHandler(clear_blocklist_callback, pattern='^clear_blocklist$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_allowlist_callback, pattern='^enable_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(disable_allowlist_callback, pattern='^disable_allowlist$'))
