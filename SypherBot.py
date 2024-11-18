@@ -4,6 +4,7 @@ import time
 import pytz
 import json
 import random
+import inspect
 import requests
 import telegram
 import threading
@@ -45,15 +46,15 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 ### /website - Get links to related websites
 ### /report - Report a message to group admins
 ### /save - Save a message to your DMs
-### /rick - Send a Rickroll video (pass arguments to customize)
 ##
 #
 #### Admin Commands <<< These are the commands that are available to group admins only.
 ##
 ### /admincommands | /adminhelp - Get a list of admin commands
 ### /cleanbot | /clean | /cleanupbot | /cleanup - Clean all bot messages in the chat
+### /clearcache - Clear the cache for the group
 ### /cleargames - Clear all active games in the chat
-### /kick - Reply to a message to kick a user from the chat
+### /kick | /ban - Reply to a message to kick a user from the chat
 ### /mute | /unmute - Reply to a message to toggle mute for a user
 ### /mutelist - Check the mute list
 ### /warn - Reply to a message to warn a user
@@ -351,6 +352,16 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 'max_warns': 3,
                 'allowlist': False,
                 'blocklist': False
+            },
+            'commands':
+            {
+                'play': True,
+                'website': True,
+                'contract': True,
+                'price': True,
+                'chart': True,
+                'liquidity': True,
+                'volume': True
             }
         })
         clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
@@ -630,6 +641,15 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     if DOMAIN_PATTERN.search(msg):
         detected_patterns.append("domain")
 
+    if re.search(r"@\w+", msg): # Trigger trust check
+        print(f"Detected mention in message: {msg}")
+        if not check_if_trusted(update, context):
+            print(f"User {user_id} is not trusted to tag others.")
+            context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+            return
+        else:
+            print(f"User {user_id} is trusted to tag others.")
+
     if detected_patterns and msg is not None: # Check the allowlist if any patterns matched
         group_data = fetch_group_info(update, context)
 
@@ -671,7 +691,6 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     delete_blocked_addresses(update, context)
     delete_blocked_phrases(update, context)
     delete_blocked_links(update, context)
-
     handle_guess(update, context)
 
 def handle_image(update: Update, context: CallbackContext) -> None:
@@ -680,6 +699,15 @@ def handle_image(update: Update, context: CallbackContext) -> None:
         return
     
     print(f"Image sent by user {update.message.from_user.id} in chat {update.message.chat.id}")
+
+    if re.search(r"@\w+", msg): # Trigger trust check
+        print(f"Detected mention in message: {msg}")
+        if not check_if_trusted(update, context):
+            print(f"User {user_id} is not trusted to tag others.")
+            context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+            return
+        else:
+            print(f"User {user_id} is trusted to tag others.")
 
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
@@ -1061,7 +1089,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     keyboard = [
         [
             InlineKeyboardButton("Admin", callback_data='setup_admin'),
-            InlineKeyboardButton("Commands", callback_data='setup_custom_commands')
+            InlineKeyboardButton("Commands", callback_data='setup_commands')
         ],
         [
             InlineKeyboardButton("Authentication", callback_data='setup_verification'),
@@ -1084,18 +1112,20 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         'Configure Admin Settings: Mute, Warn, Allowlist & Blocklist\n\n'
         '_Warning! Clicking "Reset Admin Settings" will reset all admin settings._\n\n'
         '*🤖 Commands:*\n'
-        'Configure Custom Commands & Default Commands\n\n'
+        'Configure Available Commands\n\n'
         '*🔒 Authentication:*\n'
         'Configure Auth Settings: Enable/Disable Auth, Auth Types [Simple, Math, Word], Auth Timeout & Check Current Auth Settings\n\n'
         '*📈 Crypto:*\n'
         'Configure Crypto Settings: Setup Token Details, Check Token Details or Reset Your Token Details.\n\n'
         '_Warning! Clicking "Reset Token Details" will reset all token details._\n\n'
         '*🚀 Premium:*\n'
-        '🎨 Customize Your Bot • Group Monitoring:\n'
-        'Adjust the look and feel of your bot. Configure your Welcome Message Header and your Buybot Header.\n'
-        'Buybot functionality.\n',
-        # '🚨 Sypher Trust:\n'
-        # 'A smart system that dynamically adjusts the trust level of users based on their activity.',
+        '🎨 Customize Your Bot\n'
+        'Adjust the look and feel of your bot.\n'
+        'Configure your Welcome Message Header and your Buybot Header.\n'
+        '🔎 Group Monitoring:\n'
+        'Buybot functionality.\n\n'
+        '🚨 Sypher Trust:\n'
+        'A smart system that dynamically adjusts the trust level of users based on their activity.',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
@@ -2187,7 +2217,115 @@ def reset_admin_settings(update: Update, context: CallbackContext) -> None:
 #endregion Admin Setup
 
 #region Commands Setup
-# TODO: Put command setup logic here
+def setup_commands_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_commands':
+        if is_user_owner(update, context, user_id):
+            setup_commands(update, context)
+        else:
+            print("User is not the owner.")
+
+def setup_commands(update: Update, context: CallbackContext) -> None:
+    msg = None
+    chat_id = update.effective_chat.id
+    group_data = fetch_group_info(update, context)
+
+    if not group_data:
+        print(f"No group data found for group {chat_id}. Cannot set up commands.")
+        return
+
+    commands = group_data.get('commands', {})
+
+    def get_button_text(command: str) -> str:
+        status = "✅" if commands.get(command, True) else "❌"
+        return f"{status} {command}"
+    
+    keyboard = [
+        [InlineKeyboardButton(get_button_text("play"), callback_data='toggle_play')],
+        [
+            InlineKeyboardButton(get_button_text("website"), callback_data='toggle_website'),
+            InlineKeyboardButton(get_button_text("contract"), callback_data='toggle_contract')
+        ],
+        [
+            InlineKeyboardButton(get_button_text("price"), callback_data='toggle_price'),
+            InlineKeyboardButton(get_button_text("chart"), callback_data='toggle_chart')
+        ],
+        [
+            InlineKeyboardButton(get_button_text("liquidity"), callback_data='toggle_liquidity'),
+            InlineKeyboardButton(get_button_text("volume"), callback_data='toggle_volume')
+        ],
+        [InlineKeyboardButton("Back", callback_data='setup_admin')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*🤖 Command Setup 🤖*\n\n'
+        'Here, you can enable or disable commands in your group. All commands are enabled by default.\n\n'
+        'Clicking the button for each command below will disable or enable the command for your group.\n\n'
+        '*How To Use Commands:*\n'
+        'To use commands in your group type: /<command>. Users can also view all commands by typing /help or /commands.',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    store_message_id(context, msg.message_id)
+
+    if msg is not None:
+        track_message(msg)
+
+def toggle_command_status(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    chat_id = query.message.chat.id
+
+    command = query.data.replace('toggle_', '')  # Extract the command name
+
+    if command == "play": # Check if the command is "play"
+        if not is_premium_group(update, context):
+            msg = query.message.reply_text("The /play command can only be toggled in premium groups.")
+            return
+
+    group_doc = db.collection('groups').document(str(chat_id))
+    group_data = group_doc.get().to_dict()
+
+    if not group_data:
+        query.answer(text="Group data not found.", show_alert=True)
+        return
+
+    commands = group_data.get('commands', {})
+    current_status = commands.get(command, True)  # Default to True if not set
+
+    new_status = not current_status # Toggle the status
+    group_doc.update({f'commands.{command}': new_status})
+    print(f"Toggled command '{command}' to {new_status} for group {chat_id}")
+
+    status_text = "enabled" if new_status else "disabled"
+    query.answer(text=f"Command '{command}' is now {status_text}.", show_alert=False)
+    clear_group_cache(str(chat_id)) # Clear the cache on all database updates
+
+    setup_commands(update, context)
+
+    if msg is not None:
+        track_message(msg)
+
+def check_command_status(group_id: str, command: str) -> bool:
+    group_data = fetch_group_info(group_id)
+
+    if not group_data:
+        print(f"No group data found for group {group_id}. Defaulting '{command}' to disabled.")
+        return False
+
+    commands = group_data.get('commands', {})
+    return commands.get(command, False)  # Default to False if the command is not explicitly set
+
 #endregion Commands Setup
 
 #region Authentication Setup
@@ -2940,7 +3078,8 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Please choose your chain from the list.',
+            text='Please choose your chain from the list.\n\n'
+            'Currently only Base Mainnet + Uniswap V3 LP is *fully* supported. We will be rolling out support for other chains and LP positions shortly.',
             reply_markup=reply_markup
         )
         context.user_data['setup_stage'] = 'chain'
@@ -3172,6 +3311,24 @@ def setup_premium(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+def is_premium_group(update: Update, context: CallbackContext) -> bool:
+    group_id = update.effective_chat.id
+    group_data = fetch_group_info(update, context)
+    
+    if group_data is not None and group_data.get('premium') is not True:
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
+            parse_mode='Markdown'
+        )
+        store_message_id(context, msg.message_id)
+        print(f"{group_id} is not a premium group.")
+        return False
+    else:
+        print(f"{group_id} is a premium group.")
+        return True
+
+#region Customization
 def setup_welcome_message_header_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -3187,17 +3344,8 @@ def setup_welcome_message_header_callback(update: Update, context: CallbackConte
 
 def setup_welcome_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_data = fetch_group_info(update, context)
 
-    if group_data is not None and group_data.get('premium') is not True:
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
-            parse_mode='Markdown'
-        )
-        store_message_id(context, msg.message_id)
-        print("User does not have premium.")
-        return
+    if not is_premium_group(update, context): return
 
     print("Requesting a welcome message header.")
     msg = context.bot.send_message(
@@ -3286,17 +3434,8 @@ def setup_buybot_message_header_callback(update: Update, context: CallbackContex
 
 def setup_buybot_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_data = fetch_group_info(update, context)
 
-    if group_data is not None and group_data.get('premium') is not True:
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
-            parse_mode='Markdown'
-        )
-        store_message_id(context, msg.message_id)
-        print("User does not have premium.")
-        return
+    if not is_premium_group(update, context): return
     
     print("Requesting a Buybot message header.")
 
@@ -3373,7 +3512,9 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
             store_message_id(context, msg.message_id)
         if msg is not None:
             track_message(msg)
+#endregion Customization
 
+#region Sypher Trust
 def enable_sypher_trust_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -3396,15 +3537,7 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
 
     group_data, group_doc = result  # Unpack the tuple
 
-    if group_data is not None and group_data.get('premium') is not True:
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
-            parse_mode='Markdown'
-        )
-        store_message_id(context, msg.message_id)
-        print("User does not have premium.")
-        return
+    if not is_premium_group(update, context): return
 
     if group_data is not None:
         group_doc.update({
@@ -3446,15 +3579,7 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
 
     group_data, group_doc = result  # Unpack the tuple
     
-    if group_data is not None and group_data.get('premium') is not True:
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
-            parse_mode='Markdown'
-        )
-        store_message_id(context, msg.message_id)
-        print("User does not have premium.")
-        return
+    if not is_premium_group(update, context): return
 
     if group_data is not None:
         group_doc.update({
@@ -3488,17 +3613,9 @@ def sypher_trust_preferences_callback(update: Update, context: CallbackContext) 
 
 def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_data = fetch_group_info(update, context)
 
-    if group_data is not None and group_data.get('premium') is not True:
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="This feature is only available to premium users. Please contact @tukyowave for more information.",
-            parse_mode='Markdown'
-        )
-        store_message_id(context, msg.message_id)
-        print("User does not have premium.")
-        return
+    if not is_premium_group(update, context): return
+
     keyboard = [
         [
             InlineKeyboardButton("Relaxed", callback_data='sypher_trust_relaxed'),
@@ -3643,6 +3760,58 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
+
+def check_if_trusted(update: Update, context: CallbackContext) -> None:
+    user_id = str(update.effective_user.id)
+    group_id = str(update.effective_chat.id)
+
+    group_data = fetch_group_info(update, context)
+    if not group_data:
+        print(f"No group data found for group {group_id}. Assuming Sypher Trust is not enabled.")
+        return False
+
+    sypher_trust_enabled = group_data.get('premium_features', {}).get('sypher_trust', False) # Verify if Sypher Trust is enabled
+    if not sypher_trust_enabled:
+        print(f"Sypher Trust is not enabled for group {group_id}. Allowing user {user_id}.")
+        return True
+
+    unverified_users = group_data.get('unverified_users', {}) # Check if the user is in unverified_users
+    user_data = unverified_users.get(user_id)
+    if not user_data:
+        print(f"User {user_id} is not in unverified_users for group {group_id}. Assuming trusted.")
+        return True
+
+    timestamp_str = user_data.get('timestamp') # Extract timestamp and calculate time since added
+    if not timestamp_str:
+        print(f"No timestamp found for user {user_id} in unverified_users. Assuming untrusted.")
+        return False
+
+    user_added_time = datetime.fromisoformat(timestamp_str)
+    current_time = datetime.now(timezone.utc)
+    time_elapsed = current_time - user_added_time
+
+    sypher_trust_preferences = group_data.get('premium_features', {}).get('sypher_trust_preferences', 'moderate') # Determine trust preferences
+    trust_durations = {
+        'relaxed': timedelta(hours=24),
+        'moderate': timedelta(hours=72),
+        'strict': timedelta(days=7),
+    }
+    trust_duration = trust_durations.get(sypher_trust_preferences)
+
+    if not trust_duration:
+        print(f"Invalid sypher trust preference: {sypher_trust_preferences}. Defaulting to untrusted.")
+        return False
+
+    if time_elapsed >= trust_duration: # Check if sufficient time has passed
+        print(f"User {user_id} has been in unverified_users for {time_elapsed}. Removing from unverified_users.")
+        db.collection('groups').document(group_id).update({f'unverified_users.{user_id}': firestore.DELETE_FIELD})
+        clear_group_cache(group_id) # Clear the cache on all database updates
+        return True
+    else:
+        print(f"User {user_id} has been in unverified_users for {time_elapsed}. Still untrusted.")
+        return False
+#endregion Sypher Trust
+
 #endregion Premium Setup
 
 #endregion Bot Setup
@@ -3652,7 +3821,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
     msg = None
     group_id = update.message.chat.id
-    group_doc = db.collection('groups').document(str(group_id))
+    group_doc = db.collection('groups').document(str(group_id)) # TODO: maybe use cache through fetch_group_info
 
     group_data = fetch_group_info(update, context, group_id=group_id)
     if group_data is None:
@@ -3660,6 +3829,10 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
         print("Group data not found.")
     else:
         group_name = group_data.get('group_info', {}).get('group_username', "the group")
+
+    sypher_trust_enabled = (
+        group_data.get('premium_features', {}).get('sypher_trust') if group_data else False
+    )
 
     updates = {} # Initialize the updates to send to the database at the end of the function
         
@@ -3691,6 +3864,10 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 print(f"No raid detected... Allowing user {user_id} to join.")
 
             current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
+
+            if sypher_trust_enabled:
+                print(f"Sypher Trust is enabled for group {group_id}. Adding user {user_id} to untrusted_users.")
+                updates[f'untrusted_users.{user_id}'] = current_time
             
             auth_url = f"https://t.me/{BOT_USERNAME}?start=authenticate_{chat_id}_{user_id}"
             keyboard = [ [InlineKeyboardButton("Start Authentication", url=auth_url)] ]
@@ -4860,28 +5037,33 @@ def cleanbot(update: Update, context: CallbackContext):
                 print(f"Failed to delete message {msg_id}: {str(e)}")  # Handle errors
 
         bot_messages = [(cid, msg_id) for cid, msg_id in bot_messages if cid != chat_id]
+
+def clear_cache(update: Update, context: CallbackContext):
+    msg = None
+    if is_user_admin(update, context):
+        clear_group_cache(str(update.effective_chat.id))
+        msg = update.message.reply_text("Cache cleared.")
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
+    
+    if msg is not None:
+        track_message(msg)
 #endregion Admin Controls
 
 #region User Controls
 def commands(update: Update, context: CallbackContext) -> None:
     msg = None
+    chat_id = str(update.effective_chat.id)
+
     if rate_limit_check():
-        keyboard = [
-            [
-                InlineKeyboardButton("/play", callback_data='commands_play'),
-            ],
-            [
-                InlineKeyboardButton("/website", callback_data='commands_website'),
-                InlineKeyboardButton("/contract", callback_data='commands_contract')
-            ],
-            [
-                InlineKeyboardButton("/price", callback_data='commands_price'),
-                InlineKeyboardButton("/chart", callback_data='commands_chart')
-            ],
-            [
-                InlineKeyboardButton("/liquidity", callback_data='commands_liquidity'),
-                InlineKeyboardButton("/volume", callback_data='commands_volume')
-            ]
+        enabled_commands = []
+
+        for command in ['play', 'website', 'contract', 'price', 'chart', 'liquidity', 'volume']: # Check the status of each command
+            if check_command_status(chat_id, command):
+                enabled_commands.append(command)
+
+        keyboard = [ # Generate dynamic keyboard for enabled commands
+            [InlineKeyboardButton(f"/{cmd}", callback_data=f'commands_{cmd}')] for cmd in enabled_commands
         ]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -4891,37 +5073,57 @@ def commands(update: Update, context: CallbackContext) -> None:
 
         with open(image_path, 'rb') as photo:
             context.bot.send_photo(
-                chat_id=update.effective_chat.id,
+                chat_id=chat_id,
                 photo=photo,
-                caption="Welcome to Sypher Bot! Below you will find all my commands:",
+                caption="Welcome to Sypher Bot! Below you will find all my enabled commands:",
                 reply_markup=reply_markup
             )
     else:
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
+
     if msg is not None:
         track_message(msg)
 
 def command_buttons(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+    chat_id = str(query.message.chat.id)
+    user_id = query.from_user.id
 
     update = Update(update.update_id, message=query.message)
+    command_mapping = {
+        'commands_play': 'play',
+        'commands_contract': 'contract',
+        'commands_website': 'website',
+        'commands_price': 'price',
+        'commands_chart': 'chart',
+        'commands_liquidity': 'liquidity',
+        'commands_volume': 'volume'
+    }
 
-    if query.data == 'commands_play':
-        play(update, context)
-    elif query.data == 'commands_contract':
-        ca(update, context)
-    elif query.data == 'commands_website':
-        website(update, context)
-    elif query.data == 'commands_price':
-        get_token_price(update, context)
-    elif query.data == 'commands_chart':
-        chart(update, context)
-    elif query.data == 'commands_liquidity':
-        liquidity(update, context)
-    elif query.data == 'commands_volume':
-        volume(update, context)
+    command_key = query.data
+    command_name = command_mapping.get(command_key)
+
+    if command_name:
+        if not check_command_status(chat_id, command_name): # Check if the command is enabled
+            query.message.reply_text(f"The /{command_name} command is currently disabled in this group.")
+            print(f"User {user_id} attempted to use disabled command /{command_name}.")
+            return
+
+        if command_key == 'commands_play':
+            play(update, context)
+        elif command_key == 'commands_contract':
+            ca(update, context)
+        elif command_key == 'commands_website':
+            website(update, context)
+        elif command_key == 'commands_price':
+            get_token_price(update, context)
+        elif command_key == 'commands_chart':
+            chart(update, context)
+        elif command_key == 'commands_liquidity':
+            liquidity(update, context)
+        elif command_key == 'commands_volume':
+            volume(update, context)
 
 def report(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
@@ -5022,7 +5224,15 @@ def save(update: Update, context: CallbackContext):
 
 #region Play Game
 def play(update: Update, context: CallbackContext) -> None:
+    chat_id = str(update.effective_chat.id)
+
     if rate_limit_check():
+        function_name = inspect.currentframe().f_code.co_name
+        if not check_command_status(chat_id, function_name):
+            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+            print(f"Attempted to use disabled command /play in group {chat_id}.")
+            return
+        
         keyboard = [[InlineKeyboardButton("Click Here to Start a Game!", callback_data='startGame')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -5210,41 +5420,47 @@ def send_rick_video(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
     args = context.args
 
-    # Map arguments to specific videos
-    video_mapping = {
-        "duncan": "assets/RICK_DUNCAN.mp4",
-        "saintlaurent": "assets/RICK_SAINTLAURENT.mp4",
-        "shoenice": "assets/RICK_SHOENICE.mp4"
-    }
+    if rate_limit_check():
+        video_mapping = { # Map arguments to specific videos
+            "duncan": "assets/RICK_DUNCAN.mp4",
+            "saintlaurent": "assets/RICK_SAINTLAURENT.mp4",
+            "shoenice": "assets/RICK_SHOENICE.mp4"
+        }
 
-    if not args:  # If no arguments are passed, send a random video
-        video_path = random.choice(list(video_mapping.values()))
+        if not args:  # If no arguments are passed, send a random video
+            video_path = random.choice(list(video_mapping.values()))
+        else:
+            video_key = args[0].lower() # Check if the argument matches a key in the mapping
+            video_path = video_mapping.get(video_key)
+
+        if not video_path: # If no match is found, send a default response
+            keyboard = [[InlineKeyboardButton("Rick", url="https://www.instagram.com/bigf0ck/")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            context.bot.send_message(chat_id=chat_id, text="ALIEN", reply_markup=reply_markup)
+            return
+
+        if video_path in video_cache: # Use cached file_id if available
+            file_id = video_cache[video_path]
+            context.bot.send_video(chat_id=chat_id, video=file_id)
+        else: 
+            with open(video_path, 'rb') as video_file: # Upload the video and cache the file_id
+                message = context.bot.send_video(chat_id=chat_id, video=video_file)
+            file_id = message.video.file_id
+            video_cache[video_path] = file_id
     else:
-        # Check if the argument matches a key in the mapping
-        video_key = args[0].lower()
-        video_path = video_mapping.get(video_key)
-
-    if not video_path:
-        # If no match is found, send a default response
-        keyboard = [[InlineKeyboardButton("Rick", url="https://www.instagram.com/bigf0ck/")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        context.bot.send_message(chat_id=chat_id, text="ALIEN", reply_markup=reply_markup)
-        return
-
-    if video_path in video_cache:
-        # Use cached file_id if available
-        file_id = video_cache[video_path]
-        context.bot.send_video(chat_id=chat_id, video=file_id)
-    else:
-        # Upload the video and cache the file_id
-        with open(video_path, 'rb') as video_file:
-            message = context.bot.send_video(chat_id=chat_id, video=video_file)
-        file_id = message.video.file_id
-        video_cache[video_path] = file_id
+        update.message.reply_text('Bot rate limit exceeded. Please try again later.')
 
 def ca(update: Update, context: CallbackContext) -> None:
     msg = None
+    chat_id = str(update.effective_chat.id)
+
     if rate_limit_check():
+        function_name = inspect.currentframe().f_code.co_name
+        if not check_command_status(chat_id, function_name):
+            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+            print(f"Attempted to use disabled command /play in group {chat_id}.")
+            return
+        
         group_data = fetch_group_info(update, context)
         if group_data is None:
             return  # Early exit if no data is found
@@ -5270,23 +5486,31 @@ def ca(update: Update, context: CallbackContext) -> None:
 
 def liquidity(update: Update, context: CallbackContext) -> None:
     msg = None
+    chat_id = str(update.effective_chat.id)
     group_data = fetch_group_info(update, context)
-    if group_data is None:
-        return
-
-    token_data = group_data.get('token')
-    if not token_data:
-        update.message.reply_text("Token data not found for this group.")
-        return
-
-    lp_address = token_data.get('liquidity_address')
-    chain = token_data.get('chain')
-
-    if not lp_address or not chain:
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
 
     if rate_limit_check():
+        function_name = inspect.currentframe().f_code.co_name
+        if not check_command_status(chat_id, function_name):
+            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+            print(f"Attempted to use disabled command /play in group {chat_id}.")
+            return
+        
+        if group_data is None:
+            return
+
+        token_data = group_data.get('token')
+        if not token_data:
+            update.message.reply_text("Token data not found for this group.")
+            return
+
+        lp_address = token_data.get('liquidity_address')
+        chain = token_data.get('chain')
+
+        if not lp_address or not chain:
+            update.message.reply_text("Liquidity address or chain not found for this group.")
+            return
+
         liquidity_usd = get_liquidity(chain, lp_address)
         if liquidity_usd:
             msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
@@ -5314,23 +5538,30 @@ def get_liquidity(chain, lp_address):
 def volume(update: Update, context: CallbackContext) -> None:
     msg = None
     group_data = fetch_group_info(update, context)
-
-    if group_data is None:
-        return
-    
-    token_data = group_data.get('token')
-    if not token_data:
-        update.message.reply_text("Token data not found for this group.")
-        return
-
-    lp_address = token_data.get('liquidity_address')
-    chain = token_data.get('chain')    
-
-    if not lp_address or not chain:
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
+    chat_id = str(update.effective_chat.id)
 
     if rate_limit_check():
+        function_name = inspect.currentframe().f_code.co_name
+        if not check_command_status(chat_id, function_name):
+            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+            print(f"Attempted to use disabled command /play in group {chat_id}.")
+            return
+
+        if group_data is None:
+            return
+        
+        token_data = group_data.get('token')
+        if not token_data:
+            update.message.reply_text("Token data not found for this group.")
+            return
+
+        lp_address = token_data.get('liquidity_address')
+        chain = token_data.get('chain')    
+
+        if not lp_address or not chain:
+            update.message.reply_text("Liquidity address or chain not found for this group.")
+            return
+        
         volume_24h_usd = get_volume(chain, lp_address)
         if volume_24h_usd:
             volume_24h_usd = float(volume_24h_usd) # Ensure the value is treated as a float for formatting
@@ -5358,6 +5589,7 @@ def get_volume(chain, lp_address):
 
 def chart(update: Update, context: CallbackContext) -> None:
     args = context.args
+    chat_id = update.effective_chat.id
     time_frame = 'minute'  # default to minute if no argument is provided
     
     if args:
@@ -5373,7 +5605,12 @@ def chart(update: Update, context: CallbackContext) -> None:
             return
         
     if rate_limit_check():
-        # Fetch group-specific contract information
+        function_name = inspect.currentframe().f_code.co_name
+        if not check_command_status(chat_id, function_name):
+            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+            print(f"Attempted to use disabled command /play in group {chat_id}.")
+            return
+        
         group_data = fetch_group_info(update, context)
         if group_data is None:
             return  # Early exit if no data is found
@@ -5435,8 +5672,15 @@ def chart(update: Update, context: CallbackContext) -> None:
 
 def website(update: Update, context: CallbackContext) -> None:
     msg = None
+    chat_id = update.effective_chat.id
     
     if rate_limit_check():
+        function_name = inspect.currentframe().f_code.co_name
+        if not check_command_status(chat_id, function_name):
+            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+            print(f"Attempted to use disabled command /play in group {chat_id}.")
+            return
+        
         group_data = fetch_group_info(update, context)
         if group_data is None:
             return  # Early exit if no data is found
@@ -5484,8 +5728,9 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler(['start', 'setup'], start))
     dispatcher.add_handler(CommandHandler(['admincommands', 'adminhelp'], admin_commands))
     dispatcher.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
+    dispatcher.add_handler(CommandHandler("clearcache", clear_cache))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
-    dispatcher.add_handler(CommandHandler("kick", kick))
+    dispatcher.add_handler(CommandHandler(['kick', 'ban'], kick))
     dispatcher.add_handler(CommandHandler(['block', 'filter'], block))
     dispatcher.add_handler(CommandHandler(['removeblock', 'unblock', 'unfilter'], remove_block))
     dispatcher.add_handler(CommandHandler(['blocklist', 'filterlist'], blocklist))
@@ -5552,6 +5797,10 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(clear_allowlist_callback, pattern='^clear_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(reset_admin_settings_callback, pattern='^reset_admin_settings$'))
     #endregion Admin Setup Callbacks
+    ##
+    #region Command Setup Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(toggle_command_status, pattern=r'^toggle_(play|website|contract|price|chart|liquidity|volume)$'))
+    #endregion Command Setup Callbacks
     ##
     #region Crypto Setup Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_crypto_callback, pattern='^setup_crypto$'))
