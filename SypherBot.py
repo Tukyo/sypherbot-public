@@ -775,8 +775,11 @@ def delete_blocked_addresses(update: Update, context: CallbackContext):
     if group_data is None:
         return
 
-    # Retrieve the contract and LP addresses from the fetched group info
-    allowed_addresses = [group_data.get('token.contract_address', '').lower(), group_data.get('token.liquidity_address', '').lower()]
+    token_data = group_data.get('token', {})  # Get the 'token' dictionary
+    allowed_addresses = [ # Retrieve the contract and LP addresses from the fetched group info
+        token_data.get('contract_address', '').lower(),
+        token_data.get('liquidity_address', '').lower()
+    ]
 
     print(f"Found addresses: {found_addresses}")
     print(f"Allowed addresses: {allowed_addresses}")
