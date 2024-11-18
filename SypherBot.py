@@ -850,24 +850,25 @@ def delete_blocked_phrases(update: Update, context: CallbackContext):
 
     message_text = message_text.lower()
 
-    # Fetch the group info to get the blocklist
-    group_info = fetch_group_info(update, context)
+    group_info = fetch_group_info(update, context) # Fetch the group info to get the blocklist
     if not group_info:
         print("No group info available.")
         return
 
-    # Get the blocklist as an array from the group info
-    blocklist_field = 'blocklist'
+    admin_settings = group_info.get('admin', {}) # Check if blocklist is enabled
+    if not admin_settings.get('blocklist', False):  # Default to False if not specified
+        print("Blocklist is disabled for this group.")
+        return
+
+    blocklist_field = 'blocklist' # Get the blocklist as an array from the group info
     blocklist_items = group_info.get(blocklist_field, [])
 
-    # Ensure blocklist_items is a list
-    if not isinstance(blocklist_items, list):
+    if not isinstance(blocklist_items, list): # Ensure blocklist_items is a list
         print("Blocklist is not properly formatted as an array.")
         return
 
-    # Check each blocked phrase in the group's blocklist
-    for phrase in blocklist_items:
-        if phrase in message_text:
+    for phrase in blocklist_items: # Check each blocked phrase in the group's blocklist
+        if re.search(rf'\b{re.escape(phrase)}\b', message_text): # Use regex
             print(f"Found blocked phrase: {phrase}")
             try:
                 update.message.delete()
