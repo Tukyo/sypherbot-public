@@ -129,7 +129,7 @@ Sypherbot offers a plethora of features to manage and control your group. The bo
 ## 🔒 Admin Commands
 ### Available to Group Admins Only
 > All commands are available for the owner of the group. **Setup functionality is only available to the owner**.
-- `/admincommands` - Get a list of admin commands
+- `/admincommands | /adminhelp` - Get a list of admin commands
 - `/cleanbot | /clean | /cleanupbot | /cleanup` - Clean all bot messages in the chat
 - `/cleargames` - Clear all active games in the chat
 - `/kick` - Reply to a message to kick a user from the chat
@@ -140,7 +140,7 @@ Sypherbot offers a plethora of features to manage and control your group. The bo
 - `/clearwarns` - Clear warnings for a specific user
 - `/warnings` - Check warnings for a specific user
 - `/block | /filter` - Block a user or contract address
-- `/removeblock | /unblock | unfilter` - Remove a user or contract address from the block list
+- `/removeblock | /unblock | /unfilter` - Remove a user or contract address from the block list
 - `/blocklist | /filterlist` - View the block list
 - `/allow` - Allow a specific user or contract
 - `/allowlist` - View the allow list

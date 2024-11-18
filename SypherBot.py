@@ -50,7 +50,7 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 #
 #### Admin Commands <<< These are the commands that are available to group admins only.
 ##
-### /admincommands - Get a list of admin commands
+### /admincommands | /adminhelp - Get a list of admin commands
 ### /cleanbot | /clean | /cleanupbot | /cleanup - Clean all bot messages in the chat
 ### /cleargames - Clear all active games in the chat
 ### /kick - Reply to a message to kick a user from the chat
@@ -1889,8 +1889,8 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='❌ Allowlist has been cleared in this group ❌'
     )
-
     context.user_data['setup_stage'] = None
+    store_message_id(context, msg.message_id)
 
     if msg is not None:
         track_message(msg)
@@ -2177,6 +2177,7 @@ def reset_admin_settings(update: Update, context: CallbackContext) -> None:
     clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = update.message.reply_text("Admin settings have been reset to default.")
+    store_message_id(context, msg.message_id)
 
     print(f"Admin settings for group {group_id} have been reset to: {new_admin_settings}")
 
@@ -3140,13 +3141,13 @@ def setup_premium(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Welcome Message Header", callback_data='setup_welcome_message_header'),
             InlineKeyboardButton("Buybot Message Header", callback_data='setup_buybot_message_header')
         ],
-        # [
-        #     InlineKeyboardButton("Enable Trust System", callback_data='enable_sypher_trust'),
-        #     InlineKeyboardButton("Disable Trust System", callback_data='disable_sypher_trust')
-        # ],
-        # [
-        #     InlineKeyboardButton("Trust Preferences", callback_data='sypher_trust_preferences'),
-        # ],
+        [
+            InlineKeyboardButton("Enable Trust System", callback_data='enable_sypher_trust'),
+            InlineKeyboardButton("Disable Trust System", callback_data='disable_sypher_trust')
+        ],
+        [
+            InlineKeyboardButton("Trust Preferences", callback_data='sypher_trust_preferences'),
+        ],
         [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -3157,9 +3158,11 @@ def setup_premium(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='*🚀 Premium Setup 🚀*\n\n'
         '🎨 Customize:\n'
-        'Configure your *Welcome Message Header* and your *Buybot Header*.\n',
-        # '🚨 Sypher Trust:\n'
-        # 'Enable/Disable Trust System. Set Trust Preferences.',
+        'Configure your *Welcome Message Header* and your *Buybot Header*.\n\n'
+        '💰 Buybot Funcationality:\n'
+        'Change settings for buybot (coming soon)\n\n'
+        '🚨 Sypher Trust:\n'
+        'Enable/Disable Trust System. Set Trust Preferences.',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -4414,10 +4417,10 @@ def admin_commands(update: Update, context: CallbackContext) -> None:
     if is_user_admin(update, context):
         msg = update.message.reply_text(
             "*Admin Commands:*\n"
-            "*/admincommands*\nList all admin commands\n"
+            "*/admincommands | /adminhelp*\nList all admin commands\n"
             "*/cleanbot | /clean | /cleanupbot | /cleanup*\nClean all bot messages\n"
             "*/cleargames*\nClear all active games\n"
-            "*/mute*\nMute a user (reply to their message)\n"
+            "*/mute | /stfu*\nMute a user (reply to their message)\n"
             "*/unmute*\nUnmute a user (reply to their message)\n"
             "*/mutelist*\nView the list of muted users\n"
             "*/kick*\nKick a user (reply to their message)\n"
@@ -4425,9 +4428,9 @@ def admin_commands(update: Update, context: CallbackContext) -> None:
             "*/warnlist*\nList all warnings in the chat\n"
             "*/clearwarns*\nClear warnings for a specific user (reply to their message)\n"
             "*/warnings*\nCheck warnings for a specific user (reply to their message)\n"
-            "*/block*\nBlock a user or contract address\n"
-            "*/removeblock*\nRemove a user or contract address from the block list\n"
-            "*/blocklist*\nView the block list\n"
+            "*/block | /filter*\nBlock a user or contract address\n"
+            "*/removeblock | /unblock | /unfilter*\nRemove a user or contract address from the block list\n"
+            "*/blocklist | /filterlist*\nView the block list\n"
             "*/allow*\nAllow a user or contract address\n"
             "*/allowlist*\nView the allow list\n",
             parse_mode='Markdown'
@@ -5479,7 +5482,7 @@ def main() -> None:
     ##
     #region Admin Slash Command Handlers
     dispatcher.add_handler(CommandHandler(['start', 'setup'], start))
-    dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
+    dispatcher.add_handler(CommandHandler(['admincommands', 'adminhelp'], admin_commands))
     dispatcher.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
     dispatcher.add_handler(CommandHandler("kick", kick))
