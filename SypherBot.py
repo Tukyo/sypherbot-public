@@ -25,40 +25,47 @@ from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboa
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler, JobQueue
 
 #
-## This is the public version of the bot that was developed by Tukyo Games for the deSypher project.
-## This bot has a customizable commands feature, and admin controls. Along with full charting, price and buybot functionality.
-## You may also set a custom contract address for the token you want to track, all other contracts will be blocked in your chat if enabled.
-# 
-## https://desypher.net/
+## This is the public version of the bot that was developed by Tukyo for the Sypher project.
+## This bot has a customizable commands feature and admin controls, along with full charting, price, and buybot functionality.
+## You may also set a custom contract address for the token you want to track; all other contracts will be blocked in your chat if enabled.
 #
-## Commands
+## https://desypher.net/ | https://tukyogames.com/ | https://tukyowave.com/ | https://tukyo.org/
+#
+#### Commands <<< These are the commands that are available to all users in the chat.
+##
 ### /start - Start the bot
-### /commands - Get a list of commands
-### /play - Start a mini-game of deSypher within Telegram
-### /endgame - End your current game
+### /setup - Set up the bot for your group
+### /commands | /help - Get a list of commands
+### /play | /endgame - Start a mini-game of deSypher within Telegram & end any ongoing games
 ### /contract /ca - Contract address for the SYPHER token
-### /report - Report a message to group admins
-### /save - Save a message to your DMs
-## CUSTOM COMMANDS
-### The rest of the commands you can create yourself. Use /createcommand to create a new command.
-#
-## Ethereum Commands
 ### /price - Get the price of the SYPHER token in USD
 ### /chart - Links to the token chart on various platforms
 ### /liquidity /lp - View the liquidity value of the SYPHER V3 pool
 ### /volume - 24-hour trading volume of the SYPHER token
+### /website - Get links to related websites
+### /report - Report a message to group admins
+### /save - Save a message to your DMs
+### /rick - Send a Rickroll video (pass arguments to customize)
+##
 #
-## Admin Commands
+#### Admin Commands <<< These are the commands that are available to group admins only.
+##
 ### /admincommands - Get a list of admin commands
-### /createcommand - Create a new command
-### /cleanbot - Clean all bot messages in the chat
+### /cleanbot | /clean | /cleanupbot | /cleanup - Clean all bot messages in the chat
 ### /cleargames - Clear all active games in the chat
-### /mute /unmute - Reply to a message with this command to toggle mute for a user
-### /kick - Reply to a message with this command to kick a user from the chat
-### /warn - Reply to a message with this command to warn a user
-### /filter - Filter a word or phrase from the chat
-### /removefilter - Remove a word or phrase from the filter list
-### /filterlist - Get a list of filtered words
+### /kick - Reply to a message to kick a user from the chat
+### /mute | /unmute - Reply to a message to toggle mute for a user
+### /mutelist - Check the mute list
+### /warn - Reply to a message to warn a user
+### /warnlist - Get a list of all warnings
+### /clearwarns - Clear warnings for a specific user
+### /warnings - Check warnings for a specific user
+### /block - Block a user or contract address
+### /removeblock - Remove a user or contract address from the block list
+### /blocklist - View the block list
+### /allow - Allow a specific user or contract
+### /allowlist - View the allow list
+##
 #
 
 load_dotenv()
@@ -263,7 +270,7 @@ class AntiRaid:
 #endregion Classes
 
 anti_spam = AntiSpam(rate_limit=5, time_window=10, mute_duration=60)
-anti_raid = AntiRaid(user_amount=25, time_out=30, anti_raid_time=180)
+anti_raid = AntiRaid(user_amount=50, time_out=10, anti_raid_time=180)
 
 scheduler = BackgroundScheduler()
 
@@ -311,6 +318,11 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     inviter_is_admin = any(admin.user.id == inviter.id for admin in admins)
 
     print(f"Bot added to group {group_id} by {inviter.id} ({inviter.username})")
+
+    if group_type == "private":
+        print(f"Bot added to a private chat by {inviter.id} ({inviter.username}). Ignoring.")
+        update.message.reply_text("Sorry, I don't support private groups. You will need to remove me from your group, and add me back after you change the group type to public.")
+        return  # Ignore private chats
 
     if group_type not in ["group", "supergroup"]:
         msg = update.message.reply_text("Sorry, I don't support private chats or channels.")
@@ -1065,8 +1077,9 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         'Configure Crypto Settings: Setup Token Details, Check Token Details or Reset Your Token Details.\n\n'
         '_Warning! Clicking "Reset Token Details" will reset all token details._\n\n'
         '*🚀 Premium:*\n'
-        '🎨 Customize Your Bot:\n'
-        'Adjust the look and feel of your bot. Configure your Welcome Message Header and your Buybot Header.\n',
+        '🎨 Customize Your Bot • Group Monitoring:\n'
+        'Adjust the look and feel of your bot. Configure your Welcome Message Header and your Buybot Header.\n'
+        'Buybot functionality.\n',
         # '🚨 Sypher Trust:\n'
         # 'A smart system that dynamically adjusts the trust level of users based on their activity.',
         parse_mode='markdown',
@@ -4184,6 +4197,33 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
 #endregion Ethereum Logic
 
 #region Admin Controls
+def admin_commands(update: Update, context: CallbackContext) -> None:
+    msg = None
+    if is_user_admin(update, context):
+        msg = update.message.reply_text(
+            "*Admin Commands:*\n"
+            "*/admincommands*\nList all admin commands\n"
+            "*/cleanbot | /clean | /cleanupbot | /cleanup*\nClean all bot messages\n"
+            "*/cleargames*\nClear all active games\n"
+            "*/mute*\nMute a user (reply to their message)\n"
+            "*/unmute*\nUnmute a user (reply to their message)\n"
+            "*/mutelist*\nView the list of muted users\n"
+            "*/kick*\nKick a user (reply to their message)\n"
+            "*/warn*\nWarn a user (reply to their message)\n"
+            "*/warnlist*\nList all warnings in the chat\n"
+            "*/clearwarns*\nClear warnings for a specific user (reply to their message)\n"
+            "*/warnings*\nCheck warnings for a specific user (reply to their message)\n"
+            "*/block*\nBlock a user or contract address\n"
+            "*/removeblock*\nRemove a user or contract address from the block list\n"
+            "*/blocklist*\nView the block list\n"
+            "*/allow*\nAllow a user or contract address\n"
+            "*/allowlist*\nView the allow list\n",
+            parse_mode='Markdown'
+        )
+    
+    if msg is not None:
+        track_message(msg)
+
 def mute(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
@@ -4603,6 +4643,66 @@ def cleanbot(update: Update, context: CallbackContext):
 #endregion Admin Controls
 
 #region User Controls
+def commands(update: Update, context: CallbackContext) -> None:
+    msg = None
+    if rate_limit_check():
+        keyboard = [
+            [
+                InlineKeyboardButton("/play", callback_data='commands_play'),
+            ],
+            [
+                InlineKeyboardButton("/website", callback_data='commands_website'),
+                InlineKeyboardButton("/contract", callback_data='commands_contract')
+            ],
+            [
+                InlineKeyboardButton("/price", callback_data='commands_price'),
+                InlineKeyboardButton("/chart", callback_data='commands_chart')
+            ],
+            [
+                InlineKeyboardButton("/liquidity", callback_data='commands_liquidity'),
+                InlineKeyboardButton("/volume", callback_data='commands_volume')
+            ]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        base_dir = os.path.dirname(__file__)
+        image_path = os.path.join(base_dir, 'assets', 'banner.jpg')
+
+        with open(image_path, 'rb') as photo:
+            context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=photo,
+                caption="Welcome to Sypher Bot! Below you will find all my commands:",
+                reply_markup=reply_markup
+            )
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    
+    if msg is not None:
+        track_message(msg)
+
+def command_buttons(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'commands_play':
+        play(update, context)
+    elif query.data == 'commands_contract':
+        ca(update, context)
+    elif query.data == 'commands_website':
+        website(update, context)
+    elif query.data == 'commands_price':
+        get_token_price(update, context)
+    elif query.data == 'commands_chart':
+        chart(update, context)
+    elif query.data == 'commands_liquidity':
+        liquidity(update, context)
+    elif query.data == 'commands_volume':
+        volume(update, context)
+
 def report(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
 
@@ -5139,127 +5239,9 @@ def website(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 #endregion User Controls
 
-
-
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-
-
-
-
-def admin_commands(update: Update, context: CallbackContext) -> None: # HERE TODO: UPDATE ALL THIS AND THEN ALSO UPDATE THE COMMENTS AT THE TOP TO MATCH 
-    msg = None
-    if is_user_admin(update, context):
-        msg = update.message.reply_text(
-            "*Admin commands:*\n"
-            "*/cleanbot*\nCleans all bot messages\n"
-            "*/cleargames*\nClear all active games\n"
-            "*/mute*\nMute a user\n"
-            "*/unmute*\nUnmute a user\n"
-            "*/kick*\nKick a user\n"
-            "*/warn*\nWarn a user\n"
-            "*/filter*\nFilter a word or phrase\n"
-            "*/removefilter*\nRemove a filtered word or phrase\n"
-            "*/filterlist*\nList all filtered words and phrases\n",
-            parse_mode='Markdown'
-        )
-    
-    if msg is not None:
-        track_message(msg)
-
-def commands(update: Update, context: CallbackContext) -> None:
-    msg = None
-    if rate_limit_check():
-        keyboard = [
-            [
-                InlineKeyboardButton("/play", callback_data='commands_play'),
-            ],
-            [
-                InlineKeyboardButton("/website", callback_data='commands_website'),
-                InlineKeyboardButton("/contract", callback_data='commands_contract')
-            ],
-            [
-                InlineKeyboardButton("/price", callback_data='commands_price'),
-                InlineKeyboardButton("/chart", callback_data='commands_chart')
-            ],
-            [
-                InlineKeyboardButton("/liquidity", callback_data='commands_liquidity'),
-                InlineKeyboardButton("/volume", callback_data='commands_volume')
-            ]
-        ]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        base_dir = os.path.dirname(__file__)
-        image_path = os.path.join(base_dir, 'assets', 'banner.jpg')
-
-        with open(image_path, 'rb') as photo:
-            context.bot.send_photo(
-                chat_id=update.effective_chat.id,
-                photo=photo,
-                caption="Welcome to Sypher Bot! Below you will find all my commands:",
-                reply_markup=reply_markup
-            )
-    else:
-        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
-    
-    if msg is not None:
-        track_message(msg)
-
-def command_buttons(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'commands_play':
-        play(update, context)
-    elif query.data == 'commands_contract':
-        ca(update, context)
-    elif query.data == 'commands_website':
-        website(update, context)
-    elif query.data == 'commands_price':
-        get_token_price(update, context)
-    elif query.data == 'commands_chart':
-        chart(update, context)
-    elif query.data == 'commands_liquidity':
-        liquidity(update, context)
-    elif query.data == 'commands_volume':
-        volume(update, context)
-
-
-
 def main() -> None:
-    # Create the Updater and pass it your bot's token
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    
-    # Get the dispatcher to register handlers
-    dispatcher = updater.dispatcher
+    updater = Updater(TELEGRAM_TOKEN, use_context=True) # Create the Updater and pass it the bot's token
+    dispatcher = updater.dispatcher # Get the dispatcher to register handlers
     
     #region Slash Command Handlers
     #
@@ -5279,8 +5261,7 @@ def main() -> None:
     #endregion User Slash Command Handlers
     ##
     #region Admin Slash Command Handlers
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("setup", start))
+    dispatcher.add_handler(CommandHandler(['start', 'setup'], start))
     dispatcher.add_handler(CommandHandler("admincommands", admin_commands))
     dispatcher.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
@@ -5301,26 +5282,33 @@ def main() -> None:
     #
     #endregion Slash Command Handlers
 
-    # General Callbacks
+    #region Callbacks
+    #
+    #region General Callbacks
     dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
     dispatcher.add_handler(CallbackQueryHandler(command_buttons, pattern='^commands_'))    
+    #endregion General Callbacks
+    ##
+    #region Authentication Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
+    dispatcher.add_handler(CallbackQueryHandler(callback_math_response, pattern='^mauth_'))
+    dispatcher.add_handler(CallbackQueryHandler(callback_word_response, pattern='^wauth_'))
+    #endregion Authentication Callbacks
+    #
+    #endregion Callbacks
     
-    # Register the message handler for new users
+    #region Message Handlers
     dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
     dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
     dispatcher.add_handler(MessageHandler((Filters.text) & (~Filters.command), handle_message))
     dispatcher.add_handler(MessageHandler(Filters.document, handle_document))
     dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
+    #endregion Message Handlers
 
-    # Authentication Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
-    dispatcher.add_handler(CallbackQueryHandler(callback_math_response, pattern='^mauth_'))
-    dispatcher.add_handler(CallbackQueryHandler(callback_word_response, pattern='^wauth_'))
-    
-    # Setup Callback
+    #region Setup Callbacks
+    #
+    #region Admin Setup Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
-
-    # Setup Admin Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_admin_callback, pattern='^setup_admin$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_mute_callback, pattern='^setup_mute$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_mute_callback, pattern='^enable_mute$'))
@@ -5339,8 +5327,9 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(check_allowlist_callback, pattern='^check_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(clear_allowlist_callback, pattern='^clear_allowlist$'))
     dispatcher.add_handler(CallbackQueryHandler(reset_admin_settings_callback, pattern='^reset_admin_settings$'))
-    
-    # Setup Crypto Callbacks
+    #endregion Admin Setup Callbacks
+    ##
+    #region Crypto Setup Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_crypto_callback, pattern='^setup_crypto$'))
     dispatcher.add_handler(CallbackQueryHandler(check_token_details_callback, pattern='^check_token_details$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
@@ -5351,8 +5340,9 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(exit_callback, pattern='^exit_setup$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|harmony|mantle)$'))
     dispatcher.add_handler(CallbackQueryHandler(reset_token_details_callback, pattern='^reset_token_details$'))
-
-    # Setup Authentication Callbacks
+    #endregion Crypto Setup Callbacks
+    ##
+    #region Authentication Setup Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_verification_callback, pattern='^setup_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(check_verification_settings_callback, pattern='^check_verification_settings$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_verification_callback, pattern='^enable_verification$'))
@@ -5362,8 +5352,9 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(word_verification_callback, pattern='^word_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(timeout_verification_callback, pattern='^timeout_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_timeout_callback, pattern='^vtimeout_'))
-
-    # Setup Premium Callbacks
+    #endregion Authentication Setup Callbacks
+    ##
+    #region Premium Setup Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_premium_callback, pattern='^setup_premium$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_welcome_message_header_callback, pattern='^setup_welcome_message_header$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_buybot_message_header_callback, pattern='^setup_buybot_message_header$'))
@@ -5373,13 +5364,13 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(sypher_trust_relaxed_callback, pattern='^sypher_trust_relaxed$'))
     dispatcher.add_handler(CallbackQueryHandler(sypher_trust_moderate_callback, pattern='^sypher_trust_moderate$'))
     dispatcher.add_handler(CallbackQueryHandler(sypher_trust_strict_callback, pattern='^sypher_trust_strict$'))
+    #endregion Premium Setup Callbacks
+    #
+    #endregion Setup Callbacks
 
-    # Start the Bot
-    updater.start_polling()
-    start_monitoring_groups()
-
-    # Run the bot until stopped
-    updater.idle()
+    updater.start_polling() # Start the Bot
+    start_monitoring_groups() # Start monitoring premium groups
+    updater.idle() # Run the bot until stopped
 
 if __name__ == '__main__':
     main()
