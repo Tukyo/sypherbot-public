@@ -644,20 +644,15 @@ def handle_message(update: Update, context: CallbackContext) -> None:
 
         for pattern in detected_patterns:
             if pattern == "eth_address":
-                print(f"Detected Ethereum address: {msg}")
+                print(f"Detected Ethereum address in message: {msg}")
                 delete_blocked_addresses(update, context)
                 return
             elif pattern == "url":
                 matched_url = URL_PATTERN.search(msg).group()  # Extract the detected URL
-                normalized_msg = re.sub(r'^https?://', '', msg) # Strip scheme from the message
+                normalized_msg = re.sub(r'^https?://', '', msg).strip().lower().rstrip('/')  # Normalize the URL
                 print(f"Detected URL: {matched_url} - Normalized: {normalized_msg}")
-                if matched_url and group_website and matched_url.lower() == group_website.lower(): # Check if the URL matches the group website
-                    print(f"URL matches group website: {matched_url}.")
-                    return  # Skip deletion for matching group website URL
-                elif not is_allowed(normalized_msg, allowlist, URL_PATTERN):
-                    print(f"Blocked URL: {msg}")
-                    context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
-                    return
+                delete_blocked_links(update, context)
+                return
             elif pattern == "domain":
                 def extract_domain(url): # Extract the domain from the group's website_url
                     return re.sub(r'^https?://', '', url).split('/')[0]  # Strip scheme and path
@@ -796,14 +791,12 @@ def delete_blocked_links(update: Update, context: CallbackContext):
     print("Checking message for unallowed links...")
     message_text = update.message.text
 
-    if message_text is None:
+    if not message_text:
         print("No text in message.")
         return
-    
-    # Regular expression to match all URLs
+
+    # Regular expressions to find URLs and domains
     found_links = URL_PATTERN.findall(message_text)
-    
-    # Regular expression to match any word with .[domain]
     found_domains = DOMAIN_PATTERN.findall(message_text)
 
     if not found_links and not found_domains:
@@ -816,27 +809,34 @@ def delete_blocked_links(update: Update, context: CallbackContext):
         print("No group info available.")
         return
 
-    # Get the allowlist
-    allowlist_field = 'allowlist'
-    allowlist_items = group_info.get(allowlist_field, [])
-    
-    # Ensure allowlist_items is a list
-    if isinstance(allowlist_items, str):
-        allowlist_items = [item.strip() for item in allowlist_items.split(',') if item.strip()]
+    # Directly use the allowlist as an array
+    allowlist_items = group_info.get('allowlist', [])
+    if not isinstance(allowlist_items, list):
+        print("Allowlist is not in the correct format.")
+        return
 
-    # Combine the found links and domains
+    # Normalize allowlist entries
+    normalized_allowlist = [item.strip().lower().rstrip('/') for item in allowlist_items]
+
+    # Combine found links and domains
     found_items = found_links + found_domains
     print(f"Found items: {found_items}")
+    print(f"Normalized allowlist: {normalized_allowlist}")
 
     for item in found_items:
-        normalized_item = item.replace('http://', '').replace('https://', '')
-        if not any(normalized_item.startswith(allowed_item) for allowed_item in allowlist_items):
+        # Normalize the found item for comparison
+        normalized_item = item.lower().replace('http://', '').replace('https://', '').rstrip('/')
+        print(f"Checking item: {normalized_item}")
+
+        # Check if the item is in the allowlist
+        if not any(normalized_item.startswith(allowed_item) for allowed_item in normalized_allowlist):
             try:
                 update.message.delete()
-                print("Deleted a message with unallowed item.")
+                print(f"Deleted a message with unallowed item: {normalized_item}")
                 return  # Stop further checking if a message is deleted
             except Exception as e:
                 print(f"Failed to delete message: {e}")
+
 
 def delete_blocked_phrases(update: Update, context: CallbackContext):
     print("Checking message for filtered phrases...")
