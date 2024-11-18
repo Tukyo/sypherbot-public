@@ -840,7 +840,6 @@ def delete_blocked_links(update: Update, context: CallbackContext):
             except Exception as e:
                 print(f"Failed to delete message: {e}")
 
-
 def delete_blocked_phrases(update: Update, context: CallbackContext):
     print("Checking message for filtered phrases...")
     message_text = update.message.text
@@ -4469,22 +4468,27 @@ def block(update: Update, context: CallbackContext):
         blocklist_field = 'blocklist'
 
         try:
-            doc_snapshot = group_doc.get() # Fetch current blocklist from the group's document
+            doc_snapshot = group_doc.get()  # Fetch current blocklist from the group's document
             if doc_snapshot.exists:
                 group_data = doc_snapshot.to_dict()
-                current_blocklist = group_data.get(blocklist_field, "")
-                new_blocklist = current_blocklist + command_text + ", "
+                current_blocklist = group_data.get(blocklist_field, [])
 
-                group_doc.update({blocklist_field: new_blocklist}) # Update the blocklist in the group's document
-                msg = update.message.reply_text(f"'{command_text}' added to blocklist!")
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-                print("Updated blocklist:", new_blocklist)
+                if not isinstance(current_blocklist, list): # Ensure current_blocklist is a list
+                    current_blocklist = []
 
+                if command_text in current_blocklist:
+                    msg = update.message.reply_text(f"'{command_text}' is already in the blocklist.")
+                else:
+                    current_blocklist.append(command_text)  # Add new blocked text to the list
+                    group_doc.update({blocklist_field: current_blocklist})  # Update the blocklist in the group's document
+                    msg = update.message.reply_text(f"'{command_text}' added to blocklist!")
+                    clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
+                    print("Updated blocklist:", current_blocklist)
             else:
-                group_doc.set({blocklist_field: command_text + ", "}) # If no blocklist exists, create it with the current command text
+                group_doc.set({blocklist_field: [command_text]})  # If no blocklist exists, create it with the current command text
                 msg = update.message.reply_text(f"'{command_text}' blocked!")
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-                print("Created new blocklist with:", command_text)
+                clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
+                print("Created new blocklist with:", [command_text])
 
         except Exception as e:
             msg = update.message.reply_text(f"Failed to update blocklist: {str(e)}")
@@ -4492,6 +4496,7 @@ def block(update: Update, context: CallbackContext):
 
     if msg is not None:
         track_message(msg)
+
 
 def remove_block(update: Update, context: CallbackContext):
     msg = None
