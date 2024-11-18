@@ -649,10 +649,11 @@ def handle_message(update: Update, context: CallbackContext) -> None:
                 return
             elif pattern == "url":
                 matched_url = URL_PATTERN.search(msg).group()  # Extract the detected URL
+                normalized_msg = re.sub(r'^https?://', '', msg) # Strip scheme from the message
                 if matched_url and group_website and matched_url.lower() == group_website.lower(): # Check if the URL matches the group website
                     print(f"URL matches group website: {matched_url}.")
                     return  # Skip deletion for matching group website URL
-                elif not is_allowed(msg, allowlist, URL_PATTERN):
+                elif not is_allowed(normalized_msg, allowlist, URL_PATTERN):
                     print(f"Blocked URL: {msg}")
                     context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
                     return
@@ -3566,8 +3567,6 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
 
         blob = bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
         image_url = blob.generate_signed_url(expiration=timedelta(minutes=BLOB_EXPIRATION))
-
-        print(f"image_url: {image_url}")
 
         response = requests.get(image_url)
         print(f"Response: {response}")
