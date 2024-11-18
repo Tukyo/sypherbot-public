@@ -333,7 +333,8 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
         owner_id = inviter.id # Store group info only if the inviter is an admin
         owner_username = inviter.username
         print(f"Adding group {group_id} to database with owner {owner_id} ({owner_username})")
-        group_doc = fetch_group_info(update, context, return_doc=True)  # Fetch the Firestore document reference directly
+        chat_id = update.effective_chat.id
+        group_doc = db.collection('groups').document(str(chat_id))
         group_doc.set({
             'group_id': group_id,
             'owner_id': owner_id,
