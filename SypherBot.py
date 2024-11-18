@@ -485,22 +485,30 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
 
     return user_is_owner
 
-def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool = False, update_attr: bool = False, return_both: bool = False):
-    if update.effective_chat.type == 'private':
-        return None  # Private chats have no group data
+def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool = False, update_attr: bool = False, return_both: bool = False, group_id: str = None):
+    if update.effective_chat.type == 'private' and group_id is None:
+        print(f"Private chat detected when attempting to fetch group info. No group_id provided either.")
+        return None  # Private chats have no group data and no group_id was provided
 
-    if update_attr: # Determines wether or not the group_id is fetched from a message update or chat
+    if update_attr and group_id is not None: # Determines wether or not the group_id is fetched from a message update or chat
+        print(f"group_id not manually provided, fetching from message.")
         group_id = str(update.message.chat.id)
-    else:
+    elif group_id is not None:
+        print(f"group_id not manually provided, fetching from chat.")
         group_id = str(update.effective_chat.id)
+    else:
+        print(f"group_id manually provided: {group_id}")
 
     cached_info = fetch_cached_group_info(group_id)
 
     if cached_info: # Return cached data based on the flags
         if return_both:
+            print(f"Returning cached document and data for group {group_id}")
             return cached_info["group_data"], cached_info["group_doc"]
         if return_doc:
+            print(f"Returning cached document for group {group_id}")
             return cached_info["group_doc"]
+        print(f"Returning cached data for group {group_id}")
         return cached_info["group_data"]
 
     group_doc = db.collection('groups').document(str(group_id))
@@ -3434,7 +3442,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
     group_id = update.message.chat.id
     group_doc = db.collection('groups').document(str(group_id))
 
-    group_data = fetch_group_info(update, context)
+    group_data = fetch_group_info(update, context, group_id=group_id)
     if group_data is None:
         group_name = "the group"  # Default text if group name not available
         print("Group data not found.")
@@ -3549,7 +3557,7 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
         query.edit_message_text(text="No such group exists.")
 
 def authentication_challenge(update: Update, context: CallbackContext, verification_type, group_id, user_id):
-    group_doc = fetch_group_info(update, context, return_doc=True)
+    group_doc = fetch_group_info(update, context, return_doc=True, group_id=group_id)
 
     if verification_type == 'math':
         challenges = [MATH_0, MATH_1, MATH_2, MATH_3, MATH_4]
