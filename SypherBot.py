@@ -965,7 +965,8 @@ def start(update: Update, context: CallbackContext) -> None:
                 user_id_from_link = command_args[2]
                 print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
 
-                group_data = fetch_group_info(update, context)
+                group_doc = db.collection('groups').document(group_id)
+                group_data = group_doc.get()
                 if group_data.exists:
                     unverified_users = group_data.to_dict().get('unverified_users', {})
                     print(f"Unverified users list: {unverified_users}")
@@ -980,8 +981,7 @@ def start(update: Update, context: CallbackContext) -> None:
                 else:
                     msg = update.message.reply_text('No such group exists.')
             else:
-                # General start command handling when not triggered via deep link
-                keyboard = [
+                keyboard = [ # General start command handling when not triggered via deep link
                     [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/{BOT_USERNAME}?startgroup=0")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
