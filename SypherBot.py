@@ -38,11 +38,12 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 ### /setup - Set up the bot for your group
 ### /commands | /help - Get a list of commands
 ### /play | /endgame - Start a mini-game of deSypher within Telegram & end any ongoing games
-### /contract /ca - Contract address for the SYPHER token
-### /price - Get the price of the SYPHER token in USD
+### /contract /ca - Contract address for the group token
+### /buy | /purchase - Buy the token for the group
+### /price - Get the price of the group token in USD
 ### /chart - Links to the token chart on various platforms
-### /liquidity /lp - View the liquidity value of the SYPHER V3 pool
-### /volume - 24-hour trading volume of the SYPHER token
+### /liquidity /lp - View the liquidity value of the group V3 pool
+### /volume - 24-hour trading volume of the group token
 ### /website - Get links to related websites
 ### /report - Report a message to group admins
 ### /save - Save a message to your DMs
@@ -289,10 +290,6 @@ RATE_LIMIT_MESSAGE_COUNT = 100  # Maximum number of allowed commands per {TIME_P
 RATE_LIMIT_TIME_PERIOD = 60  # Time period in (seconds)
 MONITOR_INTERVAL = 15 # Interval for monitoring jobs (seconds)
 BLOB_EXPIRATION = 15 # Expiration time for uploaded files (minutes)
-MINIMUM_BUY_AMOUNT = 1 # Minimum amount in USD for the buybot to trigger TODO: Change to higher after testing
-SMALL_BUY_AMOUNT = 2500 # Below this amount in USD will trigger 🐟
-MEDIUM_BUY_AMOUNT = 5000 # Below this amount in USD will trigger 🐬
-
 
 last_check_time = time.time()
 command_count = 0
@@ -3867,9 +3864,10 @@ def setup_buybot(update: Update, context: CallbackContext) -> None:
         'The minimum amount of tokens to trigger a buy.\n\n'
         '🐟 *Small Buy* 🐟\n'
         'Below this amount will be considered a small buy.\n\n'
-        '🐬 *Medium Buy:* 🐬\n'
+        '🐬 *Medium Buy* 🐬\n'
         'Below this amount will be considered a medium buy.\n\n'
-        '🐳 Any buy above the medium buy amount will be considered a large buy 🐳',
+        '🐳 *Whale* 🐳\n'
+        'Any buy above the medium buy amount will be considered a whale.',
         parse_mode='Markdown',
         reply_markup=reply_markup
     )

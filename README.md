@@ -115,6 +115,7 @@ Sypherbot offers a plethora of features to manage and control your group. The bo
 - `/setup` - Set up the bot for your group
 - `/commands | /help` - Get a list of commands
 - `/play | /endgame` - Start a mini-game of deSypher within Telegram & end any ongoing games
+- `/buy | /purchase` - Buy the group token
 - `/contract | /ca` - Get the contract address for the SYPHER token
 - `/price` - Get the price of the SYPHER token in USD - **Modifiers:** `USD` | `ETH`
 - `/chart` - Links to the token chart on various platforms, defaults to `minute` when no argument provided - **Modifiers:** `h` *hour* | `d` *day* | `m` *minute* 
