@@ -88,6 +88,10 @@ WORD_6 = os.getenv("WORD_6")
 WORD_7 = os.getenv("WORD_7")
 WORD_8 = os.getenv("WORD_8")
 
+RELAXED_TRUST = os.getenv('RELAXED_TRUST')
+MODERATE_TRUST = os.getenv('MODERATE_TRUST')
+STRICT_TRUST = os.getenv('STRICT_TRUST')
+
 endpoints = {
     "ARBITRUM": os.getenv('ARBITRUM_ENDPOINT'),
     "AVALANCHE": os.getenv('AVALANCHE_ENDPOINT'),
@@ -281,9 +285,9 @@ ETH_ADDRESS_PATTERN = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 URL_PATTERN = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 DOMAIN_PATTERN = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
 
-RATE_LIMIT = 100  # Maximum number of allowed commands per {TIME_PERIOD}
-TIME_PERIOD = 60  # Time period in (seconds)
-JOB_INTERVAL = 60 # Interval for monitoring jobs (seconds)
+RATE_LIMIT_MESSAGE_COUNT = 100  # Maximum number of allowed commands per {TIME_PERIOD}
+RATE_LIMIT_TIME_PERIOD = 60  # Time period in (seconds)
+MONITOR_INTERVAL = 15 # Interval for monitoring jobs (seconds)
 BLOB_EXPIRATION = 15 # Expiration time for uploaded files (minutes)
 MINIMUM_BUY_AMOUNT = 1 # Minimum amount in USD for the buybot to trigger TODO: Change to higher after testing
 SMALL_BUY_AMOUNT = 2500 # Below this amount in USD will trigger 🐟
@@ -439,7 +443,7 @@ def schedule_group_monitoring(group_data):
             scheduler.add_job(
                 monitor_transfers,
                 'interval',
-                seconds=JOB_INTERVAL,
+                seconds=MONITOR_INTERVAL,
                 args=[web3_instance, liquidity_address, group_data],
                 id=job_id,  # Unique ID for the job
                 timezone=pytz.utc  # Use the UTC timezone from the pytz library
@@ -598,12 +602,12 @@ def rate_limit_check(): # Later TODO: Implement rate limiting PER GROUP
     current_time = time.time()
 
     # Reset count if time period has expired
-    if current_time - last_check_time > TIME_PERIOD:
+    if current_time - last_check_time > RATE_LIMIT_TIME_PERIOD:
         command_count = 0
         last_check_time = current_time
 
     # Check if the bot is within the rate limit
-    if command_count < RATE_LIMIT:
+    if command_count < RATE_LIMIT_MESSAGE_COUNT:
         command_count += 1
         return True
     else:
@@ -3786,11 +3790,11 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
     current_time = datetime.now(timezone.utc)
     time_elapsed = current_time - user_added_time
 
-    sypher_trust_preferences = group_data.get('premium_features', {}).get('sypher_trust_preferences', 'moderate') # Determine trust preferences
+    sypher_trust_preferences = group_data.get('premium_features', {}).get('sypher_trust_preferences', 'moderate') # Determine trust preferences, default to moderate
     trust_durations = {
-        'relaxed': timedelta(hours=24),
-        'moderate': timedelta(hours=72),
-        'strict': timedelta(days=7),
+        'relaxed': timedelta(days=RELAXED_TRUST),
+        'moderate': timedelta(days=MODERATE_TRUST),
+        'strict': timedelta(days=STRICT_TRUST),
     }
     trust_duration = trust_durations.get(sypher_trust_preferences)
 
@@ -5054,7 +5058,7 @@ def commands(update: Update, context: CallbackContext) -> None:
     if rate_limit_check():
         enabled_commands = []
 
-        for command in ['play', 'website', 'contract', 'price', 'chart', 'liquidity', 'volume']: # Check the status of each command
+        for command in ['play', 'website', 'buy', 'contract', 'price', 'chart', 'liquidity', 'volume']: # Check the status of each command
             if check_command_status(update, context, command):
                 enabled_commands.append(command)
 
@@ -5089,6 +5093,7 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
     update = Update(update.update_id, message=query.message)
     command_mapping = {
         'commands_play': 'play',
+        'commands_buy' : 'buy',
         'commands_contract': 'contract',
         'commands_website': 'website',
         'commands_price': 'price',
@@ -5108,6 +5113,8 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
 
         if command_key == 'commands_play':
             play(update, context)
+        elif command_key == 'commands_buy':
+            buy(update, context)
         elif command_key == 'commands_contract':
             contract(update, context)
         elif command_key == 'commands_website':
@@ -5446,6 +5453,47 @@ def send_rick_video(update: Update, context: CallbackContext) -> None:
     else:
         update.message.reply_text('Bot rate limit exceeded. Please try again later.')
 
+def buy(update: Update, context: CallbackContext) -> None:
+    msg = None
+    chat_id = str(update.effective_chat.id)
+
+    if rate_limit_check():
+        function_name = inspect.currentframe().f_code.co_name
+        if not check_command_status(update, context, function_name):
+            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+            print(f"Attempted to use disabled command /play in group {chat_id}.")
+            return
+        
+        group_data = fetch_group_info(update, context)
+        if group_data is None:
+            return
+        
+        token_data = group_data.get('token')
+        if not token_data:
+            update.message.reply_text("Token data not found for this group.")
+            return
+        token_name = token_data.get('name')
+        
+        contract_address = token_data.get('contract_address')
+        if not contract_address:
+            update.message.reply_text("Contract address not found for this group.")
+            return
+        
+        buy_link = f"https://app.uniswap.org/swap?outputCurrency={contract_address}"
+        
+        keyboard = [[InlineKeyboardButton(f"Buy {token_name} Here", url=buy_link)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        msg = update.message.reply_text(
+            f"Buy {token_name} Here:",
+            reply_markup=reply_markup
+        )
+    else:
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+
+    if msg is not None:
+        track_message(msg)
+
 def contract(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = str(update.effective_chat.id)
@@ -5467,7 +5515,6 @@ def contract(update: Update, context: CallbackContext) -> None:
             return
 
         contract_address = token_data.get('contract_address')
-
         if not contract_address:
             update.message.reply_text("Contract address not found for this group.")
             return
@@ -5710,6 +5757,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
     dispatcher.add_handler(CommandHandler(['contract', 'ca'], contract))
+    dispatcher.add_handler(CommandHandler(['buy', 'purchase'], buy))
     dispatcher.add_handler(CommandHandler("price", get_token_price, pass_args=True))
     dispatcher.add_handler(CommandHandler("chart", chart))
     dispatcher.add_handler(CommandHandler(['liquidity', 'lp'], liquidity))
