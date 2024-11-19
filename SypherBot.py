@@ -3777,12 +3777,12 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
         print(f"User {user_id} is not in untrusted_users for group {group_id}. Assuming trusted.")
         return True
 
-    timestamp_str = user_data.get('timestamp') # Extract timestamp and calculate time since added
-    if not timestamp_str:
-        print(f"No timestamp found for user {user_id} in untrusted_users. Assuming untrusted.")
+    try: # Try to get user's time
+        user_added_time = datetime.fromisoformat(user_data)
+    except ValueError:
+        print(f"Invalid timestamp format for user {user_id} in untrusted_users. Assuming untrusted.")
         return False
 
-    user_added_time = datetime.fromisoformat(timestamp_str)
     current_time = datetime.now(timezone.utc)
     time_elapsed = current_time - user_added_time
 
