@@ -5297,17 +5297,17 @@ def report(update: Update, context: CallbackContext) -> None:
     reported_user = update.message.reply_to_message.from_user.username
 
     chat_admins = context.bot.get_chat_administrators(chat_id) # Get the list of admins
-    admin_usernames = ['@' + admin.user.username for admin in chat_admins if admin.user.username is not None]
+    admin_usernames = [admin.user.username for admin in chat_admins if admin.user.username is not None]
     bot_username = context.bot.username
     print(f"Message from {reported_user} in chat {chat_id} reported to admins {admin_usernames}")
 
     if reported_user in admin_usernames or reported_user == bot_username:
         context.bot.send_message(chat_id, text="Nice try lol") # If the reported user is an admin, send a message saying that admins cannot be reported
     else:
-        admin_mentions = ' '.join(admin_usernames)
+        admin_mentions = ' '.join(['@' + username for username in admin_usernames])  # Add '@' for mentions
 
         report_message = f"Reported Message to admins.\n {admin_mentions}\n"
-        message = context.bot.send_message(chat_id, text=report_message, disable_web_page_preview=True) # Send the message as plain text
+        message = context.bot.send_message(chat_id, text=report_message, disable_web_page_preview=True)  # Send the message as plain text
 
         # Immediately edit the message to remove the usernames, using Markdown for the new message
         context.bot.edit_message_text(chat_id=chat_id, message_id=message.message_id, text="⚠️ Message Reported to Admins ⚠️", parse_mode='Markdown', disable_web_page_preview=True)
