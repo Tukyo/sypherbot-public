@@ -1,7 +1,4 @@
 .env
 serviceAccountKey.json
-config.json
 .vscode
 ignore
-abi.json
-todo

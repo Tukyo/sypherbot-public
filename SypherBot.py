@@ -1157,7 +1157,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         '*🚀 Premium:*\n'
         '🎨 Customize Your Bot\n'
         'Adjust the look and feel of your bot.\n'
-        'Configure your Welcome Message Header and your Buybot Header.\n'
+        'Configure your Welcome Message Header and your Buybot Header.\n\n'
         '🔎 Group Monitoring:\n'
         'Buybot functionality.\n\n'
         '🚨 Sypher Trust:\n'
@@ -2381,10 +2381,6 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
         [
-            InlineKeyboardButton("Enable", callback_data='enable_verification'),
-            InlineKeyboardButton("Disable", callback_data='disable_verification')
-        ],
-        [
             InlineKeyboardButton("Simple", callback_data='simple_verification'),
             InlineKeyboardButton("Math", callback_data='math_verification'),
             InlineKeyboardButton("Word", callback_data='word_verification')
@@ -2401,112 +2397,10 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='*🌐 Authentication Setup 🌐*\n\nYou may enable or disable authentication. Once enabled, please choose an authentication type.', parse_mode='Markdown',
+        text='*🌐 Authentication Setup 🌐*\n\nHere, you may choose the type of authentication to use for your group. The default is simple.', parse_mode='Markdown',
         reply_markup=reply_markup
     )
     context.user_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
-
-    if msg is not None:
-        track_message(msg)
-
-def enable_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'enable_verification':
-        if is_user_owner(update, context, user_id):
-            enable_verification(update, context)
-        else:
-            print("User is not the owner.")
-
-def enable_verification(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
-    if not result:
-        print("Failed to fetch group info. No action taken.")
-        return
-
-    group_data, group_doc = result  # Unpack the tuple
-
-    if group_data is None:
-        group_doc.set({
-            'group_id': group_id,
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'none',
-                'verification_timeout': 600
-            }
-        })
-    else:
-        group_doc.update({
-            'verification_info': {
-                'verification': True,
-                'verification_type': 'none',
-                'verification_timeout': 600
-            }
-        })
-
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Authentication enabled for this group.\n\n*❗ Please choose an authentication type ❗*', parse_mode='Markdown'
-    )
-    store_message_id(context, msg.message_id)
-
-    if msg is not None:
-        track_message(msg)
-
-def disable_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'disable_verification':
-        if is_user_owner(update, context, user_id):
-            disable_verification(update, context)
-        else:
-            print("User is not the owner.")
-
-def disable_verification(update: Update, context: CallbackContext) -> None:
-    msg = None
-    group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
-    if not result:
-        print("Failed to fetch group info. No action taken.")
-        return
-
-    group_data, group_doc = result  # Unpack the tuple
-
-    if group_data is None:
-        group_doc.set({
-            'group_id': group_id,
-            'verification_info': {
-                'verification': False,
-                'verification_type': 'none'
-            }
-        })
-    else:
-        group_doc.update({
-            'verification_info': {
-                'verification': False,
-                'verification_type': 'none'
-            }
-        })
-
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-
-    msg = context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='*❗ Authentication disabled for this group ❗*', parse_mode='Markdown'
-    )
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2539,7 +2433,6 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
         group_doc.set({
             'group_id': group_id,
             'verification_info': {
-                'verification': True,
                 'verification_type': 'simple',
                 'verification_timeout': 600
             }
@@ -2547,7 +2440,6 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
     else:
         group_doc.update({
             'verification_info': {
-                'verification': True,
                 'verification_type': 'simple',
                 'verification_timeout': 600
             }
@@ -2600,7 +2492,6 @@ def math_verification(update: Update, context: CallbackContext) -> None:
         group_doc.set({
             'group_id': group_id,
             'verification_info': {
-                'verification': True,
                 'verification_type': 'math',
                 'verification_timeout': 600
             }
@@ -2608,7 +2499,6 @@ def math_verification(update: Update, context: CallbackContext) -> None:
     else:
         group_doc.update({
             'verification_info': {
-                'verification': True,
                 'verification_type': 'math',
                 'verification_timeout': 600
             }
@@ -2663,7 +2553,6 @@ def word_verification(update: Update, context: CallbackContext) -> None:
         group_doc.set({
             'group_id': group_id,
             'verification_info': {
-                'verification': True,
                 'verification_type': 'word',
                 'verification_timeout': 600
             }
@@ -2671,7 +2560,6 @@ def word_verification(update: Update, context: CallbackContext) -> None:
     else:
         group_doc.update({
             'verification_info': {
-                'verification': True,
                 'verification_type': 'word',
                 'verification_timeout': 600
             }
@@ -2799,8 +2687,7 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
 
     if group_data is not None:
         verification_info = group_data.get('verification_info', {})
-        verification = verification_info.get('verification', False)
-        verification_type = verification_info.get('verification_type', 'none')
+        verification_type = verification_info.get('verification_type', 'simple')
         verification_timeout = verification_info.get('verification_timeout', 000)
 
         menu_change(context, update)
@@ -2813,7 +2700,7 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"*🔒 Current Authentication Settings 🔒*\n\nAuthentication: {verification}\nType: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
+            text=f"*🔒 Current Authentication Settings 🔒*\n\nAuthentication: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
@@ -5402,21 +5289,25 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
 def report(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
 
+    if not update.message.reply_to_message:
+        context.bot.send_message(chat_id, text="You need to reply to a message to report it!")
+        print(f"Report attempt in chat {chat_id} failed: No replied message.")
+        return
+
     reported_user = update.message.reply_to_message.from_user.username
 
-    # Get the list of admins
-    chat_admins = context.bot.get_chat_administrators(chat_id)
+    chat_admins = context.bot.get_chat_administrators(chat_id) # Get the list of admins
     admin_usernames = ['@' + admin.user.username for admin in chat_admins if admin.user.username is not None]
+    bot_username = context.bot.username
+    print(f"Message in chat {chat_id} reported to admins {admin_usernames}")
 
-    if reported_user in admin_usernames:
-        # If the reported user is an admin, send a message saying that admins cannot be reported
-        context.bot.send_message(chat_id, text="Nice try lol")
+    if reported_user in admin_usernames or reported_user == bot_username:
+        context.bot.send_message(chat_id, text="Nice try lol") # If the reported user is an admin, send a message saying that admins cannot be reported
     else:
         admin_mentions = ' '.join(admin_usernames)
 
         report_message = f"Reported Message to admins.\n {admin_mentions}\n"
-        # Send the message as plain text
-        message = context.bot.send_message(chat_id, text=report_message, disable_web_page_preview=True)
+        message = context.bot.send_message(chat_id, text=report_message, disable_web_page_preview=True) # Send the message as plain text
 
         # Immediately edit the message to remove the usernames, using Markdown for the new message
         context.bot.edit_message_text(chat_id=chat_id, message_id=message.message_id, text="⚠️ Message Reported to Admins ⚠️", parse_mode='Markdown', disable_web_page_preview=True)
@@ -5474,8 +5365,7 @@ def save(update: Update, context: CallbackContext):
             msg = update.message.reply_text("The message format is not supported.")
             return
 
-        # Send the message or media to the user's DM
-        try:
+        try: # Send the message or media to the user's DM
             if content_type == 'text':
                 context.bot.send_message(chat_id=user.id, text=content)
             elif content_type in ['photo', 'audio', 'document', 'animation', 'video', 'voice', 'video_note', 'sticker']:
@@ -6141,8 +6031,6 @@ def main() -> None:
     #region Authentication Setup Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_verification_callback, pattern='^setup_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(check_verification_settings_callback, pattern='^check_verification_settings$'))
-    dispatcher.add_handler(CallbackQueryHandler(enable_verification_callback, pattern='^enable_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(disable_verification_callback, pattern='^disable_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(simple_verification_callback, pattern='^simple_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(math_verification_callback, pattern='^math_verification$'))
     dispatcher.add_handler(CallbackQueryHandler(word_verification_callback, pattern='^word_verification$'))
