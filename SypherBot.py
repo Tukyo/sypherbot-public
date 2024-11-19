@@ -5113,7 +5113,7 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
         if command_key == 'commands_play':
             play(update, context)
         elif command_key == 'commands_contract':
-            ca(update, context)
+            contract(update, context)
         elif command_key == 'commands_website':
             website(update, context)
         elif command_key == 'commands_price':
@@ -5450,7 +5450,7 @@ def send_rick_video(update: Update, context: CallbackContext) -> None:
     else:
         update.message.reply_text('Bot rate limit exceeded. Please try again later.')
 
-def ca(update: Update, context: CallbackContext) -> None:
+def contract(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = str(update.effective_chat.id)
 
@@ -5713,7 +5713,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler(['commands', 'help'], commands))
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
-    dispatcher.add_handler(CommandHandler(['contract', 'ca'], ca))
+    dispatcher.add_handler(CommandHandler(['contract', 'ca'], contract))
     dispatcher.add_handler(CommandHandler("price", get_token_price, pass_args=True))
     dispatcher.add_handler(CommandHandler("chart", chart))
     dispatcher.add_handler(CommandHandler(['liquidity', 'lp'], liquidity))
