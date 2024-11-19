@@ -275,8 +275,15 @@ class AntiRaid:
         return 0
 #endregion Classes
 
-anti_spam = AntiSpam(rate_limit=5, time_window=10, mute_duration=60)
-anti_raid = AntiRaid(user_amount=50, time_out=10, anti_raid_time=180)
+ANTI_SPAM_RATE_LIMIT = 5
+ANTI_SPAM_TIME_WINDOW = 10
+ANTI_SPAM_MUTE_DURATION = 60
+ANTI_RAID_USER_AMOUNT = 50
+ANTI_RAID_TIME_OUT = 10
+ANTI_RAID_LOCKDOWN_TIME = 180
+
+anti_spam = AntiSpam(rate_limit=ANTI_SPAM_RATE_LIMIT, time_window=ANTI_SPAM_TIME_WINDOW, mute_duration=ANTI_SPAM_MUTE_DURATION)
+anti_raid = AntiRaid(user_amount=ANTI_RAID_USER_AMOUNT, time_out=ANTI_RAID_TIME_OUT, anti_raid_time=ANTI_RAID_LOCKDOWN_TIME)
 
 scheduler = BackgroundScheduler()
 
@@ -952,11 +959,14 @@ def menu_change(context: CallbackContext, update: Update):
 
 def exit_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    print(f"Exiting setup mode in group {update.effective_chat.id}")
-    query.message.delete()
-    context.user_data['setup_stage'] = None
+    user_id = update.effective_user.id
+    
+    if is_user_owner(update, context, user_id):
+        query = update.callback_query
+        query.answer()
+        print(f"Exiting setup mode in group {update.effective_chat.id}")
+        query.message.delete()
+        context.user_data['setup_stage'] = None
 
     if msg is not None:
         track_message(msg)
