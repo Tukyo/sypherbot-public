@@ -2282,7 +2282,6 @@ def setup_commands(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def toggle_command_status(update: Update, context: CallbackContext) -> None:
-    msg = None
     query = update.callback_query
     chat_id = query.message.chat.id
 
@@ -2290,7 +2289,7 @@ def toggle_command_status(update: Update, context: CallbackContext) -> None:
 
     if command == "play": # Check if the command is "play"
         if not is_premium_group(update, context):
-            msg = query.message.reply_text("The /play command can only be toggled in premium groups.")
+            print(f"Group {chat_id} is not premium. Cannot toggle 'play' command.")
             return
 
     group_doc = db.collection('groups').document(str(chat_id))
@@ -2312,9 +2311,6 @@ def toggle_command_status(update: Update, context: CallbackContext) -> None:
     clear_group_cache(str(chat_id)) # Clear the cache on all database updates
 
     setup_commands(update, context)
-
-    if msg is not None:
-        track_message(msg)
 
 def check_command_status(update: Update, context: CallbackContext, command: str) -> bool:
     group_data = fetch_group_info(update, context)
@@ -3775,15 +3771,15 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
         print(f"Sypher Trust is not enabled for group {group_id}. Allowing user {user_id}.")
         return True
 
-    unverified_users = group_data.get('unverified_users', {}) # Check if the user is in unverified_users
-    user_data = unverified_users.get(user_id)
+    untrusted_users = group_data.get('untrusted_users', {}) # Check if the user is in untrusted_users
+    user_data = untrusted_users.get(user_id)
     if not user_data:
-        print(f"User {user_id} is not in unverified_users for group {group_id}. Assuming trusted.")
+        print(f"User {user_id} is not in untrusted_users for group {group_id}. Assuming trusted.")
         return True
 
     timestamp_str = user_data.get('timestamp') # Extract timestamp and calculate time since added
     if not timestamp_str:
-        print(f"No timestamp found for user {user_id} in unverified_users. Assuming untrusted.")
+        print(f"No timestamp found for user {user_id} in untrusted_users. Assuming untrusted.")
         return False
 
     user_added_time = datetime.fromisoformat(timestamp_str)
@@ -3803,12 +3799,12 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
         return False
 
     if time_elapsed >= trust_duration: # Check if sufficient time has passed
-        print(f"User {user_id} has been in unverified_users for {time_elapsed}. Removing from unverified_users.")
-        db.collection('groups').document(group_id).update({f'unverified_users.{user_id}': firestore.DELETE_FIELD})
+        print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Removing from untrusted_users.")
+        db.collection('groups').document(group_id).update({f'untrusted_users.{user_id}': firestore.DELETE_FIELD})
         clear_group_cache(group_id) # Clear the cache on all database updates
         return True
     else:
-        print(f"User {user_id} has been in unverified_users for {time_elapsed}. Still untrusted.")
+        print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Still untrusted.")
         return False
 #endregion Sypher Trust
 
