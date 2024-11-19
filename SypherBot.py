@@ -4722,11 +4722,10 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
 
         if modifier == "USD":
             try:
-                token_price_in_usd = price_in_weth * eth_price_in_usd  # Convert to USD
+                # Convert eth_price_in_usd to Decimal before multiplying
+                token_price_in_usd = price_in_weth * Decimal(eth_price_in_usd) 
                 print(f"Token price in USD: {token_price_in_usd}")
-                update.message.reply_text(
-                    f"${token_price_in_usd:.4f}"
-                )
+                update.message.reply_text(f"${token_price_in_usd:.4f}")
             except Exception as e:
                 print(f"Error converting token price to USD: {e}")
                 update.message.reply_text("Failed to calculate token price in USD.")
