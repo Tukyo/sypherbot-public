@@ -1055,6 +1055,8 @@ def start(update: Update, context: CallbackContext) -> None:
                 reply_markup=setup_markup
             )
             store_message_id(context, msg.message_id)
+        else:
+            msg = update.message.reply_text("You are not the owner of this group.")
 
     if msg is not None:
         track_message(msg)
@@ -4830,18 +4832,20 @@ def admin_commands(update: Update, context: CallbackContext) -> None:
             "*/mute | /stfu*\nMute a user (reply to their message)\n"
             "*/unmute*\nUnmute a user (reply to their message)\n"
             "*/mutelist*\nView the list of muted users\n"
-            "*/kick*\nKick a user (reply to their message)\n"
+            "*/kick | /ban*\nKick a user (reply to their message)\n"
             "*/warn*\nWarn a user (reply to their message)\n"
             "*/warnlist*\nList all warnings in the chat\n"
             "*/clearwarns*\nClear warnings for a specific user (reply to their message)\n"
             "*/warnings*\nCheck warnings for a specific user (reply to their message)\n"
-            "*/block | /filter*\nBlock a user or contract address\n"
-            "*/removeblock | /unblock | /unfilter*\nRemove a user or contract address from the block list\n"
+            "*/block | /filter*\nAdd something to the blocklist\n"
+            "*/removeblock | /unblock | /unfilter*\nRemove something from the block list\n"
             "*/blocklist | /filterlist*\nView the block list\n"
-            "*/allow*\nAllow a user or contract address\n"
+            "*/allow*\nAllow a contract address, URL or domain\n"
             "*/allowlist*\nView the allow list\n",
             parse_mode='Markdown'
         )
+    else:
+        msg = update.message.reply_text("You must be an admin to use this command.")
     
     if msg is not None:
         track_message(msg)
