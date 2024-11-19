@@ -5299,7 +5299,7 @@ def report(update: Update, context: CallbackContext) -> None:
     chat_admins = context.bot.get_chat_administrators(chat_id) # Get the list of admins
     admin_usernames = ['@' + admin.user.username for admin in chat_admins if admin.user.username is not None]
     bot_username = context.bot.username
-    print(f"Message in chat {chat_id} reported to admins {admin_usernames}")
+    print(f"Message from {reported_user} in chat {chat_id} reported to admins {admin_usernames}")
 
     if reported_user in admin_usernames or reported_user == bot_username:
         context.bot.send_message(chat_id, text="Nice try lol") # If the reported user is an admin, send a message saying that admins cannot be reported
