@@ -4588,7 +4588,7 @@ def get_token_price_in_usd(chain, lp_address):
     """
     try:
         # Step 1: Get ETH price in USD using Chainlink
-        eth_price_in_usd = check_eth_price()  # Assume no need for update/context
+        eth_price_in_usd = check_eth_price()  
         if eth_price_in_usd is None:
             print("Failed to fetch ETH price from Chainlink.")
             return None
@@ -4604,7 +4604,8 @@ def get_token_price_in_usd(chain, lp_address):
         print(f"Token price in WETH: {price_in_weth}")
 
         # Step 3: Convert token price from WETH to USD
-        token_price_in_usd = price_in_weth * eth_price_in_usd
+        # Convert eth_price_in_usd to Decimal for consistent types
+        token_price_in_usd = price_in_weth * Decimal(eth_price_in_usd)  
         print(f"Token price in USD: {token_price_in_usd}")
         return token_price_in_usd
 
