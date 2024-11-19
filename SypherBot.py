@@ -2296,7 +2296,7 @@ def setup_commands(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton(get_button_text("liquidity"), callback_data='toggle_liquidity'),
             InlineKeyboardButton(get_button_text("volume"), callback_data='toggle_volume')
         ],
-        [InlineKeyboardButton("Back", callback_data='setup_admin')]
+        [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
