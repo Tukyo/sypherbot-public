@@ -3922,56 +3922,6 @@ def handle_minimum_buy(update: Update, context: CallbackContext) -> None:
     else:
         print("User is not the owner.")
 
-def handle_small_buy(update: Update, context: CallbackContext) -> None:
-    msg = None
-    user_id = update.message.from_user.id
-    
-    if is_user_owner(update, context, user_id):
-        if context.user_data.get('setup_stage') == 'small_buy':
-            group_id = update.effective_chat.id
-            group_data = fetch_group_info(update, context)
-            if group_data is not None:
-                group_doc = db.collection('groups').document(str(group_id))
-                try:
-                    group_doc.update({
-                        'premium_features.buybot.smallbuy': int(update.message.text)
-                    })
-                    clear_group_cache(str(group_id))  # Clear the cache on all database updates
-                    msg = update.message.reply_text("Small buy value updated successfully!")
-                except Exception as e:
-                    msg = update.message.reply_text(f"Error updating small buy value: {e}")
-        
-        if msg:
-            store_message_id(context, msg.message_id)
-
-    else:
-        print("User is not the owner.")
-
-def handle_medium_buy(update: Update, context: CallbackContext) -> None:
-    msg = None
-    user_id = update.message.from_user.id
-    
-    if is_user_owner(update, context, user_id):
-        if context.user_data.get('setup_stage') == 'medium_buy':
-            group_id = update.effective_chat.id
-            group_data = fetch_group_info(update, context)
-            if group_data is not None:
-                group_doc = db.collection('groups').document(str(group_id))
-                try:
-                    group_doc.update({
-                        'premium_features.buybot.mediumbuy': int(update.message.text)
-                    })
-                    clear_group_cache(str(group_id))  # Clear the cache on all database updates
-                    msg = update.message.reply_text("Medium buy value updated successfully!")
-                except Exception as e:
-                    msg = update.message.reply_text(f"Error updating medium buy value: {e}")
-        
-        if msg:
-            store_message_id(context, msg.message_id)
-
-    else:
-        print("User is not the owner.")
-
 def setup_small_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
     query = update.callback_query
@@ -3999,6 +3949,31 @@ def setup_small_buy_callback(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 
+def handle_small_buy(update: Update, context: CallbackContext) -> None:
+    msg = None
+    user_id = update.message.from_user.id
+    
+    if is_user_owner(update, context, user_id):
+        if context.user_data.get('setup_stage') == 'small_buy':
+            group_id = update.effective_chat.id
+            group_data = fetch_group_info(update, context)
+            if group_data is not None:
+                group_doc = db.collection('groups').document(str(group_id))
+                try:
+                    group_doc.update({
+                        'premium_features.buybot.smallbuy': int(update.message.text)
+                    })
+                    clear_group_cache(str(group_id))  # Clear the cache on all database updates
+                    msg = update.message.reply_text("Small buy value updated successfully!")
+                except Exception as e:
+                    msg = update.message.reply_text(f"Error updating small buy value: {e}")
+        
+        if msg:
+            store_message_id(context, msg.message_id)
+
+    else:
+        print("User is not the owner.")
+
 def setup_medium_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
     query = update.callback_query
@@ -4025,6 +4000,31 @@ def setup_medium_buy_callback(update: Update, context: CallbackContext) -> None:
 
         if msg is not None:
             track_message(msg)
+
+def handle_medium_buy(update: Update, context: CallbackContext) -> None:
+    msg = None
+    user_id = update.message.from_user.id
+    
+    if is_user_owner(update, context, user_id):
+        if context.user_data.get('setup_stage') == 'medium_buy':
+            group_id = update.effective_chat.id
+            group_data = fetch_group_info(update, context)
+            if group_data is not None:
+                group_doc = db.collection('groups').document(str(group_id))
+                try:
+                    group_doc.update({
+                        'premium_features.buybot.mediumbuy': int(update.message.text)
+                    })
+                    clear_group_cache(str(group_id))  # Clear the cache on all database updates
+                    msg = update.message.reply_text("Medium buy value updated successfully!")
+                except Exception as e:
+                    msg = update.message.reply_text(f"Error updating medium buy value: {e}")
+        
+        if msg:
+            store_message_id(context, msg.message_id)
+
+    else:
+        print("User is not the owner.")
 #endregion Buybot Setup
 
 #endregion Premium Setup
@@ -4498,24 +4498,37 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
     print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
 
     try:
-        # Fetch Transfer events in the specified block range
-        logs = contract.events.Transfer().get_logs(
+        logs = contract.events.Transfer().get_logs( # Fetch Transfer events in the specified block range
             from_block=last_seen_block + 1,
             to_block=latest_block,
             argument_filters={'from': liquidity_address}
         )
 
-        # Process each log
-        for log in logs:
+        for log in logs: # Process each log
             handle_transfer_event(log, group_data)  # Pass the decoded log to your handler
 
-        # Update static last_seen_block
-        monitor_transfers.last_seen_block = latest_block
+        monitor_transfers.last_seen_block = latest_block # Update static last_seen_block
 
     except Exception as e:
         print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
 
 def handle_transfer_event(event, group_data):
+    fetched_data, group_doc = fetch_group_info(
+        update=None,  # No update object is available in this context
+        context=None,  # No context object is used here
+        return_both=True,
+        group_id=group_data['group_id']
+    )
+
+    if fetched_data is None:
+        print(f"Failed to fetch group data for group ID {group_data['group_id']}.")
+        return
+    
+    buybot_config = fetched_data.get('premium_features', {}).get('buybot', {})
+    minimum_buy_amount = buybot_config.get('minimumbuy', 1000)  # Default to 1000 if not set
+    small_buy_amount = buybot_config.get('smallbuy', 2500)  # Default to 2500 if not set
+    medium_buy_amount = buybot_config.get('mediumbuy', 5000) # Default to 5000
+
     amount = event['args']['value']
     tx_hash = event['transactionHash'].hex()
 
@@ -4527,20 +4540,19 @@ def handle_transfer_event(event, group_data):
 
     print(f"Received transfer event for {token_amount} tokens.")
     print(f"Transaction hash: {tx_hash}")
-
-    # Fetch the USD price of the token using Uniswap V3 and Chainlink1
-    chain = group_data['token']['chain']
+    
+    chain = group_data['token']['chain'] # Fetch the USD price of the token using Uniswap V3 and Chainlink1
     lp_address = group_data['token']['liquidity_address']
     token_price_in_usd = get_token_price_in_usd(chain, lp_address)
 
     if token_price_in_usd is not None:
         token_price_in_usd = Decimal(token_price_in_usd)
         total_value_usd = token_amount * token_price_in_usd
-        if total_value_usd < MINIMUM_BUY_AMOUNT:
-            print("Ignoring small buy")
-            return
+        if total_value_usd < minimum_buy_amount:
+            print(f"Ignoring small buy below the minimum threshold: ${total_value_usd:.2f}")
+            return  # Ignore small buy events
         value_message = f" (${total_value_usd:.2f})"
-        header_emoji, buyer_emoji = categorize_buyer(total_value_usd)
+        header_emoji, buyer_emoji = categorize_buyer(total_value_usd, small_buy_amount, medium_buy_amount)
     else:
         print("Failed to fetch token price in USD.")
         return
@@ -4556,13 +4568,11 @@ def handle_transfer_event(event, group_data):
         )
         print(f"Sending buy message with transaction link for group {group_data['group_id']}")
 
-        # Create an inline keyboard with a button for the transaction link
         keyboard = [[InlineKeyboardButton("View Transaction", url=transaction_link)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         send_buy_message(message, group_data['group_id'], reply_markup)
     else:
-        # Fallback message when blockscanner is unknown
-        message = (
+        message = ( # Fallback message when blockscanner is unknown
             f"{header_emoji} BUY ALERT {header_emoji}\n\n"
             f"{buyer_emoji} {token_amount:.4f} {token_name}{value_message}\n\n"
             f"Transaction hash: {tx_hash}"
@@ -4570,10 +4580,10 @@ def handle_transfer_event(event, group_data):
         print(f"Sending fallback buy message for group {group_data['group_id']}")
         send_buy_message(message, group_data['group_id'])
 
-def categorize_buyer(usd_value):
-    if usd_value < SMALL_BUY_AMOUNT:
+def categorize_buyer(usd_value, small_buy, medium_buy):
+    if usd_value < small_buy:
         return "💸", "🐟"
-    elif usd_value < MEDIUM_BUY_AMOUNT:
+    elif usd_value < medium_buy:
         return "💰", "🐬"
     else:
         return "🤑", "🐳"
