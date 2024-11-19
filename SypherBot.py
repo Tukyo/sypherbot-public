@@ -3064,20 +3064,23 @@ def send_example_abi(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
-    base_dir = os.path.dirname(__file__)
-    abi_path = os.path.join(base_dir, 'assets', 'example_abi.json')
+    if is_user_owner(update, context):
+        base_dir = os.path.dirname(__file__)
+        abi_path = os.path.join(base_dir, 'assets', 'example_abi.json')
 
-    with open(abi_path, 'rb') as file:
-        msg = context.bot.send_document(
-            chat_id=update.effective_user.id,
-            document=file,
-            filename='abi.json',
-            caption='Here is an example ABI file.'
-        )
-    
-    msg = query.message.reply_text("Example ABI file sent to your DM.")
+        with open(abi_path, 'rb') as file:
+            msg = context.bot.send_document(
+                chat_id=update.effective_user.id,
+                document=file,
+                filename='abi.json',
+                caption='Here is an example ABI file.'
+            )
+        
+        msg = query.message.reply_text("Example ABI file sent to your DM.")
 
-    store_message_id(context, msg.message_id)
+        store_message_id(context, msg.message_id)
+    else:
+        print("User is not the owner.")
 
     if msg is not None:
         track_message(msg)
