@@ -501,18 +501,22 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
     return user_is_owner
 
 def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool = False, update_attr: bool = False, return_both: bool = False, group_id: str = None):
-    if update.effective_chat.type == 'private' and group_id is None:
-        print(f"Private chat detected when attempting to fetch group info. No group_id provided either.")
-        return None  # Private chats have no group data and no group_id was provided
+    if update is not None:
+        if update.effective_chat.type == 'private' and group_id is None:
+            print(f"Private chat detected when attempting to fetch group info. No group_id provided either.")
+            return None  # Private chats have no group data and no group_id was provided
 
-    if update_attr and group_id is None: # Determines wether or not the group_id is fetched from a message update or chat
-        print(f"group_id not manually provided, fetching from message.")
-        group_id = str(update.message.chat.id)
+        if update_attr and group_id is None:  # Determines whether or not the group_id is fetched from a message update or chat
+            print(f"group_id not manually provided, fetching from message.")
+            group_id = str(update.message.chat.id)
+        elif group_id is None:
+            print(f"group_id not manually provided, fetching from chat.")
+            group_id = str(update.effective_chat.id)
+        else:
+            print(f"group_id manually provided: {group_id}")
     elif group_id is None:
-        print(f"group_id not manually provided, fetching from chat.")
-        group_id = str(update.effective_chat.id)
-    else:
-        print(f"group_id manually provided: {group_id}")
+        print(f"Neither update nor group_id provided. Unable to fetch group info.")
+        return None  # No valid source for group_id
 
     cached_info = fetch_cached_group_info(group_id)
 
