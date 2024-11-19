@@ -370,6 +370,9 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
 
         print(f"Group {group_id} added to database.")
 
+        group_counter = db.collection('stats').document('addedgroups')
+        group_counter.update({'count': firestore.Increment(1)}) # Get the current added groups count and increment by 1
+
         bot_member = context.bot.get_chat_member(group_id, context.bot.id)  # Get bot's member info
 
         if bot_member.status == "administrator":
@@ -409,6 +412,8 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
 
     if left_member.id == context.bot.id: # Bot left. not user
         print(f"Removing group {update.effective_chat.id} from database.")
+        group_counter = db.collection('stats').document('removedgroups')
+        group_counter = group_counter.update({'count': firestore.Increment(1)}) # Get the current removed groups count and increment by 1
         group_doc.delete()  # Directly delete the group document
         clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
@@ -420,6 +425,8 @@ def start_monitoring_groups():
 
         if group_data.get('premium', False):  # Check if premium is True
             schedule_group_monitoring(group_data)
+        else:
+            print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
 
     scheduler.start()
 
@@ -449,6 +456,8 @@ def schedule_group_monitoring(group_data):
             print(f"Scheduled monitoring for premium group {group_id}")
         else:
             print(f"Web3 instance not connected for group {group_id} on chain {chain}")
+    else:
+        print(f"No token info found for group {group_id} - Not scheduling monitoring.")
 
 def is_user_admin(update: Update, context: CallbackContext) -> bool:
     chat_id = update.effective_chat.id
@@ -1070,14 +1079,22 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
     user_id = query.from_user.id
 
     if is_user_owner(update, context, user_id):
-        # Check if the bot is an admin
-        chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id)
+        chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id) # Check if the bot is an admin
         if not chat_member.can_invite_users:
-            context.bot.edit_message_text(
-                chat_id=update.effective_chat.id,
-                message_id=context.user_data['setup_bot_message'],
-                text='Please give me admin permissions first!'
-            )
+            try:
+                context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=context.user_data.get('setup_bot_message', None),
+                    text='Please give me admin permissions first!'
+                )
+                print(f"Bot does not have admin permissions in group: {update.effective_chat.id} - Editing message to request perms.")
+            except telegram.error.BadRequest as e:
+                if "message to edit not found" in str(e).lower():
+                    context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text="Please give me admin permissions first!"
+                    )
+                    print(f"Bot does not have admin permissions in group: {update.effective_chat.id} - Sending message to request perms.")
             return
 
         update = Update(update.update_id, message=query.message)
