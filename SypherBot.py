@@ -486,10 +486,7 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
 
     print(f"Checking if user is owner for chat {chat_id}")
 
-    # Always retrieve the group document from the database
-    # Do not use {fetch_group_info} as it may return cached data << !!!!!
-    group_doc = db.collection('groups').document(str(chat_id))
-    group_data = group_doc.get().to_dict()
+    group_data = fetch_group_info(update, context)
 
     if not group_data:
         print(f"No data found for group {chat_id}. Group may not be registered.")
@@ -2310,33 +2307,37 @@ def setup_commands(update: Update, context: CallbackContext) -> None:
 def toggle_command_status(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     chat_id = query.message.chat.id
+    user_id = query.from_user.id
 
-    command = query.data.replace('toggle_', '')  # Extract the command name
+    if is_user_owner(update, context, user_id):
+        command = query.data.replace('toggle_', '')  # Extract the command name
 
-    if command == "play": # Check if the command is "play"
-        if not is_premium_group(update, context):
-            print(f"Group {chat_id} is not premium. Cannot toggle 'play' command.")
+        if command == "play": # Check if the command is "play"
+            if not is_premium_group(update, context):
+                print(f"Group {chat_id} is not premium. Cannot toggle 'play' command.")
+                return
+
+        group_doc = db.collection('groups').document(str(chat_id))
+        group_data = group_doc.get().to_dict()
+
+        if not group_data:
+            query.answer(text="Group data not found.", show_alert=True)
             return
 
-    group_doc = db.collection('groups').document(str(chat_id))
-    group_data = group_doc.get().to_dict()
+        commands = group_data.get('commands', {})
+        current_status = commands.get(command, True)  # Default to True if not set
 
-    if not group_data:
-        query.answer(text="Group data not found.", show_alert=True)
-        return
+        new_status = not current_status # Toggle the status
+        group_doc.update({f'commands.{command}': new_status})
+        print(f"Toggled command '{command}' to {new_status} for group {chat_id}")
 
-    commands = group_data.get('commands', {})
-    current_status = commands.get(command, True)  # Default to True if not set
+        status_text = "enabled" if new_status else "disabled"
+        query.answer(text=f"Command '{command}' is now {status_text}.", show_alert=False)
+        clear_group_cache(str(chat_id)) # Clear the cache on all database updates
 
-    new_status = not current_status # Toggle the status
-    group_doc.update({f'commands.{command}': new_status})
-    print(f"Toggled command '{command}' to {new_status} for group {chat_id}")
-
-    status_text = "enabled" if new_status else "disabled"
-    query.answer(text=f"Command '{command}' is now {status_text}.", show_alert=False)
-    clear_group_cache(str(chat_id)) # Clear the cache on all database updates
-
-    setup_commands(update, context)
+        setup_commands(update, context)
+    else:
+        print("User is not the owner.")
 
 def check_command_status(update: Update, context: CallbackContext, command: str) -> bool:
     group_data = fetch_group_info(update, context)
