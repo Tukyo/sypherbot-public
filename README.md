@@ -122,7 +122,7 @@ Sypherbot offers a plethora of features to manage and control your group. The bo
 - `/liquidity | /lp` - View the liquidity value of the SYPHER V3 pool
 - `/volume` - View the 24-hour trading volume of the SYPHER token
 - `/website` - Get links to related websites
-- `/report` - Report a message to group admins
+- `/report` - Report a message to group admins *(keeps admins anon during reporting process)*
 - `/save` - Save a message to your DMs
 
 ---

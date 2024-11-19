@@ -4659,6 +4659,8 @@ def get_uniswap_v3_position_data(chain, lp_address):
         slot0 = pair_contract.functions.slot0().call()
         sqrt_price_x96 = slot0[0]
 
+        print(f"Raw sqrtPriceX96: {sqrt_price_x96}")
+
         # Calculate the token price in WETH
         price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192)
         return price_in_weth
