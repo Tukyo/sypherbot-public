@@ -5310,23 +5310,28 @@ def commands(update: Update, context: CallbackContext) -> None:
             if check_command_status(update, context, command):
                 enabled_commands.append(command)
 
-        keyboard = [ # Generate dynamic keyboard for enabled commands
-            [InlineKeyboardButton(f"/{cmd}", callback_data=f'commands_{cmd}')] for cmd in enabled_commands
-        ]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        base_dir = os.path.dirname(__file__)
-        image_path = os.path.join(base_dir, 'assets', 'banner.jpg')
-
-        with open(image_path, 'rb') as photo:
-            context.bot.send_photo(
-                chat_id=chat_id,
-                photo=photo,
-                caption='Welcome to Sypherbot!\n\n'
-                'Below you will find all my enabled commands:',
-                reply_markup=reply_markup
+        if not enabled_commands: # Handle case where no commands are enabled
+            msg = update.message.reply_text(
+                "Sorry, you disabled all my commands!"
             )
+        else:
+            keyboard = [ # Generate dynamic keyboard for enabled commands
+                [InlineKeyboardButton(f"/{cmd}", callback_data=f'commands_{cmd}')] for cmd in enabled_commands
+            ]
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            base_dir = os.path.dirname(__file__)
+            image_path = os.path.join(base_dir, 'assets', 'banner.jpg')
+
+            with open(image_path, 'rb') as photo:
+                context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo,
+                    caption='Welcome to Sypherbot!\n\n'
+                    'Below you will find all my enabled commands:',
+                    reply_markup=reply_markup
+                )
     else:
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
 
