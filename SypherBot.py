@@ -3064,7 +3064,10 @@ def send_example_abi(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
 
-    with open('abi.json', 'rb') as file:
+    base_dir = os.path.dirname(__file__)
+    abi_path = os.path.join(base_dir, 'assets', 'example_abi.json')
+
+    with open(abi_path, 'rb') as file:
         msg = context.bot.send_document(
             chat_id=update.effective_user.id,
             document=file,
