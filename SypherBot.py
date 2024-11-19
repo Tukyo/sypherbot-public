@@ -5799,6 +5799,7 @@ def main() -> None:
     #endregion Admin Setup Callbacks
     ##
     #region Command Setup Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(setup_commands_callback, pattern='^setup_commands$'))
     dispatcher.add_handler(CallbackQueryHandler(toggle_command_status, pattern=r'^toggle_(play|website|contract|price|chart|liquidity|volume)$'))
     #endregion Command Setup Callbacks
     ##
