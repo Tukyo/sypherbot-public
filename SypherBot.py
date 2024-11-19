@@ -2316,11 +2316,11 @@ def toggle_command_status(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def check_command_status(group_id: str, command: str) -> bool:
-    group_data = fetch_group_info(group_id)
+def check_command_status(update: Update, context: CallbackContext, command: str) -> bool:
+    group_data = fetch_group_info(update, context)
 
     if not group_data:
-        print(f"No group data found for group {group_id}. Defaulting '{command}' to disabled.")
+        print(f"No group data found for group {update.effective_chat.id}. Defaulting '{command}' to disabled.")
         return False
 
     commands = group_data.get('commands', {})
@@ -5059,7 +5059,7 @@ def commands(update: Update, context: CallbackContext) -> None:
         enabled_commands = []
 
         for command in ['play', 'website', 'contract', 'price', 'chart', 'liquidity', 'volume']: # Check the status of each command
-            if check_command_status(chat_id, command):
+            if check_command_status(update, context, command):
                 enabled_commands.append(command)
 
         keyboard = [ # Generate dynamic keyboard for enabled commands
@@ -5105,7 +5105,7 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
     command_name = command_mapping.get(command_key)
 
     if command_name:
-        if not check_command_status(chat_id, command_name): # Check if the command is enabled
+        if not check_command_status(update, context, command_name): # Check if the command is enabled
             query.message.reply_text(f"The /{command_name} command is currently disabled in this group.")
             print(f"User {user_id} attempted to use disabled command /{command_name}.")
             return
@@ -5228,7 +5228,7 @@ def play(update: Update, context: CallbackContext) -> None:
 
     if rate_limit_check():
         function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(chat_id, function_name):
+        if not check_command_status(update, context, function_name):
             update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
             print(f"Attempted to use disabled command /play in group {chat_id}.")
             return
@@ -5456,7 +5456,7 @@ def ca(update: Update, context: CallbackContext) -> None:
 
     if rate_limit_check():
         function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(chat_id, function_name):
+        if not check_command_status(update, context, function_name):
             update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
             print(f"Attempted to use disabled command /play in group {chat_id}.")
             return
@@ -5491,7 +5491,7 @@ def liquidity(update: Update, context: CallbackContext) -> None:
 
     if rate_limit_check():
         function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(chat_id, function_name):
+        if not check_command_status(update, context, function_name):
             update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
             print(f"Attempted to use disabled command /play in group {chat_id}.")
             return
@@ -5542,7 +5542,7 @@ def volume(update: Update, context: CallbackContext) -> None:
 
     if rate_limit_check():
         function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(chat_id, function_name):
+        if not check_command_status(update, context, function_name):
             update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
             print(f"Attempted to use disabled command /play in group {chat_id}.")
             return
@@ -5606,7 +5606,7 @@ def chart(update: Update, context: CallbackContext) -> None:
         
     if rate_limit_check():
         function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(chat_id, function_name):
+        if not check_command_status(update, context, function_name):
             update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
             print(f"Attempted to use disabled command /play in group {chat_id}.")
             return
@@ -5676,7 +5676,7 @@ def website(update: Update, context: CallbackContext) -> None:
     
     if rate_limit_check():
         function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(chat_id, function_name):
+        if not check_command_status(update, context, function_name):
             update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
             print(f"Attempted to use disabled command /play in group {chat_id}.")
             return
