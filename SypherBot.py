@@ -991,6 +991,15 @@ def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> 
     elif context.user_data.get('setup_stage') == 'set_max_warns':
         print(f"Received max warns number in group {update.effective_chat.id}")
         handle_max_warns(update, context)
+    elif context.user_data.get('setup_stage') == 'minimum_buy':
+        print(f"Received minimum buy amount in group {update.effective_chat.id}")
+        handle_minimum_buy(update, context)
+    elif context.user_data.get('setup_stage') == 'small_buy':
+        print(f"Received small buy amount in group {update.effective_chat.id}")
+        handle_small_buy(update, context)
+    elif context.user_data.get('setup_stage') == 'medium_buy':
+        print(f"Received medium buy amount in group {update.effective_chat.id}")
+        handle_medium_buy(update, context)
     
     # MAYBE clear cache here TODO
     # clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
@@ -3285,6 +3294,9 @@ def setup_premium(update: Update, context: CallbackContext) -> None:
             InlineKeyboardButton("Disable Trust System", callback_data='disable_sypher_trust')
         ],
         [
+            InlineKeyboardButton("Buybot Preferences", callback_data='setup_buybot')
+        ],
+        [
             InlineKeyboardButton("Trust Preferences", callback_data='sypher_trust_preferences'),
         ],
         [InlineKeyboardButton("Back", callback_data='setup_home')]
@@ -3328,7 +3340,7 @@ def is_premium_group(update: Update, context: CallbackContext) -> bool:
         print(f"{group_id} is a premium group.")
         return True
 
-#region Customization
+#region Customization Setup
 def setup_welcome_message_header_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -3512,9 +3524,9 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
             store_message_id(context, msg.message_id)
         if msg is not None:
             track_message(msg)
-#endregion Customization
+#endregion Customization Setup
 
-#region Sypher Trust
+#region Sypher Trust Setup
 def enable_sypher_trust_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
@@ -3810,7 +3822,210 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
     else:
         print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Still untrusted.")
         return False
-#endregion Sypher Trust
+#endregion Sypher Trust Setup
+
+#region Buybot Setup
+def setup_buybot_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'setup_buybot':
+        if is_user_owner(update, context, user_id):
+            setup_buybot(update, context)
+        else:
+            print("User is not the owner.")
+
+def setup_buybot(update: Update, context: CallbackContext) -> None:
+    msg = None
+
+    if not is_premium_group(update, context): return
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Minimum Buy", callback_data='setup_minimum_buy'),
+            InlineKeyboardButton("Small Buy", callback_data='setup_small_buy'),
+            InlineKeyboardButton("Medium Buy", callback_data='setup_medium_buy'),
+        ],
+        [InlineKeyboardButton("Back", callback_data='setup_premium')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    menu_change(context, update)
+
+    msg = context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='*💰 Buybot Preferences 💰*\n\n'
+        'Here you can setup the trigger zones for buys on your token!\n\n'
+        '*Minimum Buy:*\n'
+        'The minimum amount of tokens to trigger a buy.\n\n'
+        '🐟 *Small Buy* 🐟\n'
+        'Below this amount will be considered a small buy.\n\n'
+        '🐬 *Medium Buy:* 🐬\n'
+        'Below this amount will be considered a medium buy.\n\n'
+        '🐳 Any buy above the medium buy amount will be considered a large buy 🐳',
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    context.user_data['setup_stage'] = None
+    store_message_id(context, msg.message_id)
+
+    if msg is not None:
+        track_message(msg)
+
+def setup_minimum_buy_callback(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    if is_user_owner(update, context, user_id):
+
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_buybot')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        menu_change(context, update) 
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Please respond with your minimum buy amount to trigger the buybot.',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = 'minimum_buy'
+        print("Requesting minumum buy amount.")
+        store_message_id(context, msg.message_id)
+
+        if msg is not None:
+            track_message(msg)
+
+def handle_minimum_buy(update: Update, context: CallbackContext) -> None:
+    msg = None
+    user_id = update.message.from_user.id
+    
+    if is_user_owner(update, context, user_id):
+        if context.user_data.get('setup_stage') == 'minimum_buy':
+            group_id = update.effective_chat.id
+            group_data = fetch_group_info(update, context)
+            if group_data is not None:
+                group_doc = db.collection('groups').document(str(group_id))
+                group_doc.update({
+                    'premium_features.buybot.minimumbuy': int(update.message.text)
+                })
+                clear_group_cache(str(group_id)) # Clear the cache on all database updates
+
+        store_message_id(context, msg.message_id)
+
+    else:
+        print("User is not the owner.")
+
+def handle_small_buy(update: Update, context: CallbackContext) -> None:
+    msg = None
+    user_id = update.message.from_user.id
+    
+    if is_user_owner(update, context, user_id):
+        if context.user_data.get('setup_stage') == 'small_buy':
+            group_id = update.effective_chat.id
+            group_data = fetch_group_info(update, context)
+            if group_data is not None:
+                group_doc = db.collection('groups').document(str(group_id))
+                try:
+                    group_doc.update({
+                        'premium_features.buybot.smallbuy': int(update.message.text)
+                    })
+                    clear_group_cache(str(group_id))  # Clear the cache on all database updates
+                    msg = update.message.reply_text("Small buy value updated successfully!")
+                except Exception as e:
+                    msg = update.message.reply_text(f"Error updating small buy value: {e}")
+        
+        if msg:
+            store_message_id(context, msg.message_id)
+
+    else:
+        print("User is not the owner.")
+
+def handle_medium_buy(update: Update, context: CallbackContext) -> None:
+    msg = None
+    user_id = update.message.from_user.id
+    
+    if is_user_owner(update, context, user_id):
+        if context.user_data.get('setup_stage') == 'medium_buy':
+            group_id = update.effective_chat.id
+            group_data = fetch_group_info(update, context)
+            if group_data is not None:
+                group_doc = db.collection('groups').document(str(group_id))
+                try:
+                    group_doc.update({
+                        'premium_features.buybot.mediumbuy': int(update.message.text)
+                    })
+                    clear_group_cache(str(group_id))  # Clear the cache on all database updates
+                    msg = update.message.reply_text("Medium buy value updated successfully!")
+                except Exception as e:
+                    msg = update.message.reply_text(f"Error updating medium buy value: {e}")
+        
+        if msg:
+            store_message_id(context, msg.message_id)
+
+    else:
+        print("User is not the owner.")
+
+def setup_small_buy_callback(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    if is_user_owner(update, context, user_id):
+
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_buybot')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        menu_change(context, update) 
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Please respond with the maximum amount of tokens to trigger a small buy.',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = 'small_buy'
+        print("Requesting medium buy amount.")
+        store_message_id(context, msg.message_id)
+
+        if msg is not None:
+            track_message(msg)
+
+def setup_medium_buy_callback(update: Update, context: CallbackContext) -> None:
+    msg = None
+    query = update.callback_query
+    query.answer()
+    user_id = query.from_user.id
+
+    if is_user_owner(update, context, user_id):
+
+        keyboard = [
+            [InlineKeyboardButton("Back", callback_data='setup_buybot')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        menu_change(context, update) 
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Please respond with the maximum amount of tokens to trigger a medium buy.',
+            reply_markup=reply_markup
+        )
+        context.user_data['setup_stage'] = 'medium_buy'
+        print("Requesting medium buy amount.")
+        store_message_id(context, msg.message_id)
+
+        if msg is not None:
+            track_message(msg)
+#endregion Buybot Setup
 
 #endregion Premium Setup
 
@@ -5473,6 +5688,7 @@ def buy(update: Update, context: CallbackContext) -> None:
             update.message.reply_text("Token data not found for this group.")
             return
         token_name = token_data.get('name')
+        token_symbol = token_data.get('symbol')
         
         contract_address = token_data.get('contract_address')
         if not contract_address:
@@ -5485,7 +5701,7 @@ def buy(update: Update, context: CallbackContext) -> None:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         msg = update.message.reply_text(
-            f"Buy {token_name} Here:",
+            f"{token_name} • {token_symbol}",
             reply_markup=reply_markup
         )
     else:
@@ -5803,7 +6019,12 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(callback_math_response, pattern='^mauth_'))
     dispatcher.add_handler(CallbackQueryHandler(callback_word_response, pattern='^wauth_'))
     #endregion Authentication Callbacks
-    #
+    ##
+    #region Buybot Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(setup_buybot_callback, pattern='^setup_buybot'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_minimum_buy_callback, pattern='^setup_minimum_buy'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_small_buy_callback, pattern='^setup_small_buy'))
+    dispatcher.add_handler(CallbackQueryHandler(setup_medium_buy_callback, pattern='^setup_medium_buy'))
     #endregion Callbacks
     
     #region Message Handlers
