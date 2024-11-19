@@ -306,12 +306,6 @@ def track_message(message):
     bot_messages.append((message.chat.id, message.message_id))
     print(f"Tracked message: {message.message_id}")
 
-rick_videos = [
-    "assets/RICK_DUNCAN.mp4",
-    "assets/RICK_SAINTLAURENT.mp4",
-    "assets/RICK_SHOENICE.mp4"
-]
-
 #region Bot Logic
 def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     new_members = update.message.new_chat_members
@@ -5679,6 +5673,7 @@ def send_rick_video(update: Update, context: CallbackContext) -> None:
 
     if rate_limit_check():
         video_mapping = { # Map arguments to specific videos
+            "alien": "assets/RICK_ALIEN.mp4",
             "duncan": "assets/RICK_DUNCAN.mp4",
             "saintlaurent": "assets/RICK_SAINTLAURENT.mp4",
             "shoenice": "assets/RICK_SHOENICE.mp4"
