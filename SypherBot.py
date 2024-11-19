@@ -4661,8 +4661,9 @@ def get_uniswap_v3_position_data(chain, lp_address):
 
         print(f"Raw sqrtPriceX96: {sqrt_price_x96}")
 
-        # Calculate the token price in WETH
-        price_in_weth = (sqrt_price_x96 ** 2) / (2 ** 192)
+        # Use Decimal for precise calculations
+        sqrt_price_x96_decimal = Decimal(sqrt_price_x96)
+        price_in_weth = (sqrt_price_x96_decimal ** 2) / Decimal(2 ** 192) 
         return price_in_weth
     except Exception as e:
         print(f"Error fetching Uniswap V3 position data: {e}")
