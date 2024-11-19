@@ -964,6 +964,8 @@ def exit_callback(update: Update, context: CallbackContext) -> None:
         print(f"Exiting setup mode in group {update.effective_chat.id}")
         query.message.delete()
         context.user_data['setup_stage'] = None
+    else:
+        print("User is not the owner.")
 
     if msg is not None:
         track_message(msg)
@@ -1048,7 +1050,7 @@ def start(update: Update, context: CallbackContext) -> None:
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 msg = update.message.reply_text(
-                    'Hello! I am Sypher Bot. Please add me to your group to get started.',
+                    'Hello! I am Sypherbot. Please add me to your group to get started.',
                     reply_markup=reply_markup
                 )
         else:
@@ -2276,6 +2278,7 @@ def setup_commands(update: Update, context: CallbackContext) -> None:
         ],
         [
             InlineKeyboardButton(get_button_text("price"), callback_data='toggle_price'),
+            InlineKeyboardButton(get_button_text("buy"), callback_data='toggle_buy'),
             InlineKeyboardButton(get_button_text("chart"), callback_data='toggle_chart')
         ],
         [
@@ -5320,7 +5323,8 @@ def commands(update: Update, context: CallbackContext) -> None:
             context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption="Welcome to Sypher Bot! Below you will find all my enabled commands:",
+                caption='Welcome to Sypherbot!\n\n'
+                'Below you will find all my enabled commands:',
                 reply_markup=reply_markup
             )
     else:
@@ -6095,7 +6099,7 @@ def main() -> None:
     ##
     #region Command Setup Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_commands_callback, pattern='^setup_commands$'))
-    dispatcher.add_handler(CallbackQueryHandler(toggle_command_status, pattern=r'^toggle_(play|website|contract|price|chart|liquidity|volume)$'))
+    dispatcher.add_handler(CallbackQueryHandler(toggle_command_status, pattern=r'^toggle_(play|website|contract|price|buy|chart|liquidity|volume)$'))
     #endregion Command Setup Callbacks
     ##
     #region Crypto Setup Callbacks
