@@ -89,9 +89,9 @@ WORD_6 = os.getenv("WORD_6")
 WORD_7 = os.getenv("WORD_7")
 WORD_8 = os.getenv("WORD_8")
 
-RELAXED_TRUST = os.getenv('RELAXED_TRUST')
-MODERATE_TRUST = os.getenv('MODERATE_TRUST')
-STRICT_TRUST = os.getenv('STRICT_TRUST')
+RELAXED_TRUST = int(os.getenv('RELAXED_TRUST'))
+MODERATE_TRUST = int(os.getenv('MODERATE_TRUST'))
+STRICT_TRUST = int(os.getenv('STRICT_TRUST'))
 
 endpoints = {
     "ARBITRUM": os.getenv('ARBITRUM_ENDPOINT'),
