@@ -306,6 +306,32 @@ def track_message(message):
     bot_messages.append((message.chat.id, message.message_id))
     print(f"Tracked message: {message.message_id}")
 
+#region Bot Controller (TUKYO)
+def fetch_config():
+    try:
+        ref = db.reference('config')
+        config = ref.get()
+        if config:
+            print(f"Fetched configuration: {config}")
+        else:
+            print("No configuration found in the database.")
+        return config
+    except Exception as e:
+        print(f"Error fetching configuration: {e}")
+        return {}
+
+def update_config():
+    config = fetch_config()
+    if not config:
+        print("No configuration available to update.")
+        return
+    
+    MONITOR_INTERVAL = config.get('MONITOR_INTERVAL', MONITOR_INTERVAL)
+    print(f"Updated MONITOR_INTERVAL to {MONITOR_INTERVAL}")
+    
+
+#endregion Bot Controller (TUKYO)
+
 #region Bot Logic
 def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     new_members = update.message.new_chat_members
@@ -6054,6 +6080,8 @@ def main() -> None:
     #endregion Premium Setup Callbacks
     #
     #endregion Setup Callbacks
+
+    dispatcher.add_handler(CommandHandler("config", update_config))
 
     updater.start_polling() # Start the Bot
     start_monitoring_groups() # Start monitoring premium groups
