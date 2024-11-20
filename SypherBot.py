@@ -309,27 +309,32 @@ def track_message(message):
 #region Bot Controller (TUKYO)
 def fetch_config():
     try:
-        ref = db.reference('config')
-        config = ref.get()
-        if config:
-            print(f"Fetched configuration: {config}")
-        else:
+        # Access the 'config' collection and 'settings' document
+        config_doc = db.collection('config').document('settings').get()  # Fetch the document
+        if not config_doc.exists:
             print("No configuration found in the database.")
-        return config
+            return {}
+        
+        # Fetch the specific 'monitorinterval' field
+        monitor_interval = config_doc.get('monitorinterval')  # Fetch the field directly
+        print(f"Fetched MONITOR_INTERVAL: {monitor_interval}")
+        return {"monitorinterval": monitor_interval}
     except Exception as e:
         print(f"Error fetching configuration: {e}")
         return {}
 
+
+
 def update_config(update, context):
     config = fetch_config()
-    if not config:
-        update.message.reply_text("No configuration available to update.")
-        print("No configuration available to update.")
+    if not config or "monitorinterval" not in config:
+        update.message.reply_text("No configuration available or monitorinterval not found.")
+        print("No configuration available or monitorinterval not found.")
         return
 
     try:
         # Update MONITOR_INTERVAL dynamically
-        MONITOR_INTERVAL = config.get("MONITOR_INTERVAL", MONITOR_INTERVAL)
+        MONITOR_INTERVAL = int(config["monitorinterval"])  # Update the global variable
         update.message.reply_text(f"MONITOR_INTERVAL updated to: {MONITOR_INTERVAL}")
         print(f"Updated MONITOR_INTERVAL to: {MONITOR_INTERVAL}")
     except Exception as e:
