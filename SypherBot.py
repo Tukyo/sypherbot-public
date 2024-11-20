@@ -311,9 +311,11 @@ def track_message(message):
 bot = Bot(token=TELEGRAM_TOKEN)
 LOG_CHAT = "-1002087245760"
 LOGGING_TIMEZONE = "America/Los_Angeles"
+MAX_TELEGRAM_MESSAGE_LENGTH = 4096
 class TelegramLogger: # Batch all logs and send to the logging channel for debugging in telegram
     def __init__(self):
         self.original_stdout = sys.stdout  # Keep a reference to the original stdout
+        self.original_stderr = sys.stderr # Keep a reference to the original stderr
         self.log_buffer = []  # Buffer to store logs
         self.flush_interval = 10  # Send logs every 10 seconds
         self.timer = Timer(self.flush_interval, self.flush_logs)  # Timer for batching
@@ -324,21 +326,29 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
             pst_timezone = pytz.timezone(LOGGING_TIMEZONE)
             timestamp = datetime.now(pst_timezone).strftime("%Y-%m-%d %I:%M:%S %p PST")
             formatted_message = f"{timestamp} - {message.strip()}"
+            if sys.stderr == self: # Append @Tukyowave for stderr messages
+                formatted_message += " @Tukyowave"
             self.log_buffer.append(formatted_message)
         
-        self.original_stdout.write(message)  # Write the message to the original stdout
+        if sys.stdout == self:
+            self.original_stdout.write(message)
+        if sys.stderr == self:
+            self.original_stderr.write(message)
 
     def flush(self):
-        self.original_stdout.flush()
+        if self.original_stdout:
+            self.original_stdout.flush()
+        if self.original_stderr:
+            self.original_stderr.flush()
 
     def flush_logs(self):
         if self.log_buffer:
-            try: # Combine all logs into one message
-                bot.send_message(chat_id=LOG_CHAT, text="\n\n".join(self.log_buffer))
-            except Exception as e:
-                self.original_stdout.write(f"Failed to send batched logs to Telegram: {e}\n")
-            finally:
-                self.log_buffer = [] # Clear the buffer after sending
+            combined_message = "\n\n".join(self.log_buffer)
+            while combined_message:
+                chunk = combined_message[:MAX_TELEGRAM_MESSAGE_LENGTH]
+                bot.send_message(chat_id=LOG_CHAT, text=chunk)
+                combined_message = combined_message[MAX_TELEGRAM_MESSAGE_LENGTH:]
+            self.log_buffer = []
 
         self.timer = Timer(self.flush_interval, self.flush_logs) # Restart the timer
         self.timer.start()
@@ -348,7 +358,9 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
             self.timer.cancel()
             self.timer = None
 
-sys.stdout = TelegramLogger()
+logger = TelegramLogger()
+sys.stdout = logger
+sys.stderr = logger
 #endregion LOGGING
 
 #region Bot Logic
