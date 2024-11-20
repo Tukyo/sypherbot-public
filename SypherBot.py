@@ -4687,36 +4687,23 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
         return
 
     try:
-        print("Fetching ETH price in USD using Chainlink...")
-        eth_price_in_usd = check_eth_price()  # Step 1: Get ETH price in USD using Chainlink
-        if eth_price_in_usd is None:
-            print("Failed to fetch ETH price from Chainlink.")
-            update.message.reply_text("Failed to fetch ETH price.")
-            return
-
-        print(f"ETH price in USD: {eth_price_in_usd}")
-        
-        price_in_weth = get_uniswap_v3_position_data(chain, lp_address) # Use the new function to fetch Uniswap V3 position data
-        if price_in_weth is None:
-            print("Failed to fetch Uniswap V3 position data.")
-            update.message.reply_text("Failed to fetch Uniswap V3 position data.")
-            return
-
-        print(f"Token price in WETH: {price_in_weth}")
-
         if modifier == "USD":
-            try:
-                token_price_in_usd = price_in_weth * Decimal(eth_price_in_usd) # Convert eth_price_in_usd to Decimal before multiplying
-                print(f"Token price in USD: {token_price_in_usd}")
-                update.message.reply_text(f"${token_price_in_usd:.4f}")
-            except Exception as e:
-                print(f"Error converting token price to USD: {e}")
-                update.message.reply_text("Failed to calculate token price in USD.")
+            # Use the existing get_token_price_in_usd function
+            token_price_in_usd = get_token_price_in_usd(chain, lp_address)
+            if token_price_in_usd is None:
+                update.message.reply_text("Failed to fetch token price in USD.")
                 return
+            print(f"Token price in USD: {token_price_in_usd}")
+            update.message.reply_text(f"${token_price_in_usd:.4f}")
         elif modifier == "ETH":
-            update.message.reply_text(
-                f"{price_in_weth:.8f} ETH"
-            )
+            # Fetch token price in WETH directly
+            price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
+            if price_in_weth is None:
+                print("Failed to fetch Uniswap V3 position data.")
+                update.message.reply_text("Failed to fetch Uniswap V3 position data.")
+                return
+            print(f"Token price in WETH: {price_in_weth}")
+            update.message.reply_text(f"{price_in_weth:.8f} ETH")
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
         update.message.reply_text("An unexpected error occurred while fetching the token price.")
