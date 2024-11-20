@@ -310,6 +310,7 @@ def track_message(message):
 #region LOGGING
 bot = Bot(token=TELEGRAM_TOKEN)
 LOG_CHAT = "-1002087245760"
+LOGGING_TIMEZONE = "America/Los_Angeles"
 class TelegramLogger: # Batch all logs and send to the logging channel for debugging in telegram
     def __init__(self):
         self.original_stdout = sys.stdout  # Keep a reference to the original stdout
@@ -320,9 +321,10 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
 
     def write(self, message):
         if message.strip():  # Avoid sending empty lines
-            self.log_buffer.append(message.strip())
-        
-        self.original_stdout.write(message) # Also print to the original stdout
+            pst_timezone = timezone(LOGGING_TIMEZONE)
+            timestamp = datetime.now(pst_timezone).strftime("%Y-%m-%d %I:%M:%S %p PST")
+            formatted_message = f"{timestamp} - {message.strip()}"
+            self.log_buffer.append(formatted_message)
 
     def flush(self):
         self.original_stdout.flush()
