@@ -343,6 +343,11 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
         self.timer = Timer(self.flush_interval, self.flush_logs) # Restart the timer
         self.timer.start()
 
+    def stop(self):
+        if self.timer:
+            self.timer.cancel()
+            self.timer = None
+
 sys.stdout = TelegramLogger()
 #endregion LOGGING
 
@@ -3868,12 +3873,16 @@ def handle_minimum_buy(update: Update, context: CallbackContext) -> None:
                 group_doc.update({
                     'premium_features.buybot.minimumbuy': int(update.message.text)
                 })
+                msg = update.message.reply_text("Minimum buy value updated successfully!")
                 clear_group_cache(str(group_id)) # Clear the cache on all database updates
 
         store_message_id(context, msg.message_id)
 
     else:
         print("User is not the owner.")
+
+    if msg is not None:
+        track_message(msg)
 
 def setup_small_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -3927,6 +3936,9 @@ def handle_small_buy(update: Update, context: CallbackContext) -> None:
     else:
         print("User is not the owner.")
 
+    if msg is not None:
+        track_message(msg)
+
 def setup_medium_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
     query = update.callback_query
@@ -3978,6 +3990,9 @@ def handle_medium_buy(update: Update, context: CallbackContext) -> None:
 
     else:
         print("User is not the owner.")
+
+    if msg is not None:
+        track_message(msg)
 #endregion Buybot Setup
 
 #endregion Premium Setup
