@@ -320,14 +320,21 @@ def fetch_config():
         print(f"Error fetching configuration: {e}")
         return {}
 
-def update_config():
+def update_config(update, context):
     config = fetch_config()
     if not config:
+        update.message.reply_text("No configuration available to update.")
         print("No configuration available to update.")
         return
-    
-    MONITOR_INTERVAL = config.get('MONITOR_INTERVAL', MONITOR_INTERVAL)
-    print(f"Updated MONITOR_INTERVAL to {MONITOR_INTERVAL}")
+
+    try:
+        # Update MONITOR_INTERVAL dynamically
+        MONITOR_INTERVAL = config.get("MONITOR_INTERVAL", MONITOR_INTERVAL)
+        update.message.reply_text(f"MONITOR_INTERVAL updated to: {MONITOR_INTERVAL}")
+        print(f"Updated MONITOR_INTERVAL to: {MONITOR_INTERVAL}")
+    except Exception as e:
+        update.message.reply_text(f"Failed to update configuration: {e}")
+        print(f"Error updating configuration: {e}")
     
 
 #endregion Bot Controller (TUKYO)
