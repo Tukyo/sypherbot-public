@@ -325,6 +325,8 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
             timestamp = datetime.now(pst_timezone).strftime("%Y-%m-%d %I:%M:%S %p PST")
             formatted_message = f"{timestamp} - {message.strip()}"
             self.log_buffer.append(formatted_message)
+        
+        self.original_stdout.write(message)  # Write the message to the original stdout
 
     def flush(self):
         self.original_stdout.flush()
