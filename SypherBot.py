@@ -676,6 +676,23 @@ def is_allowed(message, allowlist, pattern): # Check if any detected matches in 
             return True
     return False
 
+def get_query_info(update, get_user=True):
+    query = update.callback_query
+    if query is None:
+        print("Error: Callback query is None.", file=sys.stderr)
+        return None if not get_user else (None, None)
+
+    query.answer()  # Safely answer the query
+    if get_user:
+        if query.from_user is None:
+            print("Error: No user information in callback query.", file=sys.stderr)
+            return query, None
+        print(f"Query data returned for user {query.from_user.id}")
+        return query, query.from_user.id
+    else:
+        print(f"Query data returned without user_id")
+        return query  # Return only the query if get_user is False
+
 #region Message Handling
 def rate_limit_check(): # Later TODO: Implement rate limiting PER GROUP
     print("Checking rate limit...")
@@ -695,18 +712,14 @@ def rate_limit_check(): # Later TODO: Implement rate limiting PER GROUP
         return False
 
 def handle_message(update: Update, context: CallbackContext) -> None:
+    if not (update.message and update.message.from_user):
+        print("Received a message with missing update or user information.")
+        return
+    
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
     username = update.message.from_user.username or update.message.from_user.first_name    
     msg = update.message.text
-
-    if update.message is None:
-        print(f"Received a message with no update information from group {chat_id}.")
-        return
-
-    if update.message.from_user is None:
-        print(f"Received a message with no user information from group {chat_id}.")
-        return
 
     if not msg:
         print("No message text found.")
@@ -835,8 +848,7 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
     if user_id == context.bot.id:
         return
 
-    # Mute the spamming user
-    context.bot.restrict_chat_member(
+    context.bot.restrict_chat_member( # Mute the spamming user
         chat_id=chat_id,
         user_id=user_id,
         permissions=ChatPermissions(can_send_messages=False)
@@ -1155,9 +1167,7 @@ def start(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def setup_home_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
         chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id) # Check if the bot is an admin
@@ -5521,8 +5531,8 @@ def handle_guess(update: Update, context: CallbackContext) -> None:
     
     player_name = context.chat_data[key].get('player_name', 'Player')
 
-    # Check if there's an ongoing game for this user in this chat
-    if key not in context.chat_data or 'chosen_word' not in context.chat_data[key]:
+    
+    if key not in context.chat_data or 'chosen_word' not in context.chat_data[key]: # Check if there's an ongoing game for this user in this chat
         # print(f"No active game found for key: {key}")
         return
 
