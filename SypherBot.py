@@ -1144,12 +1144,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
 def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     msg = None
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
-    if not result:
-        print("Failed to fetch group info. No action taken.")
-        return
-
-    group_data, group_doc = result  # Unpack the tuple
+    group_doc = fetch_group_info(update, context, return_doc=True)
 
     try:
         group_link = context.bot.export_chat_invite_link(group_id)
@@ -1209,15 +1204,10 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
 
     if msg is not None:
         track_message(msg)
-    
-    if group_data and 'group_info' in group_data:
-        return
 
     group_doc.update({
-        'group_info': {
-            'group_link': group_link,
-            'group_username': group_username,
-        }
+        'group_info.group_link': group_link,
+        'group_info.group_username': group_username,
     })
     clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
