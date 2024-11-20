@@ -308,30 +308,40 @@ def track_message(message):
     print(f"Tracked message: {message.message_id}")
 
 
+#region LOGGING
 bot = Bot(token=TELEGRAM_TOKEN)
 LOG_CHAT = "-1002087245760"
-class TelegramLogger:
+class TelegramLogger: # Batch all logs and send to the logging channel for debugging in telegram
     def __init__(self):
         self.original_stdout = sys.stdout  # Keep a reference to the original stdout
+        self.log_buffer = []  # Buffer to store logs
+        self.flush_interval = 10  # Send logs every 10 seconds
+        self.timer = Timer(self.flush_interval, self.flush_logs)  # Timer for batching
+        self.timer.start()
 
     def write(self, message):
-        # Send the message to Telegram if it's not empty or just a newline
         if message.strip():  # Avoid sending empty lines
-            try:
-                bot.send_message(chat_id=LOG_CHAT, text=message.strip())
-            except Exception as e:
-                # Handle Telegram API errors silently (optional logging)
-                self.original_stdout.write(f"Failed to send message to Telegram: {e}\n")
+            self.log_buffer.append(message.strip())
         
-        # Also print to the original stdout
-        self.original_stdout.write(message)
+        self.original_stdout.write(message) # Also print to the original stdout
 
     def flush(self):
-        # This is required for compatibility with stdout
         self.original_stdout.flush()
 
-# Redirect stdout to TelegramLogger
+    def flush_logs(self):
+        if self.log_buffer:
+            try: # Combine all logs into one message
+                bot.send_message(chat_id=LOG_CHAT, text="\n".join(self.log_buffer))
+            except Exception as e:
+                self.original_stdout.write(f"Failed to send batched logs to Telegram: {e}\n")
+            finally:
+                self.log_buffer = [] # Clear the buffer after sending
+
+        self.timer = Timer(self.flush_interval, self.flush_logs) # Restart the timer
+        self.timer.start()
+
 sys.stdout = TelegramLogger()
+#endregion LOGGING
 
 #region Bot Logic
 def bot_added_to_group(update: Update, context: CallbackContext) -> None:
