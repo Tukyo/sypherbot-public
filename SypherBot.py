@@ -307,7 +307,6 @@ def track_message(message):
     bot_messages.append((message.chat.id, message.message_id))
     print(f"Tracked message: {message.message_id}")
 
-
 #region LOGGING
 bot = Bot(token=TELEGRAM_TOKEN)
 LOG_CHAT = "-1002087245760"
@@ -331,7 +330,7 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
     def flush_logs(self):
         if self.log_buffer:
             try: # Combine all logs into one message
-                bot.send_message(chat_id=LOG_CHAT, text="\n".join(self.log_buffer))
+                bot.send_message(chat_id=LOG_CHAT, text="\n\n".join(self.log_buffer))
             except Exception as e:
                 self.original_stdout.write(f"Failed to send batched logs to Telegram: {e}\n")
             finally:
@@ -396,6 +395,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
             {
                 'play': True,
                 'website': True,
+                'buy': True,
                 'contract': True,
                 'price': True,
                 'chart': True,
@@ -4567,58 +4567,6 @@ def send_buy_message(text, group_id, reply_markup=None):
 #endregion Buybot
 
 #region Price Fetching
-def get_token_price_in_weth(contract_address): # OLD TODO: PHASE THIS OUT
-    apiUrl = f"https://api.dexscreener.com/latest/dex/tokens/{contract_address}"
-    try:
-        response = requests.get(apiUrl)
-        response.raise_for_status()
-        data = response.json()
-        
-        if data['pairs'] and len(data['pairs']) > 0:
-            # Find the pair with WETH as the quote token
-            weth_pair = next((pair for pair in data['pairs'] if pair['quoteToken']['symbol'] == 'WETH'), None)
-            
-            if weth_pair:
-                price_in_weth = weth_pair['priceNative']
-                return price_in_weth
-            else:
-                print("No WETH pair found for this token.")
-                return None
-        else:
-            print("No pairs found for this token.")
-            return None
-    except requests.RequestException as e:
-        print(f"Error fetching token price from DexScreener: {e}")
-        return None
-    
-def get_weth_price_in_fiat(currency): # OLD TODO: PHASE THIS OUT
-    apiUrl = f"https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies={currency}"
-    try:
-        response = requests.get(apiUrl)
-        response.raise_for_status()  # This will raise an exception for HTTP errors
-        data = response.json()
-        return data['ethereum'][currency]
-    except requests.RequestException as e:
-        print(f"Error fetching WETH price from CoinGecko: {e}")
-        return None
-    
-def get_token_price_in_fiat(contract_address, currency): # OLD TODO: PHASE THIS OUT
-    # Fetch price of token in WETH
-    token_price_in_weth = get_token_price_in_weth(contract_address)
-    if token_price_in_weth is None:
-        print("Could not retrieve token price in WETH.")
-        return None
-
-    # Fetch price of WETH in the specified currency
-    weth_price_in_fiat = get_weth_price_in_fiat(currency)
-    if weth_price_in_fiat is None:
-        print(f"Could not retrieve WETH price in {currency}.")
-        return None
-
-    # Calculate token price in the specified currency
-    token_price_in_fiat = float(token_price_in_weth) * weth_price_in_fiat
-    return token_price_in_fiat
-
 def get_token_price_in_usd(chain, lp_address):
     """
     Fetch the token price in USD using Uniswap V3 position data and Chainlink for ETH price.
@@ -4747,9 +4695,8 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
             return
 
         print(f"ETH price in USD: {eth_price_in_usd}")
-
-        # Use the new function to fetch Uniswap V3 position data
-        price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
+        
+        price_in_weth = get_uniswap_v3_position_data(chain, lp_address) # Use the new function to fetch Uniswap V3 position data
         if price_in_weth is None:
             print("Failed to fetch Uniswap V3 position data.")
             update.message.reply_text("Failed to fetch Uniswap V3 position data.")
@@ -4759,8 +4706,7 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
 
         if modifier == "USD":
             try:
-                # Convert eth_price_in_usd to Decimal before multiplying
-                token_price_in_usd = price_in_weth * Decimal(eth_price_in_usd) 
+                token_price_in_usd = price_in_weth * Decimal(eth_price_in_usd) # Convert eth_price_in_usd to Decimal before multiplying
                 print(f"Token price in USD: {token_price_in_usd}")
                 update.message.reply_text(f"${token_price_in_usd:.4f}")
             except Exception as e:
