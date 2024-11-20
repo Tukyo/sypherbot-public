@@ -321,19 +321,19 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
         self.timer = Timer(self.flush_interval, self.flush_logs)  # Timer for batching
         self.timer.start()
 
-    def write(self, message):
+    def write(self, message, from_stderr=False):
         if message.strip():  # Avoid sending empty lines
             pst_timezone = pytz.timezone(LOGGING_TIMEZONE)
             timestamp = datetime.now(pst_timezone).strftime("%Y-%m-%d %I:%M:%S %p PST")
             formatted_message = f"{timestamp} - {message.strip()}"
-            if sys.stderr == self: # Append @Tukyowave for stderr messages
+            if from_stderr: # Only append @Tukyowave for stderr messages
                 formatted_message += " @Tukyowave"
             self.log_buffer.append(formatted_message)
         
-        if sys.stdout == self:
-            self.original_stdout.write(message)
-        if sys.stderr == self:
+        if from_stderr: # Write to the original stream
             self.original_stderr.write(message)
+        else:
+            self.original_stdout.write(message)
 
     def flush(self):
         if self.original_stdout:
@@ -359,8 +359,23 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
             self.timer = None
 
 logger = TelegramLogger()
-sys.stdout = logger
-sys.stderr = logger
+
+class StdoutWrapper:
+    def write(self, message):
+        logger.write(message, from_stderr=False)
+
+    def flush(self):
+        logger.flush()
+
+class StderrWrapper:
+    def write(self, message):
+        logger.write(message, from_stderr=True)
+
+    def flush(self):
+        logger.flush()
+
+sys.stdout = StdoutWrapper()  # Redirect stdout
+sys.stderr = StderrWrapper()  # Redirect stderr
 #endregion LOGGING
 
 #region Bot Logic
