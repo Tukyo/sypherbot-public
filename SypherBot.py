@@ -326,6 +326,8 @@ def fetch_config():
 
 
 def update_config(update, context):
+    global MONITOR_INTERVAL
+    
     config = fetch_config()
     if not config or "monitorinterval" not in config:
         update.message.reply_text("No configuration available or monitorinterval not found.")
