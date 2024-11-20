@@ -700,6 +700,14 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     username = update.message.from_user.username or update.message.from_user.first_name    
     msg = update.message.text
 
+    if update.message is None:
+        print(f"Received a message with no update information from group {chat_id}.")
+        return
+
+    if update.message.from_user is None:
+        print(f"Received a message with no user information from group {chat_id}.")
+        return
+
     if not msg:
         print("No message text found.")
         return
@@ -779,6 +787,11 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     handle_guess(update, context)
 
 def handle_image(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    chat_id = update.message.chat.id
+    username = update.message.from_user.username or update.message.from_user.first_name
+    msg = None
+
     if is_user_admin(update, context):
         handle_setup_inputs_from_admin(update, context)
         return
@@ -793,11 +806,6 @@ def handle_image(update: Update, context: CallbackContext) -> None:
             return
         else:
             print(f"User {user_id} is trusted to tag others.")
-
-    user_id = update.message.from_user.id
-    chat_id = update.message.chat.id
-    username = update.message.from_user.username or update.message.from_user.first_name
-    msg = None
 
     if anti_spam.is_spam(user_id, chat_id):
         handle_spam(update, context, chat_id, user_id, username)
@@ -4801,6 +4809,16 @@ def mute(update: Update, context: CallbackContext) -> None:
             user_id = reply_to_message.from_user.id
             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
 
+        chat_admins = context.bot.get_chat_administrators(chat_id)  # Get list of admins
+        admin_user_ids = [admin.user.id for admin in chat_admins]
+        bot_id = context.bot.id
+
+        if int(user_id) in admin_user_ids or int(user_id) == bot_id:  # Check if the user is an admin or the bot
+            msg = update.message.reply_text("Nice try lol")
+            if msg is not None:
+                track_message(msg)
+            return
+
         context.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=ChatPermissions(can_send_messages=False))
         msg = update.message.reply_text(f"User {username} has been muted.")
 
@@ -4881,6 +4899,16 @@ def warn(update: Update, context: CallbackContext):
         if reply_to_message:
             user_id = str(reply_to_message.from_user.id)
             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
+
+        chat_admins = context.bot.get_chat_administrators(chat_id)  # Get list of admins
+        admin_user_ids = [admin.user.id for admin in chat_admins]
+        bot_id = context.bot.id
+
+        if int(user_id) in admin_user_ids or int(user_id) == bot_id:  # Check if the user is an admin or the bot
+            msg = update.message.reply_text("Nice try lol")
+            if msg is not None:
+                track_message(msg)
+            return
         
         try:
             doc_snapshot = group_doc.get()
