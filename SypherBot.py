@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import time
 import pytz
 import json
@@ -295,7 +296,7 @@ DOMAIN_PATTERN = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
 
 RATE_LIMIT_MESSAGE_COUNT = 100  # Maximum number of allowed commands per {TIME_PERIOD}
 RATE_LIMIT_TIME_PERIOD = 60  # Time period in (seconds)
-MONITOR_INTERVAL = 15 # Interval for monitoring jobs (seconds)
+MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
 BLOB_EXPIRATION = 15 # Expiration time for uploaded files (minutes)
 
 last_check_time = time.time()
@@ -306,45 +307,31 @@ def track_message(message):
     bot_messages.append((message.chat.id, message.message_id))
     print(f"Tracked message: {message.message_id}")
 
-#region Bot Controller (TUKYO)
-def fetch_config():
-    try:
-        # Access the 'config' collection and 'settings' document
-        config_doc = db.collection('config').document('settings').get()  # Fetch the document
-        if not config_doc.exists:
-            print("No configuration found in the database.")
-            return {}
+
+bot = Bot(token=TELEGRAM_TOKEN)
+LOG_CHAT = "-1002087245760"
+class TelegramLogger:
+    def __init__(self):
+        self.original_stdout = sys.stdout  # Keep a reference to the original stdout
+
+    def write(self, message):
+        # Send the message to Telegram if it's not empty or just a newline
+        if message.strip():  # Avoid sending empty lines
+            try:
+                bot.send_message(chat_id=LOG_CHAT, text=message.strip())
+            except Exception as e:
+                # Handle Telegram API errors silently (optional logging)
+                self.original_stdout.write(f"Failed to send message to Telegram: {e}\n")
         
-        # Fetch the specific 'monitorinterval' field
-        monitor_interval = config_doc.get('monitorinterval')  # Fetch the field directly
-        print(f"Fetched MONITOR_INTERVAL: {monitor_interval}")
-        return {"monitorinterval": monitor_interval}
-    except Exception as e:
-        print(f"Error fetching configuration: {e}")
-        return {}
+        # Also print to the original stdout
+        self.original_stdout.write(message)
 
+    def flush(self):
+        # This is required for compatibility with stdout
+        self.original_stdout.flush()
 
-
-def update_config(update, context):
-    global MONITOR_INTERVAL
-    
-    config = fetch_config()
-    if not config or "monitorinterval" not in config:
-        update.message.reply_text("No configuration available or monitorinterval not found.")
-        print("No configuration available or monitorinterval not found.")
-        return
-
-    try:
-        # Update MONITOR_INTERVAL dynamically
-        MONITOR_INTERVAL = int(config["monitorinterval"])  # Update the global variable
-        update.message.reply_text(f"MONITOR_INTERVAL updated to: {MONITOR_INTERVAL}")
-        print(f"Updated MONITOR_INTERVAL to: {MONITOR_INTERVAL}")
-    except Exception as e:
-        update.message.reply_text(f"Failed to update configuration: {e}")
-        print(f"Error updating configuration: {e}")
-    
-
-#endregion Bot Controller (TUKYO)
+# Redirect stdout to TelegramLogger
+sys.stdout = TelegramLogger()
 
 #region Bot Logic
 def bot_added_to_group(update: Update, context: CallbackContext) -> None:
@@ -6094,8 +6081,6 @@ def main() -> None:
     #endregion Premium Setup Callbacks
     #
     #endregion Setup Callbacks
-
-    dispatcher.add_handler(CommandHandler("config", update_config))
 
     updater.start_polling() # Start the Bot
     start_monitoring_groups() # Start monitoring premium groups
