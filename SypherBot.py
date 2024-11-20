@@ -321,7 +321,7 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
 
     def write(self, message):
         if message.strip():  # Avoid sending empty lines
-            pst_timezone = timezone(LOGGING_TIMEZONE)
+            pst_timezone = pytz.timezone(LOGGING_TIMEZONE)
             timestamp = datetime.now(pst_timezone).strftime("%Y-%m-%d %I:%M:%S %p PST")
             formatted_message = f"{timestamp} - {message.strip()}"
             self.log_buffer.append(formatted_message)
