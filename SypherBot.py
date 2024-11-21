@@ -4,7 +4,6 @@ import sys
 import time
 import pytz
 import json
-import atexit
 import random
 import inspect
 import requests
@@ -287,14 +286,6 @@ anti_raid = AntiRaid(user_amount=ANTI_RAID_USER_AMOUNT, time_out=ANTI_RAID_TIME_
 
 scheduler = BackgroundScheduler()
 
-def shutdown_scheduler():
-    if scheduler.running:
-        print("Shutting down APScheduler...")
-        scheduler.shutdown(wait=False)  # Ensure the scheduler stops without waiting for running jobs
-        print("APScheduler shut down successfully.")
-
-atexit.register(shutdown_scheduler)
-
 BOT_USERNAME = "sypher_robot"
 
 ETH_ADDRESS_PATTERN = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
@@ -511,10 +502,6 @@ def start_monitoring_groups():
     scheduler.start()
 
 def schedule_group_monitoring(group_data):
-    if not scheduler.running:
-        print("Scheduler is not running. Skipping job scheduling.")
-        return
-    
     group_id = str(group_data['group_id'])
     job_id = f"monitoring_{group_id}"
     token_info = group_data.get('token')
