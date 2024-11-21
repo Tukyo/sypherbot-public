@@ -573,7 +573,7 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
     print(f"UserID: {user_id} - OwnerID: {group_data['owner_id']} - IsOwner: {user_is_owner}")
 
     if not user_is_owner:
-        print("User is not the owner of this group.")
+        print(f"User {user_id} is not the owner of group {chat_id}")
 
     return user_is_owner
 
@@ -1023,10 +1023,10 @@ def delete_service_messages(update, context):
             print(f"Failed to delete service message: {str(e)}")
 
 def store_message_id(context, message_id):
-    if 'setup_bot_message' in context.user_data:
-        context.user_data['setup_bot_message'].append(message_id)
+    if 'setup_bot_message' in context.chat_data:
+        context.chat_data['setup_bot_message'].append(message_id)
     else:
-        context.user_data['setup_bot_message'] = [message_id]
+        context.chat_data['setup_bot_message'] = [message_id]
 #endregion Message Handling
 #
 ##
@@ -1039,8 +1039,8 @@ def menu_change(context: CallbackContext, update: Update):
     print(f"Menu change detected in group {update.effective_chat.id}")
 
     for message_to_delete in messages_to_delete:
-        if message_to_delete in context.user_data:
-            for message_id in context.user_data[message_to_delete]:
+        if message_to_delete in context.chat_data:
+            for message_id in context.chat_data[message_to_delete]:
                 try:
                     context.bot.delete_message(
                         chat_id=update.effective_chat.id,
@@ -1049,7 +1049,7 @@ def menu_change(context: CallbackContext, update: Update):
                 except Exception as e:
                     if str(e) != "Message to delete not found":
                         print(f"Failed to delete message: {e}")
-            context.user_data[message_to_delete] = []
+            context.chat_data[message_to_delete] = []
 
 def exit_callback(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1060,7 +1060,7 @@ def exit_callback(update: Update, context: CallbackContext) -> None:
         query.answer()
         print(f"Exiting setup mode in group {update.effective_chat.id}")
         query.message.delete()
-        context.user_data['setup_stage'] = None
+        context.chat_data['setup_stage'] = None
     else:
         print("User is not the owner.")
 
@@ -1068,7 +1068,7 @@ def exit_callback(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> None:
-    setup_stage = context.user_data.get('setup_stage')
+    setup_stage = context.chat_data.get('setup_stage')
     print("Checking if user is in setup mode.")
     if not setup_stage:
         print("User is not in setup mode.")
@@ -1089,27 +1089,24 @@ def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> 
     elif setup_stage == 'website':
         print(f"Received website URL in group {update.effective_chat.id}")
         handle_website_url(update, context)
-    elif setup_stage == 'welcome_message_header' and context.user_data.get('expecting_welcome_message_header_image'):
+    elif setup_stage == 'welcome_message_header' and context.chat_data.get('expecting_welcome_message_header_image'):
         print(f"Received welcome message header image in group {update.effective_chat.id}")
         handle_welcome_message_image(update, context)
-    elif setup_stage == 'buybot_message_header' and context.user_data.get('expecting_buybot_header_image'):
+    elif setup_stage == 'buybot_message_header' and context.chat_data.get('expecting_buybot_header_image'):
         print(f"Received buybot message header image in group {update.effective_chat.id}")
         handle_buybot_message_image(update, context)
-    elif context.user_data.get('setup_stage') == 'set_max_warns':
+    elif context.chat_data.get('setup_stage') == 'set_max_warns':
         print(f"Received max warns number in group {update.effective_chat.id}")
         handle_max_warns(update, context)
-    elif context.user_data.get('setup_stage') == 'minimum_buy':
+    elif context.chat_data.get('setup_stage') == 'minimum_buy':
         print(f"Received minimum buy amount in group {update.effective_chat.id}")
         handle_minimum_buy(update, context)
-    elif context.user_data.get('setup_stage') == 'small_buy':
+    elif context.chat_data.get('setup_stage') == 'small_buy':
         print(f"Received small buy amount in group {update.effective_chat.id}")
         handle_small_buy(update, context)
-    elif context.user_data.get('setup_stage') == 'medium_buy':
+    elif context.chat_data.get('setup_stage') == 'medium_buy':
         print(f"Received medium buy amount in group {update.effective_chat.id}")
         handle_medium_buy(update, context)
-    
-    # MAYBE clear cache here TODO
-    # clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 def start(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1176,7 +1173,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
             try:
                 context.bot.edit_message_text(
                     chat_id=update.effective_chat.id,
-                    message_id=context.user_data.get('setup_bot_message', None),
+                    message_id=context.chat_data.get('setup_bot_message', None),
                     text='Please give me admin permissions first!'
                 )
                 print(f"Bot does not have admin permissions in group: {update.effective_chat.id} - Editing message to request perms.")
@@ -1252,7 +1249,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         parse_mode='markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1328,7 +1325,7 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1391,7 +1388,7 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1424,7 +1421,7 @@ def enable_mute(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='✔️ Muting has been enabled in this group ✔️'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1457,7 +1454,7 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='❌ Muting has been disabled in this group ❌'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1527,7 +1524,7 @@ def setup_warn(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1560,7 +1557,7 @@ def enable_warn(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='✔️ Warning has been enabled in this group ✔️'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1593,7 +1590,7 @@ def disable_warn(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='❌ Warning has been disabled in this group ❌'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1636,7 +1633,7 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1651,7 +1648,7 @@ def set_max_warns(update: Update, context: CallbackContext) -> None:
         '*Default Max Warns:* _3_',
         parse_mode='Markdown'
     )
-    context.user_data['setup_stage'] = 'set_max_warns'
+    context.chat_data['setup_stage'] = 'set_max_warns'
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1720,7 +1717,7 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1757,7 +1754,7 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
         text='✔️ Allowlisting has been enabled in this group ✔️'
     )
 
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1794,7 +1791,7 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
         text='❌ Allowlisting has been disabled in this group ❌'
     )
 
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
 
     if msg is not None:
         track_message(msg)
@@ -1817,7 +1814,7 @@ def setup_website(update: Update, context: CallbackContext) -> None:
             text='Please respond with your website URL.',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = 'website'
+        context.chat_data['setup_stage'] = 'website'
         print("Requesting website URL.")
         store_message_id(context, msg.message_id)
 
@@ -1829,7 +1826,7 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
 
     if is_user_owner(update, context, user_id):
-        if context.user_data.get('setup_stage') == 'website':
+        if context.chat_data.get('setup_stage') == 'website':
             website_url = update.message.text.strip()
 
             if URL_PATTERN.fullmatch(website_url):  # Use the global URL_PATTERN
@@ -1838,7 +1835,7 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
                 group_doc = fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'group_info.website_url': website_url})
                 clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-                context.user_data['setup_stage'] = None
+                context.chat_data['setup_stage'] = None
 
                 if update.message is not None:
                     msg = update.message.reply_text("Website URL added successfully!")
@@ -1869,7 +1866,7 @@ def check_allowlist(update: Update, context: CallbackContext) -> None:
         text=allowlist_text,
         parse_mode='Markdown'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1903,7 +1900,7 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='❌ Allowlist has been cleared in this group ❌'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1940,7 +1937,7 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -1976,7 +1973,7 @@ def enable_blocklist(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='✔️ Blocklisting has been enabled in this group ✔️'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2012,7 +2009,7 @@ def disable_blocklist(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='❌ Blocklisting has been disabled in this group ❌'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2047,7 +2044,7 @@ def check_blocklist(update: Update, context: CallbackContext) -> None:
         text=blocklist_text,
         parse_mode='Markdown'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2081,7 +2078,7 @@ def clear_blocklist(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='❌ Blocklist has been cleared in this group ❌'
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2140,7 +2137,7 @@ def setup_commands(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2218,7 +2215,7 @@ def setup_authentication(update: Update, context: CallbackContext) -> None:
         text='*🌐 Authentication Setup 🌐*\n\nHere, you may choose the type of authentication to use for your group. The default is simple.', parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2264,7 +2261,7 @@ def simple_authentication(update: Update, context: CallbackContext) -> None:
         text='*🤡 Simple authentication enabled for this group 🤡*', parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2311,7 +2308,7 @@ def math_authentication(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
 
@@ -2346,7 +2343,7 @@ def word_authentication(update: Update, context: CallbackContext) -> None:
 
     clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
-    context.user_data['setup_stage'] = 'setup_word_verification'
+    context.chat_data['setup_stage'] = 'setup_word_verification'
 
     menu_change(context, update)
 
@@ -2361,7 +2358,7 @@ def word_authentication(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
 
@@ -2390,7 +2387,7 @@ def timeout_authentication(update: Update, context: CallbackContext) -> None:
         text='Please choose the authentication timeout.',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2451,7 +2448,7 @@ def check_authentication_settings(update: Update, context: CallbackContext) -> N
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = None
+        context.chat_data['setup_stage'] = None
         store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2499,7 +2496,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         parse_mode='markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2523,7 +2520,7 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
             text='Please respond with your contract address.',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = 'contract'
+        context.chat_data['setup_stage'] = 'contract'
         print("Requesting contract address.")
         store_message_id(context, msg.message_id)
 
@@ -2535,7 +2532,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     
     if is_user_owner(update, context, user_id):
-        if context.user_data.get('setup_stage') == 'contract':
+        if context.chat_data.get('setup_stage') == 'contract':
             eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
             contract_address = update.message.text.strip()
 
@@ -2545,7 +2542,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
                 group_doc = fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'token.contract_address': contract_address})
                 clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-                context.user_data['setup_stage'] = None
+                context.chat_data['setup_stage'] = None
 
                 if update.message is not None:
                     msg = update.message.reply_text("Contract address added successfully!")
@@ -2578,7 +2575,7 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
             text='Please respond with your liquidity address.',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = 'liquidity'
+        context.chat_data['setup_stage'] = 'liquidity'
         store_message_id(context, msg.message_id)
         print("Requesting liquidity address.")
 
@@ -2591,7 +2588,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
 
     if is_user_owner(update, context, user_id):
         msg = None
-        if context.user_data.get('setup_stage') == 'liquidity':
+        if context.chat_data.get('setup_stage') == 'liquidity':
             eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
             liquidity_address = update.message.text.strip()
 
@@ -2601,7 +2598,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
                 group_doc = fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'token.liquidity_address': liquidity_address})
                 clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-                context.user_data['setup_stage'] = None
+                context.chat_data['setup_stage'] = None
 
                 # Check if update.message is not None before using it
                 if update.message is not None:
@@ -2642,7 +2639,7 @@ def setup_ABI(update: Update, context: CallbackContext) -> None:
             parse_mode='markdown',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = 'ABI'
+        context.chat_data['setup_stage'] = 'ABI'
         store_message_id(context, msg.message_id)
         print("Requesting ABI file.")
 
@@ -2654,7 +2651,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
 
     if is_user_owner(update, context, user_id):
         msg = None
-        if context.user_data.get('setup_stage') == 'ABI':
+        if context.chat_data.get('setup_stage') == 'ABI':
             document = update.message.document
             print(f"MIME type: {document.mime_type}")
             if document.mime_type == 'application/json':
@@ -2667,7 +2664,7 @@ def handle_ABI(update: Update, context: CallbackContext) -> None:
                     group_doc = fetch_group_info(update, context, return_doc=True)
                     group_doc.update({'token.abi': abi})
                     clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-                    context.user_data['setup_stage'] = None
+                    context.chat_data['setup_stage'] = None
                     msg = update.message.reply_text("ABI has been successfully saved.")
 
                     complete_token_setup(group_id, context)
@@ -2743,7 +2740,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             'Currently only Base Mainnet + Uniswap V3 LP is *fully* supported. We will be rolling out support for other chains and LP positions shortly.',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = 'chain'
+        context.chat_data['setup_stage'] = 'chain'
         store_message_id(context, msg.message_id)
         print("Requesting Chain.")
 
@@ -2754,14 +2751,14 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
     query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
-        if context.user_data.get('setup_stage') == 'chain':
+        if context.chat_data.get('setup_stage') == 'chain':
             chain = update.callback_query.data.upper()  # Convert chain to uppercase
             group_id = update.effective_chat.id
             print(f"Adding chain {chain} to group {group_id}")
             group_doc = fetch_group_info(update, context, return_doc=True)
             group_doc.update({'token.chain': chain})
             clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-            context.user_data['setup_stage'] = None
+            context.chat_data['setup_stage'] = None
 
             complete_token_setup(group_id, context)
 
@@ -2873,7 +2870,7 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = None
+        context.chat_data['setup_stage'] = None
         store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2943,7 +2940,7 @@ def setup_premium(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2978,8 +2975,8 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
         text="Please send a jpg image for the welcome message header that is less than 700x250px.",
         parse_mode='Markdown'
     )
-    context.user_data['expecting_welcome_message_header_image'] = True  # Flag to check in the image handler
-    context.user_data['setup_stage'] = 'welcome_message_header'
+    context.chat_data['expecting_welcome_message_header_image'] = True  # Flag to check in the image handler
+    context.chat_data['setup_stage'] = 'welcome_message_header'
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -2987,7 +2984,7 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
 
 def handle_welcome_message_image(update: Update, context: CallbackContext) -> None:
     msg = None
-    if context.user_data.get('expecting_welcome_message_header_image'):
+    if context.chat_data.get('expecting_welcome_message_header_image'):
         group_id = update.effective_chat.id
         result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
         if not result:
@@ -3027,8 +3024,8 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
                 text="Your welcome message header image has been successfully uploaded!",
                 parse_mode='Markdown'
             )
-            context.user_data['expecting_welcome_message_header_image'] = False  # Reset the flag
-            context.user_data['setup_stage'] = None
+            context.chat_data['expecting_welcome_message_header_image'] = False  # Reset the flag
+            context.chat_data['setup_stage'] = None
             store_message_id(context, msg.message_id)
         else:
             error_message = "Please ensure the image is less than 700x250 pixels"
@@ -3056,8 +3053,8 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
         text="Please send a jpg image for the buybot message header that is less than 700x250px.",
         parse_mode='Markdown'
     )
-    context.user_data['expecting_buybot_header_image'] = True  # Flag to check in the image handler
-    context.user_data['setup_stage'] = 'buybot_message_header'
+    context.chat_data['expecting_buybot_header_image'] = True  # Flag to check in the image handler
+    context.chat_data['setup_stage'] = 'buybot_message_header'
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -3065,7 +3062,7 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
 
 def handle_buybot_message_image(update: Update, context: CallbackContext) -> None:
     msg = None
-    if context.user_data.get('expecting_buybot_header_image'):
+    if context.chat_data.get('expecting_buybot_header_image'):
         group_id = update.effective_chat.id
         result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
         if not result:
@@ -3108,8 +3105,8 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
                 text="Your buybot message header image has been successfully uploaded!",
                 parse_mode='Markdown'
             )
-            context.user_data['expecting_buybot_header_image'] = False  # Reset the flag
-            context.user_data['setup_stage'] = None
+            context.chat_data['expecting_buybot_header_image'] = False  # Reset the flag
+            context.chat_data['setup_stage'] = None
             store_message_id(context, msg.message_id)
         else:
             error_message = "Please ensure the image is less than 700x250 pixels"
@@ -3152,7 +3149,7 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
             text='*✔️ Trust System Enabled ✔️*',
             parse_mode='Markdown'
         )
-        context.user_data['setup_stage'] = None
+        context.chat_data['setup_stage'] = None
         store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -3180,7 +3177,7 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
             text='*❌ Trust System Disabled ❌*',
             parse_mode='Markdown'
         )
-        context.user_data['setup_stage'] = None
+        context.chat_data['setup_stage'] = None
         store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -3216,7 +3213,7 @@ def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -3383,7 +3380,7 @@ def setup_buybot(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    context.user_data['setup_stage'] = None
+    context.chat_data['setup_stage'] = None
     store_message_id(context, msg.message_id)
 
     if msg is not None:
@@ -3407,7 +3404,7 @@ def setup_minimum_buy_callback(update: Update, context: CallbackContext) -> None
             text='Please respond with your minimum buy amount to trigger the buybot.',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = 'minimum_buy'
+        context.chat_data['setup_stage'] = 'minimum_buy'
         print("Requesting minumum buy amount.")
         store_message_id(context, msg.message_id)
 
@@ -3419,7 +3416,7 @@ def handle_minimum_buy(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     
     if is_user_owner(update, context, user_id):
-        if context.user_data.get('setup_stage') == 'minimum_buy':
+        if context.chat_data.get('setup_stage') == 'minimum_buy':
             group_id = update.effective_chat.id
             group_data = fetch_group_info(update, context)
             if group_data is not None:
@@ -3456,7 +3453,7 @@ def setup_small_buy_callback(update: Update, context: CallbackContext) -> None:
             text='Please respond with the maximum amount of tokens to trigger a small buy.',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = 'small_buy'
+        context.chat_data['setup_stage'] = 'small_buy'
         print("Requesting medium buy amount.")
         store_message_id(context, msg.message_id)
 
@@ -3468,7 +3465,7 @@ def handle_small_buy(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     
     if is_user_owner(update, context, user_id):
-        if context.user_data.get('setup_stage') == 'small_buy':
+        if context.chat_data.get('setup_stage') == 'small_buy':
             group_id = update.effective_chat.id
             group_data = fetch_group_info(update, context)
             if group_data is not None:
@@ -3509,7 +3506,7 @@ def setup_medium_buy_callback(update: Update, context: CallbackContext) -> None:
             text='Please respond with the maximum amount of tokens to trigger a medium buy.',
             reply_markup=reply_markup
         )
-        context.user_data['setup_stage'] = 'medium_buy'
+        context.chat_data['setup_stage'] = 'medium_buy'
         print("Requesting medium buy amount.")
         store_message_id(context, msg.message_id)
 
@@ -3521,7 +3518,7 @@ def handle_medium_buy(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     
     if is_user_owner(update, context, user_id):
-        if context.user_data.get('setup_stage') == 'medium_buy':
+        if context.chat_data.get('setup_stage') == 'medium_buy':
             group_id = update.effective_chat.id
             group_data = fetch_group_info(update, context)
             if group_data is not None:
