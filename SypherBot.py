@@ -1281,8 +1281,6 @@ SETUP_CALLBACK_DATA = [
 ] # Ensure callback data names match the function names so that you can access them dynamically via globals()
 def handle_setup_callbacks(update: Update, context: CallbackContext) -> None:
     query, user_id = get_query_info(update)
-    update = Update(update.update_id, message=query.message)
-
     chosen_callback = query.data
 
     if chosen_callback in SETUP_CALLBACK_DATA:
