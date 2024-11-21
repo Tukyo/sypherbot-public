@@ -1265,9 +1265,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
 
 #region Admin Setup
 def setup_admin_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1317,9 +1315,7 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
 
 #region Mute Setup
 def setup_mute_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1360,9 +1356,7 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def enable_mute_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1406,9 +1400,7 @@ def enable_mute(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def disable_mute_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1452,9 +1444,7 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def check_mute_list_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1504,9 +1494,7 @@ def check_mute_list(update: Update, context: CallbackContext) -> None:
 
 #region Warn Setup
 def setup_warn_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1548,9 +1536,7 @@ def setup_warn(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def enable_warn_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1594,9 +1580,7 @@ def enable_warn(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def disable_warn_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1640,9 +1624,7 @@ def disable_warn(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def check_warn_list_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1696,9 +1678,7 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def set_max_warns_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1756,9 +1736,7 @@ def handle_max_warns(update: Update, context: CallbackContext) -> None:
 
 #region Allowlist Setup
 def setup_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1806,9 +1784,7 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def enable_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1857,9 +1833,7 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def disable_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -1908,9 +1882,7 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
 
 def setup_website_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
 
@@ -1962,9 +1934,7 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def check_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     if query.data == 'check_allowlist':
         if is_user_owner(update, context, user_id):
@@ -1996,9 +1966,7 @@ def check_allowlist(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def clear_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2045,9 +2013,7 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
 
 #region Blocklist Setup
 def setup_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2093,9 +2059,7 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def enable_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2142,9 +2106,7 @@ def enable_blocklist(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def disable_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2191,9 +2153,7 @@ def disable_blocklist(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def check_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2239,9 +2199,7 @@ def check_blocklist(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def clear_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2287,9 +2245,7 @@ def clear_blocklist(update: Update, context: CallbackContext) -> None:
 #endregion Blocklist Setup
 
 def reset_admin_settings_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2335,9 +2291,7 @@ def reset_admin_settings(update: Update, context: CallbackContext) -> None:
 
 #region Commands Setup
 def setup_commands_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2448,9 +2402,7 @@ def check_command_status(update: Update, context: CallbackContext, command: str)
 
 #region Authentication Setup
 def setup_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2488,9 +2440,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def simple_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2547,9 +2497,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def math_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2608,9 +2556,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def word_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2671,9 +2617,7 @@ def word_verification(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def timeout_verification_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2713,9 +2657,7 @@ def timeout_verification(update: Update, context: CallbackContext) -> None:
 
 def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
         # Extract the timeout value from the callback_data
@@ -2750,9 +2692,7 @@ def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
         print(f"Error setting verification timeout: {e}")
 
 def check_verification_settings_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2794,9 +2734,7 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
 
 #region Ethereum Setup
 def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -2849,9 +2787,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
 
 def setup_contract(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
 
@@ -2907,9 +2843,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
 
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
     
     if is_user_owner(update, context, user_id):
         keyboard = [
@@ -2970,9 +2904,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
 
 def setup_ABI(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
     
     if is_user_owner(update, context, user_id):
 
@@ -3055,9 +2987,7 @@ def send_example_abi(update: Update, context: CallbackContext) -> None:
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
     
     if is_user_owner(update, context, user_id):
 
@@ -3101,9 +3031,7 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             track_message(msg)
 
 def handle_chain(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
         if context.user_data.get('setup_stage') == 'chain':
@@ -3188,9 +3116,7 @@ def complete_token_setup(group_id: str, context: CallbackContext):
         track_message(msg)
 
 def check_token_details_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3234,9 +3160,7 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def reset_token_details_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3274,9 +3198,7 @@ def reset_token_details(update: Update, context: CallbackContext) -> None:
 
 #region Premium Setup
 def setup_premium_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3344,9 +3266,7 @@ def is_premium_group(update: Update, context: CallbackContext) -> bool:
 
 #region Customization Setup
 def setup_welcome_message_header_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3434,9 +3354,7 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
             track_message(msg)
 
 def setup_buybot_message_header_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3530,9 +3448,7 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
 
 #region Sypher Trust Setup
 def enable_sypher_trust_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3572,9 +3488,7 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def disable_sypher_trust_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3613,9 +3527,7 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def sypher_trust_preferences_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3662,9 +3574,7 @@ def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def sypher_trust_relaxed_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3700,9 +3610,7 @@ def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def sypher_trust_moderate_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3738,9 +3646,7 @@ def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def sypher_trust_strict_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3828,9 +3734,7 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
 
 #region Buybot Setup
 def setup_buybot_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
@@ -3880,9 +3784,7 @@ def setup_buybot(update: Update, context: CallbackContext) -> None:
 
 def setup_minimum_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
 
@@ -3931,9 +3833,7 @@ def handle_minimum_buy(update: Update, context: CallbackContext) -> None:
 
 def setup_small_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
 
@@ -3986,9 +3886,7 @@ def handle_small_buy(update: Update, context: CallbackContext) -> None:
 
 def setup_medium_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query = update.callback_query
-    query.answer()
-    user_id = query.from_user.id
+    query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
 
