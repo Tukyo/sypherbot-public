@@ -1031,6 +1031,54 @@ def store_message_id(context, message_id):
 
 #endregion Bot Logic
 
+
+
+
+
+
+
+
+
+
+
+SETUP_CALLBACK_DATA = [
+    'enable_mute',
+    'disable_mute'
+]
+def handle_setup_callbacks(update: Update, context: CallbackContext) -> None:
+    query, user_id = get_query_info(update)
+    update = Update(update.update_id, message=query.message)
+
+    if query.data in SETUP_CALLBACK_DATA:
+        if is_user_owner(update, context, user_id):
+            if query.data == 'enable_mute':
+                enable_mute(update, context)
+            elif query.data == 'disable_mute':
+                disable_mute(update, context)
+        else:
+            print("User is not the owner.")
+        print(f"Callback {query.data} handled.")
+    else:
+        print(f"Callback {query.data} not found in setup_callback_data.")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #region Bot Setup
 def menu_change(context: CallbackContext, update: Update):
     messages_to_delete = [ 'setup_bot_message' ]
@@ -5933,8 +5981,14 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_admin_callback, pattern='^setup_admin$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_mute_callback, pattern='^setup_mute$'))
-    dispatcher.add_handler(CallbackQueryHandler(enable_mute_callback, pattern='^enable_mute$'))
-    dispatcher.add_handler(CallbackQueryHandler(disable_mute_callback, pattern='^disable_mute$'))
+
+
+    dispatcher.add_handler(CallbackQueryHandler(handle_setup_callbacks, pattern='^(' + '|'.join(SETUP_CALLBACK_DATA) + ')$'))
+
+
+    # dispatcher.add_handler(CallbackQueryHandler(enable_mute_callback, pattern='^enable_mute$'))
+    # dispatcher.add_handler(CallbackQueryHandler(disable_mute_callback, pattern='^disable_mute$'))
+
     dispatcher.add_handler(CallbackQueryHandler(check_mute_list_callback, pattern='^check_mute_list$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_warn_callback, pattern='^setup_warn$'))
     dispatcher.add_handler(CallbackQueryHandler(enable_warn_callback, pattern='^enable_warn$'))
