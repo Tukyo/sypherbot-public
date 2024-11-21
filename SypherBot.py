@@ -577,6 +577,20 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
 
     return user_is_owner
 
+def is_bot_or_admin(update: Update, context: CallbackContext, user_id: int, send_message: bool = True, message: str = "Nice try lol") -> bool:
+    chat_id = update.effective_chat.id
+    chat_admins = context.bot.get_chat_administrators(chat_id)
+    admin_user_ids = [admin.user.id for admin in chat_admins]
+    bot_id = context.bot.id
+
+    if int(user_id) in admin_user_ids or int(user_id) == bot_id:
+        if send_message:
+            msg = update.message.reply_text(message)
+            if msg is not None:
+                track_message(msg)
+        return True
+    return False
+
 def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool = False, update_attr: bool = False, return_both: bool = False, group_id: str = None):
     if update is not None:
         if update.effective_chat.type == 'private' and group_id is None:
@@ -770,7 +784,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
 
         for pattern in detected_patterns:
             if pattern == "eth_address":
-                print(f"Detected Ethereum address in message: {msg}")
+                print(f"Detected crypto address in message: {msg}")
                 delete_blocked_addresses(update, context)
                 return
             elif pattern == "url":
@@ -1069,10 +1083,12 @@ def exit_callback(update: Update, context: CallbackContext) -> None:
 
 def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> None:
     setup_stage = context.chat_data.get('setup_stage')
-    print("Checking if user is in setup mode.")
+    print("Checking if chat is in setup mode.")
     if not setup_stage:
-        print("User is not in setup mode.")
+        print("Chat is not in setup mode.")
         return
+    else:
+        print(f"Chat is in setup stage: {setup_stage}")
     if setup_stage == 'contract':
         print(f"Received contract address in group {update.effective_chat.id}")
         handle_contract_address(update, context)
@@ -3635,7 +3651,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             context.job_queue.run_once( # Schedule the deletion of the join message after 5 minutes
                 delete_join_message,
-                when=300,
+                when=300, # TODO: Make this after {verification_timeout}
                 context={'chat_id': chat_id, 'message_id': msg.message_id, 'user_id': user_id}
             )
 
@@ -3930,7 +3946,7 @@ def delete_join_message(context: CallbackContext) -> None:
         print(f"Failed to delete join message {message_id} for user {user_id} in chat {chat_id}: {e}")
 # endregion User Authentication
 
-#region Ethereum Logic
+#region Crypto Logic
 
 #region Chart
 def fetch_ohlcv_data(time_frame, chain, liquidity_address):
@@ -4267,7 +4283,7 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
         update.message.reply_text("An unexpected error occurred while fetching the token price.")
 #endregion Price Fetching
 
-#endregion Ethereum Logic
+#endregion Crypto Logic
 
 #region Admin Controls
 def admin_commands(update: Update, context: CallbackContext) -> None:
@@ -4323,15 +4339,7 @@ def mute(update: Update, context: CallbackContext) -> None:
             user_id = reply_to_message.from_user.id
             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
 
-        chat_admins = context.bot.get_chat_administrators(chat_id)  # Get list of admins
-        admin_user_ids = [admin.user.id for admin in chat_admins]
-        bot_id = context.bot.id
-
-        if int(user_id) in admin_user_ids or int(user_id) == bot_id:  # Check if the user is an admin or the bot
-            msg = update.message.reply_text("Nice try lol")
-            if msg is not None:
-                track_message(msg)
-            return
+        if is_bot_or_admin(update, context, user_id): return
 
         context.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=ChatPermissions(can_send_messages=False))
         msg = update.message.reply_text(f"User {username} has been muted.")
@@ -4414,15 +4422,7 @@ def warn(update: Update, context: CallbackContext):
             user_id = str(reply_to_message.from_user.id)
             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
 
-        chat_admins = context.bot.get_chat_administrators(chat_id)  # Get list of admins
-        admin_user_ids = [admin.user.id for admin in chat_admins]
-        bot_id = context.bot.id
-
-        if int(user_id) in admin_user_ids or int(user_id) == bot_id:  # Check if the user is an admin or the bot
-            msg = update.message.reply_text("Nice try lol")
-            if msg is not None:
-                track_message(msg)
-            return
+        if is_bot_or_admin(update, context, user_id): return
         
         try:
             doc_snapshot = group_doc.get()
@@ -4534,6 +4534,8 @@ def kick(update: Update, context: CallbackContext) -> None:
         if reply_to_message:
             user_id = reply_to_message.from_user.id
             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
+
+        if is_bot_or_admin(update, context, user_id): return
 
         context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
         msg = update.message.reply_text(f"User {username} has been kicked.")
@@ -4652,7 +4654,7 @@ def allow(update: Update, context: CallbackContext):
                 URL_PATTERN.match(command_text) or 
                 DOMAIN_PATTERN.match(command_text)):
             msg = update.message.reply_text(
-                "Invalid format. Only Ethereum addresses, URLs, or domain names can be added to the allowlist."
+                "Invalid format. Only crypto addresses, URLs, or domain names can be added to the allowlist."
             )
             if msg is not None:
                 track_message(msg)
