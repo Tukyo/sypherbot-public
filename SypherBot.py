@@ -310,12 +310,13 @@ bot = Bot(token=TELEGRAM_TOKEN)
 LOG_CHAT = "-1002087245760"
 LOGGING_TIMEZONE = "America/Los_Angeles"
 MAX_TELEGRAM_MESSAGE_LENGTH = 4096
+LOG_INTERVAL = 30
 class TelegramLogger: # Batch all logs and send to the logging channel for debugging in telegram
     def __init__(self):
         self.original_stdout = sys.stdout  # Keep a reference to the original stdout
         self.original_stderr = sys.stderr # Keep a reference to the original stderr
         self.log_buffer = []  # Buffer to store logs
-        self.flush_interval = 10  # Send logs every 10 seconds
+        self.flush_interval = LOG_INTERVAL  # Send logs every interval
         self.timer = Timer(self.flush_interval, self.flush_logs)  # Timer for batching
         self.timer.start()
 
@@ -488,6 +489,7 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         group_doc.delete()  # Directly delete the group document
         clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
+#region Monitoring
 def start_monitoring_groups():
     groups_snapshot = db.collection('groups').get()
     for group_doc in groups_snapshot:
@@ -529,6 +531,7 @@ def schedule_group_monitoring(group_data):
             print(f"Web3 instance not connected for group {group_id} on chain {chain}")
     else:
         print(f"No token info found for group {group_id} - Not scheduling monitoring.")
+#endregion Monitoring
 
 def is_user_admin(update: Update, context: CallbackContext) -> bool:
     chat_id = update.effective_chat.id
@@ -650,6 +653,24 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         print(f"Failed to fetch group info: {e}")
         return None  # Error fetching group data
 
+def get_query_info(update, get_user=True):
+    query = update.callback_query
+    if query is None:
+        print("Error: Callback query is None.", file=sys.stderr)
+        return None if not get_user else (None, None)
+
+    query.answer()  # Safely answer the query
+    if get_user:
+        if query.from_user is None:
+            print("Error: No user information in callback query.", file=sys.stderr)
+            return query, None
+        print(f"Query data returned for user {query.from_user.id}")
+        return query, query.from_user.id
+    else:
+        print(f"Query data returned without user_id")
+        return query  # Return only the query if get_user is False
+
+#region Caching
 group_info_cache = {}
 def cache_group_info(group_id: str, group_data: dict, group_doc: object) -> None: # Caches the group data and document reference for a specific group ID.
     group_id = str(group_id)
@@ -678,33 +699,10 @@ def clear_group_cache(group_id: str) -> None: # Clears the cache for a specific 
         print(f"Cache cleared for group {group_id}.")
     else:
         print(f"No cache entry found for group {group_id}.")
-
-def is_allowed(message, allowlist, pattern): # Check if any detected matches in the message are present in the allowlist.
-    print(f"Pattern found, checking message: {message}")
-
-    matches = pattern.findall(message)
-    for match in matches:
-        if match in allowlist:
-            return True
-    return False
-
-def get_query_info(update, get_user=True):
-    query = update.callback_query
-    if query is None:
-        print("Error: Callback query is None.", file=sys.stderr)
-        return None if not get_user else (None, None)
-
-    query.answer()  # Safely answer the query
-    if get_user:
-        if query.from_user is None:
-            print("Error: No user information in callback query.", file=sys.stderr)
-            return query, None
-        print(f"Query data returned for user {query.from_user.id}")
-        return query, query.from_user.id
-    else:
-        print(f"Query data returned without user_id")
-        return query  # Return only the query if get_user is False
-
+#endregion Caching
+##
+#
+##
 #region Message Handling
 def rate_limit_check(): # Later TODO: Implement rate limiting PER GROUP
     print("Checking rate limit...")
@@ -901,6 +899,15 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
         print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
         clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
+def is_allowed(message, allowlist, pattern): # Check if any detected matches in the message are present in the allowlist.
+    print(f"Pattern found, checking message: {message}")
+
+    matches = pattern.findall(message)
+    for match in matches:
+        if match in allowlist:
+            return True
+    return False
+
 def delete_blocked_addresses(update: Update, context: CallbackContext):
     print("Checking message for unallowed addresses...")
     
@@ -1043,7 +1050,9 @@ def store_message_id(context, message_id):
 #
 ##
 #endregion Bot Logic
-
+##
+#
+##
 #region Bot Setup
 def menu_change(context: CallbackContext, update: Update):
     messages_to_delete = [ 'setup_bot_message' ]
@@ -1093,13 +1102,6 @@ def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> 
     elif setup_stage == 'liquidity':
         print(f"Received liquidity address in group {update.effective_chat.id}")
         handle_liquidity_address(update, context)
-    elif setup_stage == 'ABI':
-        if update.message.text:
-            update.message.reply_text("Please upload the ABI as a JSON file.")
-            pass
-        elif update.message.document:
-            print(f"Received ABI document in group {update.effective_chat.id}")
-            handle_ABI(update, context)
     elif setup_stage == 'website':
         print(f"Received website URL in group {update.effective_chat.id}")
         handle_website_url(update, context)
@@ -2476,12 +2478,11 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
         [
-            InlineKeyboardButton("Contract", callback_data='setup_contract'),
-            InlineKeyboardButton("Liquidity", callback_data='setup_liquidity')
+            InlineKeyboardButton("Chain", callback_data='setup_chain')
         ],
         [
-            InlineKeyboardButton("Chain", callback_data='setup_chain'),
-            InlineKeyboardButton("ABI", callback_data='setup_ABI')
+            InlineKeyboardButton("Contract", callback_data='setup_contract'),
+            InlineKeyboardButton("Liquidity", callback_data='setup_liquidity')
         ],
         [
             InlineKeyboardButton("Check Token Details", callback_data='check_token_details'),
@@ -2502,9 +2503,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='*🔑 Crypto Setup 🔑*\n\n'
         'Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\n'
-        '*Please Note:*\n'
-        '• ABI is *required* for the Buybot functionality to work and for token details to propagate correctly.\n'
-        '• Currently, this functionality is only setup for ETH paired tokens.\n\n'
+        '• This functionality currently is only setup for ETH paired tokens.\n\n'
         '*⚠️ Updating Token Details ⚠️*\n'
         'To enter new token details, you must click *Reset Token Details* first.',
         parse_mode='markdown',
@@ -2633,89 +2632,6 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 
-def setup_ABI(update: Update, context: CallbackContext) -> None:
-    msg = None
-    query, user_id = get_query_info(update)
-    
-    if is_user_owner(update, context, user_id):
-
-        keyboard = [
-            [InlineKeyboardButton("Example abi.json", callback_data='example_abi')],
-            [InlineKeyboardButton("Back", callback_data='setup_crypto')]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        menu_change(context, update)
-
-        msg = context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='*📝 ABI Setup 📝*\n\nPlease upload your ABI in .json format.\n\n *Example file syntax:*\n```\n[\n    {\n        "inputs": [],\n        "stateMutability": "nonpayable",\n        "type": "constructor"\n    },\n    {\n        "anonymous": false,\n        "inputs": [\n            {\n                "indexed": true,\n                "internalType": "address",\n                "name": "owner",\n                "type": "address"\n            },\n            {\n                "indexed": true,\n                "internalType": "address",\n                "name": "spender",\n                "type": "address"\n            },\n            {\n                "indexed": false,\n                "internalType": "uint256",\n                "name": "value",\n                "type": "uint256"\n            }\n        ],\n        "name": "Approval",\n       "type": "event"\n    }\n]\n```',
-            parse_mode='markdown',
-            reply_markup=reply_markup
-        )
-        context.chat_data['setup_stage'] = 'ABI'
-        store_message_id(context, msg.message_id)
-        print("Requesting ABI file.")
-
-        if msg is not None:
-            track_message(msg)
-
-def handle_ABI(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
-
-    if is_user_owner(update, context, user_id):
-        msg = None
-        if context.chat_data.get('setup_stage') == 'ABI':
-            document = update.message.document
-            print(f"MIME type: {document.mime_type}")
-            if document.mime_type == 'application/json':
-                file = context.bot.getFile(document.file_id)
-                file.download('temp_abi.json')
-                with open('temp_abi.json', 'r') as file:
-                    abi = json.load(file)  # Parse the ABI
-                    group_id = update.effective_chat.id
-                    print(f"Adding ABI to group {group_id}")
-                    group_doc = fetch_group_info(update, context, return_doc=True)
-                    group_doc.update({'token.abi': abi})
-                    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-                    context.chat_data['setup_stage'] = None
-                    msg = update.message.reply_text("ABI has been successfully saved.")
-
-                    complete_token_setup(group_id, context)
-            else:
-                msg = update.message.reply_text("Make sure the file is a JSON file, and you are using a desktop device.")
-            
-        store_message_id(context, msg.message_id)
-
-        if msg is not None:
-            track_message(msg)
-
-def send_example_abi(update: Update, context: CallbackContext) -> None:
-    msg = None
-    query = update.callback_query
-    query.answer()
-
-    if is_user_owner(update, context):
-        base_dir = os.path.dirname(__file__)
-        abi_path = os.path.join(base_dir, 'assets', 'example_abi.json')
-
-        with open(abi_path, 'rb') as file:
-            msg = context.bot.send_document(
-                chat_id=update.effective_user.id,
-                document=file,
-                filename='abi.json',
-                caption='Here is an example ABI file.'
-            )
-        
-        msg = query.message.reply_text("Example ABI file sent to your DM.")
-
-        store_message_id(context, msg.message_id)
-    else:
-        print("User is not the owner.")
-
-    if msg is not None:
-        track_message(msg)
-
 def setup_chain(update: Update, context: CallbackContext) -> None:
     msg = None
     query, user_id = get_query_info(update)
@@ -2792,11 +2708,6 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     if not token_data:
         print("Token data not found for this group.")
         return
-
-    if 'abi' not in token_data: # Get the contract address, ABI, and chain from the group data
-        print(f"ABI not found in group {group_id}, token setup incomplete.")
-        return
-    abi = token_data.get('abi')
     
     if 'contract_address' not in token_data:
         print(f"Contract address not found in group {group_id}, token setup incomplete.")
@@ -2812,6 +2723,12 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     if not web3:
         print(f"Web3 provider not found for chain {chain}, token setup incomplete.")
         return
+    
+    base_dir = os.path.dirname(__file__)
+    abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
+
+    with open(abi_path, 'r') as abi_file:
+        abi = json.load(abi_file)
 
     contract = web3.eth.contract(address=contract_address, abi=abi)
 
@@ -3559,9 +3476,11 @@ def handle_medium_buy(update: Update, context: CallbackContext) -> None:
 #
 ##
 #endregion Premium Setup
-
+##
+#
+##
 #endregion Bot Setup
-
+#
 #region User Authentication
 def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
@@ -3943,9 +3862,11 @@ def delete_join_message(context: CallbackContext) -> None:
     except Exception as e:
         print(f"Failed to delete join message {message_id} for user {user_id} in chat {chat_id}: {e}")
 # endregion User Authentication
-
+#
 #region Crypto Logic
-
+##
+#
+##
 #region Chart
 def fetch_ohlcv_data(time_frame, chain, liquidity_address):
     now = datetime.now()
@@ -4010,11 +3931,17 @@ def plot_candlestick_chart(data_frame, group_id):
     mpf.plot(data_frame, type='candle', style=s, volume=True, savefig=save_path)
     print(f"Chart saved to {save_path}")
 #endregion Chart
-
+#
 #region Buybot
 def monitor_transfers(web3_instance, liquidity_address, group_data):
+    base_dir = os.path.dirname(__file__)
+    abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
+
+    with open(abi_path, 'r') as abi_file:
+        abi = json.load(abi_file)
+    
     contract_address = group_data['token']['contract_address']
-    abi = group_data['token']['abi']
+    
     contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
     # Initialize static tracking of the last seen block
@@ -4137,7 +4064,7 @@ def send_buy_message(text, group_id, reply_markup=None):
         except Exception as e:
             print(f"Error sending rate limit message: {e}")
 #endregion Buybot
-
+#
 #region Price Fetching
 def get_token_price_in_usd(chain, lp_address):
     """
@@ -4280,9 +4207,11 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
         print(f"Unexpected error occurred: {e}")
         update.message.reply_text("An unexpected error occurred while fetching the token price.")
 #endregion Price Fetching
-
+##
+#
+##
 #endregion Crypto Logic
-
+#
 #region Admin Controls
 def admin_commands(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -4752,7 +4681,7 @@ def clear_cache(update: Update, context: CallbackContext):
     if msg is not None:
         track_message(msg)
 #endregion Admin Controls
-
+#
 #region User Controls
 def commands(update: Update, context: CallbackContext) -> None:
     msg = None
