@@ -1,1 +1,1 @@
-worker: python SypherBot.py
+worker: python scripts/sypherbot.py

@@ -9,6 +9,7 @@ import inspect
 import requests
 import telegram
 import threading
+import config # config.py located in scripts folder
 import pandas as pd
 import firebase_admin
 import mplfinance as mpf
@@ -93,84 +94,6 @@ WORD_8 = os.getenv("WORD_8")
 RELAXED_TRUST = int(os.getenv('RELAXED_TRUST'))
 MODERATE_TRUST = int(os.getenv('MODERATE_TRUST'))
 STRICT_TRUST = int(os.getenv('STRICT_TRUST'))
-
-endpoints = {
-    "ARBITRUM": os.getenv('ARBITRUM_ENDPOINT'),
-    "AVALANCHE": os.getenv('AVALANCHE_ENDPOINT'),
-    "BASE": os.getenv('BASE_ENDPOINT'),
-    "BSC": os.getenv('BSC_ENDPOINT'),
-    "ETHEREUM": os.getenv('ETHEREUM_ENDPOINT'),
-    "FANTOM": os.getenv('FANTOM_ENDPOINT'),
-    "HARMONY": os.getenv('HARMONY_ENDPOINT'),
-    "MANTLE": os.getenv('MANTLE_ENDPOINT'),
-    "OPTIMISM": os.getenv('OPTIMISM_ENDPOINT'),
-    "POLYGON": os.getenv('POLYGON_ENDPOINT')
-}
-
-websockets = { # Later, TODO: Add websocket endpoints that are commented out
-    "ARBITRUM": os.getenv('ARBITRUM_WEBSOCKET'),
-    # "AVALANCHE": os.getenv('AVALANCHE_WEBSOCKET'),
-    "BASE": os.getenv('BASE_WEBSOCKET'),
-    # "BSC": os.getenv('BSC_WEBSOCKET'),
-    "ETHEREUM": os.getenv('ETHEREUM_WEBSOCKET'),
-    "FANTOM": os.getenv('FANTOM_WEBSOCKET'),
-    # "HARMONY": os.getenv('HARMONY_WEBSOCKET'),
-    # "MANTLE": os.getenv('MANTLE_WEBSOCKET'),
-    "OPTIMISM": os.getenv('OPTIMISM_WEBSOCKET'),
-    "POLYGON": os.getenv('POLYGON_WEBSOCKET')
-}
-
-web3_instances = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in endpoints.items()}
-for network, web3_instance in web3_instances.items():
-    if web3_instance.is_connected():
-        print(f"Successfully connected to {network}")
-    else:
-        print(f"Failed to connect to {network}")
-
-web3_websockets = {network: Web3(Web3.LegacyWebSocketProvider(endpoint)) for network, endpoint in websockets.items()}
-for network, web3_instance in web3_websockets.items():
-    if web3_instance.is_connected():
-        print(f"Successfully connected to {network} via WebSocket")
-    else:
-        print(f"Failed to connect to {network} via WebSocket")
-
-eth_web3 = web3_instances['ETHEREUM']
-
-blockscanners = { #Later TODO: Add blockscanners that are commented out
-    "ARBITRUM": "arbiscan.io",
-    # "AVALANCHE": "snowtrace.io",
-    "BASE": "basescan.org",
-    # "BSC": "bscscan.com",
-    "ETHEREUM": "etherscan.io",
-    "FANTOM": "ftmscan.com",
-    # "HARMONY": "explorer.harmony.one",
-    # "MANTLE": "mantlescan.info",
-    "OPTIMISM": "optimistic.etherscan.io",
-    "POLYGON": "polygonscan.com"
-}
-
-# region Chainlink
-chainlink_address = eth_web3.to_checksum_address('0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419')
-
-chainlink_abi = """
-    [
-        {
-            "inputs": [],
-            "name": "latestRoundData",
-            "outputs": [
-                {"name": "roundId", "type": "uint80"},
-                {"name": "answer", "type": "int256"},
-                {"name": "startedAt", "type": "uint256"},
-                {"name": "updatedAt", "type": "uint256"},
-                {"name": "answeredInRound", "type": "uint80"}
-            ],
-            "stateMutability": "view",
-            "type": "function"
-        }
-    ]
-    """
-chainlink_contract = eth_web3.eth.contract(address=chainlink_address, abi=chainlink_abi)
-#endregion Chainlink
 
 #region Firebase
 FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
@@ -511,7 +434,7 @@ def schedule_group_monitoring(group_data):
     if token_info:
         chain = token_info.get('chain')
         liquidity_address = token_info.get('liquidity_address')
-        web3_instance = web3_instances.get(chain)
+        web3_instance = config.WEB3_INSTANCES.get(chain)
 
         if web3_instance and web3_instance.is_connected():
             existing_job = scheduler.get_job(job_id)  # Check for existing job with ID
@@ -2723,12 +2646,12 @@ def complete_token_setup(group_id: str, context: CallbackContext):
         print(f"Liquidity address not found in group {group_id}, token setup incomplete.")
         return
 
-    web3 = web3_instances.get(chain) # Get the Web3 instance for the chain
+    web3 = config.WEB3_INSTANCES.get(chain) # Get the Web3 instance for the chain
     if not web3:
         print(f"Web3 provider not found for chain {chain}, token setup incomplete.")
         return
     
-    base_dir = os.path.dirname(__file__)
+    base_dir = os.path.dirname(os.path.dirname(__file__))
     abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
 
     with open(abi_path, 'r') as abi_file:
@@ -3941,7 +3864,7 @@ def plot_candlestick_chart(data_frame, group_id):
 #
 #region Buybot
 def monitor_transfers(web3_instance, liquidity_address, group_data):
-    base_dir = os.path.dirname(__file__)
+    base_dir = os.path.dirname(os.path.dirname(__file__))
     abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
 
     with open(abi_path, 'r') as abi_file:
@@ -4026,7 +3949,7 @@ def handle_transfer_event(event, group_data):
         return
 
     token_name = group_data['token'].get('symbol', 'TOKEN')
-    blockscanner = blockscanners.get(chain.upper())
+    blockscanner = config.BLOCKSCANNERS.get(chain.upper())
     
     if blockscanner:
         transaction_link = f"https://{blockscanner}/tx/{tx_hash}"
@@ -4106,7 +4029,7 @@ def get_token_price_in_usd(chain, lp_address):
 
 def check_eth_price():
     try:
-        latest_round_data = chainlink_contract.functions.latestRoundData().call()
+        latest_round_data = config.CHAINLINK_CONTRACT.functions.latestRoundData().call()
         price = latest_round_data[1] / 10 ** 8
         print(f"ETH price: {price}")
         return price
@@ -4120,7 +4043,7 @@ def get_uniswap_v3_position_data(chain, lp_address):
     Returns the token price in WETH.
     """
     try:
-        web3_instance = web3_instances.get(chain)  # Connect to the Uniswap V3 liquidity pool
+        web3_instance = config.WEB3_INSTANCES.get(chain)  # Connect to the Uniswap V3 liquidity pool
         if not web3_instance:
             print(f"Web3 instance for chain {chain} not found or not connected.")
             return None
@@ -4712,7 +4635,7 @@ def commands(update: Update, context: CallbackContext) -> None:
 
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            base_dir = os.path.dirname(__file__)
+            base_dir = os.path.dirname(os.path.dirname(__file__))
             image_path = os.path.join(base_dir, 'assets', 'banner.jpg')
 
             with open(image_path, 'rb') as photo:
@@ -4887,7 +4810,7 @@ def play(update: Update, context: CallbackContext) -> None:
         keyboard = [[InlineKeyboardButton("Click Here to Start a Game!", callback_data='startGame')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        base_dir = os.path.dirname(__file__)
+        base_dir = os.path.dirname(os.path.dirname(__file__))
         photo_path = os.path.join(base_dir, 'assets', 'banner.gif')
         
         with open(photo_path, 'rb') as photo:
@@ -5060,7 +4983,9 @@ def handle_guess(update: Update, context: CallbackContext) -> None:
         track_message(msg)
 
 def fetch_random_word() -> str:
-    with open('words.json', 'r') as file:
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    words_path  = os.path.join(base_dir, 'config', 'words.json')
+    with open(words_path, 'r') as file:
         data = json.load(file)
         words = data['words']
         return random.choice(words)
