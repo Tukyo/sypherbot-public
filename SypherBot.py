@@ -2708,16 +2708,20 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     if not token_data:
         print("Token data not found for this group.")
         return
+
+    if 'chain' not in token_data:
+        print(f"Chain not found in group {group_id}, token setup incomplete.")
+        return
+    chain = token_data.get('chain')
     
     if 'contract_address' not in token_data:
         print(f"Contract address not found in group {group_id}, token setup incomplete.")
         return
     contract_address = token_data['contract_address']
 
-    if 'chain' not in token_data:
-        print(f"Chain not found in group {group_id}, token setup incomplete.")
+    if 'liquidity_address' not in token_data:
+        print(f"Liquidity address not found in group {group_id}, token setup incomplete.")
         return
-    chain = token_data.get('chain')
 
     web3 = web3_instances.get(chain) # Get the Web3 instance for the chain
     if not web3:
@@ -2752,7 +2756,10 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
 
-    # schedule_group_monitoring(group_data)
+    if group_data.get('premium', False):  # Check if premium is True
+        schedule_group_monitoring(group_data) # Instantly start monitoring the group
+    else:
+        print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
 
     msg = context.bot.send_message(
         chat_id=group_id,
