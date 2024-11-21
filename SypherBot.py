@@ -4,6 +4,7 @@ import sys
 import time
 import pytz
 import json
+import atexit
 import random
 import inspect
 import requests
@@ -198,9 +199,7 @@ cred = credentials.Certificate({
     "client_x509_cert_url": FIREBASE_CLIENT_X509_CERT_URL
 })
 
-firebase_admin.initialize_app(cred, {
-    'storageBucket': FIREBASE_STORAGE_BUCKET
-})
+firebase_admin.initialize_app(cred, { 'storageBucket': FIREBASE_STORAGE_BUCKET })
 
 db = firestore.client()
 bucket = storage.bucket()
@@ -287,6 +286,14 @@ anti_spam = AntiSpam(rate_limit=ANTI_SPAM_RATE_LIMIT, time_window=ANTI_SPAM_TIME
 anti_raid = AntiRaid(user_amount=ANTI_RAID_USER_AMOUNT, time_out=ANTI_RAID_TIME_OUT, anti_raid_time=ANTI_RAID_LOCKDOWN_TIME)
 
 scheduler = BackgroundScheduler()
+
+def shutdown_scheduler():
+    if scheduler.running:
+        print("Shutting down APScheduler...")
+        scheduler.shutdown(wait=False)  # Ensure the scheduler stops without waiting for running jobs
+        print("APScheduler shut down successfully.")
+
+atexit.register(shutdown_scheduler)
 
 BOT_USERNAME = "sypher_robot"
 
@@ -491,6 +498,10 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 def start_monitoring_groups():
+    if scheduler.running:
+        print("Clearing existing jobs before restarting scheduler...")
+        scheduler.remove_all_jobs()
+
     groups_snapshot = db.collection('groups').get()
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
@@ -501,9 +512,15 @@ def start_monitoring_groups():
         else:
             print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
 
-    scheduler.start()
+    if not scheduler.running:
+        print("Starting scheduler...")
+        scheduler.start()
 
 def schedule_group_monitoring(group_data):
+    if not scheduler.running:
+        print("Scheduler is not running. Skipping job scheduling.")
+        return
+    
     group_id = str(group_data['group_id'])
     job_id = f"monitoring_{group_id}"
     token_info = group_data.get('token')
