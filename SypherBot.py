@@ -1028,56 +1028,9 @@ def store_message_id(context, message_id):
     else:
         context.user_data['setup_bot_message'] = [message_id]
 #endregion Message Handling
-
+#
+##
 #endregion Bot Logic
-
-
-
-
-
-
-
-
-
-
-
-SETUP_CALLBACK_DATA = [
-    'enable_mute',
-    'disable_mute'
-]
-def handle_setup_callbacks(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-    update = Update(update.update_id, message=query.message)
-
-    if query.data in SETUP_CALLBACK_DATA:
-        if is_user_owner(update, context, user_id):
-            if query.data == 'enable_mute':
-                enable_mute(update, context)
-            elif query.data == 'disable_mute':
-                disable_mute(update, context)
-        else:
-            print("User is not the owner.")
-        print(f"Callback {query.data} handled.")
-    else:
-        print(f"Callback {query.data} not found in setup_callback_data.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #region Bot Setup
 def menu_change(context: CallbackContext, update: Update):
@@ -1262,7 +1215,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
             InlineKeyboardButton("Commands", callback_data='setup_commands')
         ],
         [
-            InlineKeyboardButton("Authentication", callback_data='setup_verification'),
+            InlineKeyboardButton("Authentication", callback_data='setup_authentication'),
             InlineKeyboardButton("Crypto", callback_data='setup_crypto')
         ],
         [
@@ -1311,18 +1264,40 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     })
     clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
-#region Admin Setup
-def setup_admin_callback(update: Update, context: CallbackContext) -> None:
+SETUP_CALLBACK_DATA = [
+    'setup_admin', 'reset_admin_settings',
+    'setup_mute', 'enable_mute', 'disable_mute', 'check_mute_list',
+    'setup_warn', 'enable_warn', 'disable_warn', 'check_warn_list', 'set_max_warns',
+    'setup_allowlist', 'enable_allowlist', 'disable_allowlist', 'check_allowlist', 'clear_allowlist', 'setup_website',
+    'setup_blocklist', 'enable_blocklist', 'disable_blocklist', 'check_blocklist', 'clear_blocklist',
+    'setup_commands',
+    'setup_authentication',
+    'simple_authentication', 'math_authentication', 'word_authentication', 'timeout_authentication', 'check_authentication_settings',
+    'setup_crypto', 'reset_token_details',
+    'setup_premium',
+    'setup_welcome_message_header', 'setup_buybot_message_header',
+    'enable_sypher_trust', 'disable_sypher_trust', 'sypher_trust_preferences', 'sypher_trust_relaxed', 'sypher_trust_moderate', 'sypher_trust_strict',
+    'setup_buybot'
+] # Ensure callback data names match the function names so that you can access them dynamically via globals()
+def handle_setup_callbacks(update: Update, context: CallbackContext) -> None:
     query, user_id = get_query_info(update)
-
     update = Update(update.update_id, message=query.message)
 
-    if is_user_owner(update, context, user_id):
-        if query.data == 'setup_admin':
-            setup_admin(update, context)
-    else:
-        print("User is not the owner.")
+    chosen_callback = query.data
 
+    if chosen_callback in SETUP_CALLBACK_DATA:
+        if is_user_owner(update, context, user_id):
+            try:
+                globals()[chosen_callback](update, context) # Dynamically invoke the function
+                print(f"Callback {chosen_callback} handled.")
+            except KeyError:
+                print(f"Function {chosen_callback} does not exist.")
+        else:
+            print("User is not the owner.")
+    else:
+        print(f"Callback {chosen_callback} not found in SETUP_CALLBACK_DATA.")
+
+#region Admin Setup
 def setup_admin(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
@@ -1361,18 +1336,39 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
+def reset_admin_settings(update: Update, context: CallbackContext) -> None:
+    group_id = update.effective_chat.id  # Get the group ID
+    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
+
+    group_data, group_doc = result  # Unpack the tuple
+
+    if not group_data: # Log if group data is missing
+        print(f"No group data found for group ID {group_id}. Cannot reset admin settings.")
+        update.message.reply_text("Group settings not found. Please ensure the group is properly registered.")
+        return
+
+    new_admin_settings = { # Reset admin settings
+        'mute': False,
+        'warn': False,
+        'max_warns': 3,
+        'allowlist': False,
+        'blocklist': False
+    }
+    group_doc.update({'admin': new_admin_settings})
+    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+
+    msg = update.message.reply_text("Admin settings have been reset to default.")
+    store_message_id(context, msg.message_id)
+
+    print(f"Admin settings for group {group_id} have been reset to: {new_admin_settings}")
+
+    if msg is not None:
+        track_message(msg)
+
 #region Mute Setup
-def setup_mute_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_mute':
-        if is_user_owner(update, context, user_id):
-            setup_mute(update, context)
-        else:
-            print("User is not the owner.")
-
 def setup_mute(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
@@ -1402,17 +1398,6 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def enable_mute_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'enable_mute':
-        if is_user_owner(update, context, user_id):
-            enable_mute(update, context)
-        else:
-            print("User is not the owner.")
 
 def enable_mute(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1447,17 +1432,6 @@ def enable_mute(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def disable_mute_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'disable_mute':
-        if is_user_owner(update, context, user_id):
-            disable_mute(update, context)
-        else:
-            print("User is not the owner.")
-
 def disable_mute(update: Update, context: CallbackContext) -> None:
     msg = None
 
@@ -1490,17 +1464,6 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def check_mute_list_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'check_mute_list':
-        if is_user_owner(update, context, user_id):
-            check_mute_list(update, context)
-        else:
-            print("User is not the owner.")
 
 def check_mute_list(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1539,19 +1502,8 @@ def check_mute_list(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 #endregion Mute Setup
-
+#
 #region Warn Setup
-def setup_warn_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_warn':
-        if is_user_owner(update, context, user_id):
-            setup_warn(update, context)
-        else:
-            print("User is not the owner.")
-
 def setup_warn(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
@@ -1582,17 +1534,6 @@ def setup_warn(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def enable_warn_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'enable_warn':
-        if is_user_owner(update, context, user_id):
-            enable_warn(update, context)
-        else:
-            print("User is not the owner.")
 
 def enable_warn(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1627,17 +1568,6 @@ def enable_warn(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def disable_warn_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'disable_warn':
-        if is_user_owner(update, context, user_id):
-            disable_warn(update, context)
-        else:
-            print("User is not the owner.")
-
 def disable_warn(update: Update, context: CallbackContext) -> None:
     msg = None
 
@@ -1670,17 +1600,6 @@ def disable_warn(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def check_warn_list_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'check_warn_list':
-        if is_user_owner(update, context, user_id):
-            check_warn_list(update, context)
-        else:
-            print("User is not the owner.")
 
 def check_warn_list(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1724,17 +1643,6 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def set_max_warns_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'set_max_warns':
-        if is_user_owner(update, context, user_id):
-            set_max_warns(update, context)
-        else:
-            print("User is not the owner.")
 
 def set_max_warns(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1781,19 +1689,8 @@ def handle_max_warns(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 #endregion Warn Setup
-
+#
 #region Allowlist Setup
-def setup_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_allowlist':
-        if is_user_owner(update, context, user_id):
-            setup_allowlist(update, context)
-        else:
-            print("User is not the owner.")
-
 def setup_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
@@ -1830,18 +1727,6 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def enable_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'enable_allowlist':
-        if is_user_owner(update, context, user_id):
-            print("User is owner. Proceeding to enable allowlist.")
-            enable_allowlist(update, context)
-        else:
-            print("User is not the owner.")
 
 def enable_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1880,18 +1765,6 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def disable_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'disable_allowlist':
-        if is_user_owner(update, context, user_id):
-            print("User is owner. Proceeding to disable allowlist.")
-            disable_allowlist(update, context)
-        else:
-            print("User is not the owner.")
-
 def disable_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
@@ -1928,7 +1801,7 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def setup_website_callback(update: Update, context: CallbackContext) -> None:
+def setup_website(update: Update, context: CallbackContext) -> None:
     msg = None
     query, user_id = get_query_info(update)
 
@@ -1981,15 +1854,6 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 
-def check_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    if query.data == 'check_allowlist':
-        if is_user_owner(update, context, user_id):
-            check_allowlist(update, context)
-        else:
-            print("User is not the owner.")
-
 def check_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
@@ -2012,17 +1876,6 @@ def check_allowlist(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def clear_allowlist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'clear_allowlist':
-        if is_user_owner(update, context, user_id):
-            clear_allowlist(update, context)
-        else:
-            print("User is not the owner.")
 
 def clear_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2058,19 +1911,8 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 #endregion Allowlist Setup
-
+#
 #region Blocklist Setup
-def setup_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_blocklist':
-        if is_user_owner(update, context, user_id):
-            setup_blocklist(update, context)
-        else:
-            print("User is not the owner.")
-
 def setup_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
@@ -2105,17 +1947,6 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def enable_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'enable_blocklist':
-        if is_user_owner(update, context, user_id):
-            enable_blocklist(update, context)
-        else:
-            print("User is not the owner.")
 
 def enable_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2153,17 +1984,6 @@ def enable_blocklist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def disable_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'disable_blocklist':
-        if is_user_owner(update, context, user_id):
-            disable_blocklist(update, context)
-        else:
-            print("User is not the owner.")
-
 def disable_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
 
@@ -2200,17 +2020,6 @@ def disable_blocklist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def check_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'check_blocklist':
-        if is_user_owner(update, context, user_id):
-            check_blocklist(update, context)
-        else:
-            print("User is not the owner.")
-
 def check_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
 
@@ -2246,17 +2055,6 @@ def check_blocklist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def clear_blocklist_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'clear_blocklist':
-        if is_user_owner(update, context, user_id):
-            clear_blocklist(update, context)
-        else:
-            print("User is not the owner.")
-
 def clear_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
 
@@ -2291,64 +2089,13 @@ def clear_blocklist(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 #endregion Blocklist Setup
-
-def reset_admin_settings_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'reset_admin_settings':
-        if is_user_owner(update, context, user_id):
-            reset_admin_settings(update, context)
-        else:
-            print("User is not the owner.")
-
-def reset_admin_settings(update: Update, context: CallbackContext) -> None:
-    group_id = update.effective_chat.id  # Get the group ID
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
-    if not result:
-        print("Failed to fetch group info. No action taken.")
-        return
-
-    group_data, group_doc = result  # Unpack the tuple
-
-    if not group_data: # Log if group data is missing
-        print(f"No group data found for group ID {group_id}. Cannot reset admin settings.")
-        update.message.reply_text("Group settings not found. Please ensure the group is properly registered.")
-        return
-
-    new_admin_settings = { # Reset admin settings
-        'mute': False,
-        'warn': False,
-        'max_warns': 3,
-        'allowlist': False,
-        'blocklist': False
-    }
-    group_doc.update({'admin': new_admin_settings})
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-
-    msg = update.message.reply_text("Admin settings have been reset to default.")
-    store_message_id(context, msg.message_id)
-
-    print(f"Admin settings for group {group_id} have been reset to: {new_admin_settings}")
-
-    if msg is not None:
-        track_message(msg)
-
+#
+##
 #endregion Admin Setup
-
+##
+#
+##
 #region Commands Setup
-def setup_commands_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_commands':
-        if is_user_owner(update, context, user_id):
-            setup_commands(update, context)
-        else:
-            print("User is not the owner.")
-
 def setup_commands(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
@@ -2445,30 +2192,22 @@ def check_command_status(update: Update, context: CallbackContext, command: str)
 
     commands = group_data.get('commands', {})
     return commands.get(command, False)  # Default to False if the command is not explicitly set
-
 #endregion Commands Setup
-
+##
+#
+##
 #region Authentication Setup
-def setup_verification_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if is_user_owner(update, context, user_id):
-        if query.data == 'setup_verification':
-            setup_verification(update, context)
-
-def setup_verification(update: Update, context: CallbackContext) -> None:
+def setup_authentication(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
         [
-            InlineKeyboardButton("Simple", callback_data='simple_verification'),
-            InlineKeyboardButton("Math", callback_data='math_verification'),
-            InlineKeyboardButton("Word", callback_data='word_verification')
+            InlineKeyboardButton("Simple", callback_data='simple_authentication'),
+            InlineKeyboardButton("Math", callback_data='math_authentication'),
+            InlineKeyboardButton("Word", callback_data='word_authentication')
         ],
         [
-            InlineKeyboardButton("Authentication Timeout", callback_data='timeout_verification'),
-            InlineKeyboardButton("Current Authentication Settings", callback_data='check_verification_settings')
+            InlineKeyboardButton("Authentication Timeout", callback_data='timeout_authentication'),
+            InlineKeyboardButton("Current Authentication Settings", callback_data='check_authentication_settings')
         ],
         [InlineKeyboardButton("Back", callback_data='setup_home')]
     ]
@@ -2487,18 +2226,7 @@ def setup_verification(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def simple_verification_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'simple_verification':
-        if is_user_owner(update, context, user_id):
-            simple_verification(update, context)
-        else:
-            print("User is not the owner.")
-
-def simple_verification(update: Update, context: CallbackContext) -> None:
+def simple_authentication(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
     result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
@@ -2529,7 +2257,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
     menu_change(context, update)
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        [InlineKeyboardButton("Back", callback_data='setup_authentication')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -2544,18 +2272,7 @@ def simple_verification(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def math_verification_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'math_verification':
-        if is_user_owner(update, context, user_id):
-            math_verification(update, context)
-        else:
-            print("User is not the owner.")
-
-def math_verification(update: Update, context: CallbackContext) -> None:
+def math_authentication(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
     result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
@@ -2584,7 +2301,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
     clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        [InlineKeyboardButton("Back", callback_data='setup_authentication')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -2603,18 +2320,7 @@ def math_verification(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def word_verification_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'word_verification':
-        if is_user_owner(update, context, user_id):
-            word_verification(update, context)
-        else:
-            print("User is not the owner.")
-
-def word_verification(update: Update, context: CallbackContext) -> None:
+def word_authentication(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
     result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
@@ -2647,7 +2353,7 @@ def word_verification(update: Update, context: CallbackContext) -> None:
     menu_change(context, update)
 
     keyboard = [
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        [InlineKeyboardButton("Back", callback_data='setup_authentication')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -2664,29 +2370,18 @@ def word_verification(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def timeout_verification_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'timeout_verification':
-        if is_user_owner(update, context, user_id):
-            timeout_verification(update, context)
-        else:
-            print("User is not the owner.")
-
-def timeout_verification(update: Update, context: CallbackContext) -> None:
+def timeout_authentication(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
         [
-            InlineKeyboardButton("1 Minute", callback_data='vtimeout_60'),
-            InlineKeyboardButton("10 Minutes", callback_data='vtimeout_600')
+            InlineKeyboardButton("1 Minute", callback_data='auth_timeout_60'),
+            InlineKeyboardButton("10 Minutes", callback_data='auth_timeout_600')
         ],
         [
-            InlineKeyboardButton("30 Minutes", callback_data='vtimeout_1800'),
-            InlineKeyboardButton("60 Minutes", callback_data='vtimeout_3600')
+            InlineKeyboardButton("30 Minutes", callback_data='auth_timeout_1800'),
+            InlineKeyboardButton("60 Minutes", callback_data='auth_timeout_3600')
         ],
-        [InlineKeyboardButton("Back", callback_data='setup_verification')]
+        [InlineKeyboardButton("Back", callback_data='setup_authentication')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -2708,14 +2403,11 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
     query, user_id = get_query_info(update)
 
     if is_user_owner(update, context, user_id):
-        # Extract the timeout value from the callback_data
-        timeout_seconds = int(query.data.split('_')[1])
+        timeout_seconds = int(query.data.split('_')[1]) # Extract the timeout value from the callback_data
 
-        # Call set_verification_timeout with the group_id and timeout_seconds
-        group_id = update.effective_chat.id
-        set_verification_timeout(group_id, timeout_seconds)
+        group_id = update.effective_chat.id # Call set_verification_timeout with the group_id and timeout_seconds
+        set_authentication_timeout(group_id, timeout_seconds)
 
-        # Send a confirmation message to the user
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=f"Authentication timeout set to {timeout_seconds // 60} minutes."
@@ -2725,8 +2417,7 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
         if msg is not None:
             track_message(msg)
 
-def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
-    # Sets the verification timeout for a specific group in the Firestore database.
+def set_authentication_timeout(group_id: int, timeout_seconds: int) -> None: # Sets the verification timeout for a specific group in the Firestore database.
     try:
         group_ref = db.collection('groups').document(str(group_id))
 
@@ -2739,37 +2430,26 @@ def set_verification_timeout(group_id: int, timeout_seconds: int) -> None:
     except Exception as e:
         print(f"Error setting verification timeout: {e}")
 
-def check_verification_settings_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'check_verification_settings':
-        if is_user_owner(update, context, user_id):
-            check_verification_settings(update, context)
-        else:
-            print("User is not the owner.")
-
-def check_verification_settings(update: Update, context: CallbackContext) -> None:
+def check_authentication_settings(update: Update, context: CallbackContext) -> None:
     msg = None
     group_data = fetch_group_info(update, context)
 
     if group_data is not None:
-        verification_info = group_data.get('verification_info', {})
-        verification_type = verification_info.get('verification_type', 'simple')
-        verification_timeout = verification_info.get('verification_timeout', 000)
+        authentication_info = group_data.get('verification_info', {})
+        authentication_type = authentication_info.get('verification_type', 'simple')
+        authentication_timeout = authentication_info.get('verification_timeout', 000)
 
         menu_change(context, update)
 
         keyboard = [
-            [InlineKeyboardButton("Back", callback_data='setup_verification')]
+            [InlineKeyboardButton("Back", callback_data='setup_authentication')]
         ]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"*🔒 Current Authentication Settings 🔒*\n\nAuthentication: {verification_type}\nTimeout: {verification_timeout // 60} minutes",
+            text=f"*🔒 Current Authentication Settings 🔒*\n\nAuthentication: {authentication_type}\nTimeout: {authentication_timeout // 60} minutes",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
@@ -2779,16 +2459,10 @@ def check_verification_settings(update: Update, context: CallbackContext) -> Non
     if msg is not None:
         track_message(msg)
 #endregion Authentication Setup
-
-#region Ethereum Setup
-def setup_crypto_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if is_user_owner(update, context, user_id):
-        setup_crypto(update, context)
-
+##
+#
+##
+#region Crypto Setup
 def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
@@ -3207,17 +2881,6 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def reset_token_details_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'reset_token_details':
-        if is_user_owner(update, context, user_id):
-            reset_token_details(update, context)
-        else:
-            print("User is not the owner.")
-
 def reset_token_details(update: Update, context: CallbackContext) -> None:
     msg = None
     result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
@@ -3242,18 +2905,11 @@ def reset_token_details(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-#endregion Ethereum Setup
-
+#endregion Crypto Setup
+##
+#
+##
 #region Premium Setup
-def setup_premium_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_premium':
-        if is_user_owner(update, context, user_id):
-            setup_premium(update, context)
-
 def setup_premium(update: Update, context: CallbackContext) -> None:
     msg = None
     keyboard = [
@@ -3313,17 +2969,6 @@ def is_premium_group(update: Update, context: CallbackContext) -> bool:
         return True
 
 #region Customization Setup
-def setup_welcome_message_header_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_welcome_message_header':
-        if is_user_owner(update, context, user_id):
-            setup_welcome_message_header(update, context)
-        else:
-            print("User is not the owner.")
-
 def setup_welcome_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
 
@@ -3400,17 +3045,6 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
             store_message_id(context, msg.message_id)
         if msg is not None:
             track_message(msg)
-
-def setup_buybot_message_header_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_buybot_message_header':
-        if is_user_owner(update, context, user_id):
-            setup_buybot_message_header(update, context)
-        else:
-            print("User is not the owner.")
 
 def setup_buybot_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -3493,19 +3127,10 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
         if msg is not None:
             track_message(msg)
 #endregion Customization Setup
-
+##
+#
+##
 #region Sypher Trust Setup
-def enable_sypher_trust_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'enable_sypher_trust':
-        if is_user_owner(update, context, user_id):
-            enable_sypher_trust(update, context)
-        else:
-            print("User is not the owner.")
-
 def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
     msg = None
     result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
@@ -3535,17 +3160,6 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def disable_sypher_trust_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'disable_sypher_trust':
-        if is_user_owner(update, context, user_id):
-            disable_sypher_trust(update, context)
-        else:
-            print("User is not the owner.")
-
 def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
     msg = None
     result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
@@ -3573,17 +3187,6 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def sypher_trust_preferences_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'sypher_trust_preferences':
-        if is_user_owner(update, context, user_id):
-            sypher_trust_preferences(update, context)
-        else:
-            print("User is not the owner.")
 
 def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -3621,17 +3224,6 @@ def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def sypher_trust_relaxed_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'sypher_trust_relaxed':
-        if is_user_owner(update, context, user_id):
-            sypher_trust_relaxed(update, context)
-        else:
-            print("User is not the owner.")
-
 def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
     msg = None
     result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
@@ -3657,17 +3249,6 @@ def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 
-def sypher_trust_moderate_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'sypher_trust_moderate':
-        if is_user_owner(update, context, user_id):
-            sypher_trust_moderate(update, context)
-        else:
-            print("User is not the owner.")
-
 def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
     msg = None
     result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
@@ -3692,17 +3273,6 @@ def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
 
     if msg is not None:
         track_message(msg)
-
-def sypher_trust_strict_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'sypher_trust_strict':
-        if is_user_owner(update, context, user_id):
-            sypher_trust_strict(update, context)
-        else:
-            print("User is not the owner.")
 
 def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -3779,19 +3349,10 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
         print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Still untrusted.")
         return False
 #endregion Sypher Trust Setup
-
+##
+#
+##
 #region Buybot Setup
-def setup_buybot_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'setup_buybot':
-        if is_user_owner(update, context, user_id):
-            setup_buybot(update, context)
-        else:
-            print("User is not the owner.")
-
 def setup_buybot(update: Update, context: CallbackContext) -> None:
     msg = None
 
@@ -3985,7 +3546,9 @@ def handle_medium_buy(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         track_message(msg)
 #endregion Buybot Setup
-
+##
+#
+##
 #endregion Premium Setup
 
 #endregion Bot Setup
@@ -4101,17 +3664,17 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
 
     if group_data:
         unverified_users = group_data.get('unverified_users', {})  # Get as dictionary
-        verification_info = group_data.get('verification_info', {})
-        verification_type = verification_info.get('verification_type', 'simple')
+        authentication_info = group_data.get('verification_info', {})
+        authentication_type = authentication_info.get('verification_type', 'simple')
 
-        print(f"Authentication type: {verification_type}")
+        print(f"Authentication type: {authentication_type}")
 
         if str(user_id) in unverified_users: # Check if the user ID is in the KEYS of the unverified_users mapping
-            if verification_type == 'simple':
+            if authentication_type == 'simple':
                 authenticate_user(context, group_id, user_id)
-            elif verification_type == 'math' or verification_type == 'word':
+            elif authentication_type == 'math' or authentication_type == 'word':
                 authentication_challenge(
-                    update, context, verification_type, group_id, user_id
+                    update, context, authentication_type, group_id, user_id
                 )
             else:
                 query.edit_message_text(text="Invalid authentication type configured.")
@@ -4122,10 +3685,10 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
     else:
         query.edit_message_text(text="No such group exists.")
 
-def authentication_challenge(update: Update, context: CallbackContext, verification_type, group_id, user_id):
+def authentication_challenge(update: Update, context: CallbackContext, authentication_type, group_id, user_id):
     group_doc = fetch_group_info(update, context, return_doc=True, group_id=group_id)
 
-    if verification_type == 'math':
+    if authentication_type == 'math':
         challenges = [MATH_0, MATH_1, MATH_2, MATH_3, MATH_4]
         index = random.randint(0, 4)
         math_challenge = challenges[index]
@@ -4174,7 +3737,7 @@ def authentication_challenge(update: Update, context: CallbackContext, verificat
         clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
         print(f"Stored math challenge for user {user_id} in group {group_id}: {math_challenge}")
 
-    elif verification_type == 'word':
+    elif authentication_type == 'word':
         challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4, WORD_5, WORD_6, WORD_7, WORD_8]
         original_challenges = challenges.copy()  # Copy the original list before shuffling
         random.shuffle(challenges)
@@ -5961,7 +5524,6 @@ def main() -> None:
     #endregion Authentication Callbacks
     ##
     #region Buybot Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(setup_buybot_callback, pattern='^setup_buybot'))
     dispatcher.add_handler(CallbackQueryHandler(setup_minimum_buy_callback, pattern='^setup_minimum_buy'))
     dispatcher.add_handler(CallbackQueryHandler(setup_small_buy_callback, pattern='^setup_small_buy'))
     dispatcher.add_handler(CallbackQueryHandler(setup_medium_buy_callback, pattern='^setup_medium_buy'))
@@ -5976,46 +5538,14 @@ def main() -> None:
     #endregion Message Handlers
 
     #region Setup Callbacks
-    #
-    #region Admin Setup Callbacks
     dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_admin_callback, pattern='^setup_admin$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_mute_callback, pattern='^setup_mute$'))
-
-
     dispatcher.add_handler(CallbackQueryHandler(handle_setup_callbacks, pattern='^(' + '|'.join(SETUP_CALLBACK_DATA) + ')$'))
-
-
-    # dispatcher.add_handler(CallbackQueryHandler(enable_mute_callback, pattern='^enable_mute$'))
-    # dispatcher.add_handler(CallbackQueryHandler(disable_mute_callback, pattern='^disable_mute$'))
-
-    dispatcher.add_handler(CallbackQueryHandler(check_mute_list_callback, pattern='^check_mute_list$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_warn_callback, pattern='^setup_warn$'))
-    dispatcher.add_handler(CallbackQueryHandler(enable_warn_callback, pattern='^enable_warn$'))
-    dispatcher.add_handler(CallbackQueryHandler(disable_warn_callback, pattern='^disable_warn$'))
-    dispatcher.add_handler(CallbackQueryHandler(check_warn_list_callback, pattern='^check_warn_list$'))
-    dispatcher.add_handler(CallbackQueryHandler(set_max_warns_callback, pattern='^set_max_warns$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_blocklist_callback, pattern='^setup_blocklist$'))
-    dispatcher.add_handler(CallbackQueryHandler(enable_blocklist_callback, pattern='^enable_blocklist$'))
-    dispatcher.add_handler(CallbackQueryHandler(disable_blocklist_callback, pattern='^disable_blocklist$'))
-    dispatcher.add_handler(CallbackQueryHandler(check_blocklist_callback, pattern='^check_blocklist$'))
-    dispatcher.add_handler(CallbackQueryHandler(clear_blocklist_callback, pattern='^clear_blocklist$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_allowlist_callback, pattern='^setup_allowlist$'))
-    dispatcher.add_handler(CallbackQueryHandler(enable_allowlist_callback, pattern='^enable_allowlist$'))
-    dispatcher.add_handler(CallbackQueryHandler(disable_allowlist_callback, pattern='^disable_allowlist$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_website_callback, pattern='^setup_website$'))
-    dispatcher.add_handler(CallbackQueryHandler(check_allowlist_callback, pattern='^check_allowlist$'))
-    dispatcher.add_handler(CallbackQueryHandler(clear_allowlist_callback, pattern='^clear_allowlist$'))
-    dispatcher.add_handler(CallbackQueryHandler(reset_admin_settings_callback, pattern='^reset_admin_settings$'))
-    #endregion Admin Setup Callbacks
     ##
     #region Command Setup Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(setup_commands_callback, pattern='^setup_commands$'))
     dispatcher.add_handler(CallbackQueryHandler(toggle_command_status, pattern=r'^toggle_(play|website|contract|price|buy|chart|liquidity|volume)$'))
     #endregion Command Setup Callbacks
     ##
     #region Crypto Setup Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(setup_crypto_callback, pattern='^setup_crypto$'))
     dispatcher.add_handler(CallbackQueryHandler(check_token_details_callback, pattern='^check_token_details$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
@@ -6024,30 +5554,12 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(exit_callback, pattern='^exit_setup$'))
     dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|harmony|mantle)$'))
-    dispatcher.add_handler(CallbackQueryHandler(reset_token_details_callback, pattern='^reset_token_details$'))
     #endregion Crypto Setup Callbacks
     ##
     #region Authentication Setup Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(setup_verification_callback, pattern='^setup_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(check_verification_settings_callback, pattern='^check_verification_settings$'))
-    dispatcher.add_handler(CallbackQueryHandler(simple_verification_callback, pattern='^simple_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(math_verification_callback, pattern='^math_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(word_verification_callback, pattern='^word_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(timeout_verification_callback, pattern='^timeout_verification$'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_timeout_callback, pattern='^vtimeout_'))
+    dispatcher.add_handler(CallbackQueryHandler(handle_timeout_callback, pattern='^auth_timeout_'))
     #endregion Authentication Setup Callbacks
     ##
-    #region Premium Setup Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(setup_premium_callback, pattern='^setup_premium$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_welcome_message_header_callback, pattern='^setup_welcome_message_header$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_buybot_message_header_callback, pattern='^setup_buybot_message_header$'))
-    dispatcher.add_handler(CallbackQueryHandler(enable_sypher_trust_callback, pattern='^enable_sypher_trust$'))
-    dispatcher.add_handler(CallbackQueryHandler(disable_sypher_trust_callback, pattern='^disable_sypher_trust$'))
-    dispatcher.add_handler(CallbackQueryHandler(sypher_trust_preferences_callback, pattern='^sypher_trust_preferences$'))
-    dispatcher.add_handler(CallbackQueryHandler(sypher_trust_relaxed_callback, pattern='^sypher_trust_relaxed$'))
-    dispatcher.add_handler(CallbackQueryHandler(sypher_trust_moderate_callback, pattern='^sypher_trust_moderate$'))
-    dispatcher.add_handler(CallbackQueryHandler(sypher_trust_strict_callback, pattern='^sypher_trust_strict$'))
-    #endregion Premium Setup Callbacks
     #
     #endregion Setup Callbacks
 
