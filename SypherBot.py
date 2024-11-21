@@ -498,10 +498,6 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 def start_monitoring_groups():
-    if scheduler.running:
-        print("Clearing existing jobs before restarting scheduler...")
-        scheduler.remove_all_jobs()
-
     groups_snapshot = db.collection('groups').get()
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
@@ -512,9 +508,7 @@ def start_monitoring_groups():
         else:
             print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
 
-    if not scheduler.running:
-        print("Starting scheduler...")
-        scheduler.start()
+    scheduler.start()
 
 def schedule_group_monitoring(group_data):
     if not scheduler.running:
