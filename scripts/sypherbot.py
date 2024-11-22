@@ -1219,7 +1219,7 @@ SETUP_CALLBACK_DATA = [
     'setup_commands',
     'setup_authentication',
     'simple_authentication', 'math_authentication', 'word_authentication', 'timeout_authentication', 'check_authentication_settings',
-    'setup_crypto', 'reset_token_details',
+    'setup_crypto', 'reset_token_details', 'check_token_details',
     'setup_premium',
     'setup_welcome_message_header', 'setup_buybot_message_header',
     'enable_sypher_trust', 'disable_sypher_trust', 'sypher_trust_preferences', 'sypher_trust_relaxed', 'sypher_trust_moderate', 'sypher_trust_strict',
@@ -2698,31 +2698,32 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     if msg is not None:
         track_message(msg)
 
-def check_token_details_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
-
-    update = Update(update.update_id, message=query.message)
-
-    if query.data == 'check_token_details':
-        if is_user_owner(update, context, user_id):
-            check_token_details(update, context)
-        else:
-            print("User is not the owner.")
-
 def check_token_details(update: Update, context: CallbackContext) -> None:
     msg = None
     group_data = fetch_group_info(update, context)
 
     if group_data is not None:
-        token_info = group_data.get('token', {})
-        chain = token_info.get('chain', 'none')
-        contract_address = token_info.get('contract_address', 'none')
-        liquidity_address = token_info.get('liquidity_address', 'none')
-        name = token_info.get('name', 'none')
-        symbol = token_info.get('symbol', 'none')
-        total_supply = token_info.get('total_supply', 'none')
+        token_data = fetch_group_token(group_data, update, context)
+        if token_data is not None:
+            chain = token_data["chain"]
+            contract_address = token_data["contract_address"]
+            liquidity_address = token_data["liquidity_address"]
+            name = token_data["name"]
+            symbol = token_data["symbol"]
+            total_supply = token_data["total_supply"]
 
         menu_change(context, update)
+
+        if any(detail is None for detail in [chain, contract_address, liquidity_address, name, symbol, total_supply]):
+            msg = context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="*⚠️ Token Details Missing ⚠️*\n\n"
+                "Please complete token setup first!",
+                parse_mode='Markdown'
+            )
+            if msg is not None:
+                track_message(msg)
+            return
 
         keyboard = [
             [InlineKeyboardButton("Back", callback_data='setup_crypto')]
