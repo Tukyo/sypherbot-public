@@ -4132,7 +4132,7 @@ def get_uniswap_v2_price(chain, lp_address):
         reserve1_adjusted = reserve1 / (10 ** 18)  # WETH has 18 decimals
         print(f"Adjusted reserves: reserve0={reserve0_adjusted}, reserve1={reserve1_adjusted}")
 
-        price_in_weth = reserve1_adjusted / reserve0_adjusted
+        price_in_weth = reserve0_adjusted / reserve1_adjusted
         print(f"Token price in WETH (Uniswap V2): {price_in_weth}")
         return price_in_weth
     except Exception as e:
@@ -4177,7 +4177,6 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
             if token_price_in_usd is None:
                 update.message.reply_text("Failed to fetch token price in USD.")
                 return
-            print(f"Token price in USD: {token_price_in_usd}")
             update.message.reply_text(f"${token_price_in_usd:.4f}")
         elif modifier == "ETH":
             if pool_type == "v3":
