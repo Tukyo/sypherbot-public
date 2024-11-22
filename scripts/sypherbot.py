@@ -2436,7 +2436,7 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         chat_id=update.effective_chat.id,
         text='*🔑 Crypto Setup 🔑*\n\n'
         'Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\n'
-        '• This functionality currently is only setup for ETH paired tokens.\n\n'
+        '• This functionality currently is only setup for WETH paired tokens.\n\n'
         '*⚠️ Updating Token Details ⚠️*\n'
         'To enter new token details, you must click *Reset Token Details* first.',
         parse_mode='markdown',
@@ -2595,7 +2595,11 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text='Please choose your chain from the list.\n\n'
-            'Currently only Base Mainnet + Uniswap V3 LP is *fully* supported. We will be rolling out support for other chains and LP positions shortly.',
+            '*Supported Networks:*\n'
+            'Ethereum • Base • Arbitrum • Optimism\n\n'
+            'All other networks are untested.\n\n'
+            'We will be rolling out support for other chains and non WETH pairings shortly.',
+            parse_mode='markdown',
             reply_markup=reply_markup
         )
         context.chat_data['setup_stage'] = 'chain'

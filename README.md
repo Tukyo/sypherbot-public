@@ -24,21 +24,16 @@ Sypherbot offers customizable commands and admin controls, along with full chart
 
 ---
 ### 🔗 Currently Supported Chains
-![Base](https://img.shields.io/badge/BASE-0052FF)
+![Ethereum](https://img.shields.io/badge/Ethereum-888888) ![Base](https://img.shields.io/badge/Base-0052FF) ![Arbitrum](https://img.shields.io/badge/Arbitrum-11a5f7) ![Optimism](https://img.shields.io/badge/Optimism-f7041f)
 
 ### Coming Soon!
-![Arbitrum](https://img.shields.io/badge/Arbitrum-11a5f7)
 ![Avalanche](https://img.shields.io/badge/Avalanche-e13f40)
 ![BSC](https://img.shields.io/badge/BSC-e8b30b)
-![Ethereum](https://img.shields.io/badge/Ethereum-888888)
 ![Fantom](https://img.shields.io/badge/Fantom-1866f7)
-![Harmony](https://img.shields.io/badge/Harmony-62eeb7)
-![Mantle](https://img.shields.io/badge/Mantle-000000)
-![Optimism](https://img.shields.io/badge/Optimism-f7041f)
 ![Polygon](https://img.shields.io/badge/Polygon-7f45df)
 
 ### Currently Supported LP
-![Base](https://img.shields.io/badge/Uniswap-V3-FF007A)
+![Uniswapv3](https://img.shields.io/badge/Uniswap-V3-FF007A) ![Uniswapv2](https://img.shields.io/badge/Uniswap-V2-ff3396)
 ---
 # ❓ Help / Guide
 ## ⚙️ General Setup
