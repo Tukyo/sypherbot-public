@@ -4106,19 +4106,33 @@ def get_uniswap_v2_price(chain, lp_address):
             return None
         
         base_dir = os.path.dirname(os.path.dirname(__file__))
-        abi_path = os.path.join(base_dir, 'config', 'uniswap_v2.abi.json')
-        with open(abi_path, 'r') as abi_file:
-            abi = json.load(abi_file)
+
+        univ2_abi_path = os.path.join(base_dir, 'config', 'uniswap_v2.abi.json')
+        with open(univ2_abi_path, 'r') as univ2_abi_file:
+            univ2_abi = json.load(univ2_abi_file)
 
         address = web3_instance.to_checksum_address(lp_address)
 
-        pair_contract = web3_instance.eth.contract(address=address, abi=abi)
+        pair_contract = web3_instance.eth.contract(address=address, abi=univ2_abi)
 
         reserves = pair_contract.functions.getReserves().call()
         reserve0 = Decimal(reserves[0])
         reserve1 = Decimal(reserves[1])
+        print(f"Raw reserves: reserve0={reserve0}, reserve1={reserve1}")
 
-        price_in_weth = reserve1 / reserve0 # Reserve0 is the token and reserve1 is WETH
+        erc20_abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
+        with open(erc20_abi_path, 'r') as erc20_abi_file:
+            your_erc20_abi = json.load(erc20_abi_file)
+
+        token0_address = pair_contract.functions.token0().call()
+        token0_contract = web3_instance.eth.contract(address=token0_address, abi=your_erc20_abi)
+        decimals0 = token0_contract.functions.decimals().call()
+
+        reserve0_adjusted = reserve0 / (10 ** decimals0)
+        reserve1_adjusted = reserve1 / (10 ** 18)  # WETH has 18 decimals
+        print(f"Adjusted reserves: reserve0={reserve0_adjusted}, reserve1={reserve1_adjusted}")
+
+        price_in_weth = reserve1_adjusted / reserve0_adjusted
         print(f"Token price in WETH (Uniswap V2): {price_in_weth}")
         return price_in_weth
     except Exception as e:
