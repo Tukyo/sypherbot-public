@@ -4111,18 +4111,30 @@ def get_uniswap_v3_position_data(chain, lp_address):
 
         print(f"Token0 decimals: {decimals0}, Token1 decimals: {decimals1}")
 
-        # Convert sqrtPriceX96 to price_in_weth, adjusting for decimals
+        # Adjust sqrtPriceX96 for price calculation
         sqrt_price_x96_decimal = Decimal(sqrt_price_x96)
         price_in_weth = (sqrt_price_x96_decimal ** 2) / Decimal(2 ** 192)
 
-        # Adjust for token decimals
-        price_in_weth_adjusted = price_in_weth * (10 ** (decimals0 - decimals1))
-        print(f"Adjusted token price in WETH (Uniswap V3): {price_in_weth_adjusted:.18f}")
+        weth_address = config.WETH_ADDRESSES.get(chain).lower()
+        print(f"WETH address on {chain}: {weth_address}")
+
+        if token1_address.lower() == weth_address:
+            # Token1 is WETH; price_in_weth is already correct
+            price_in_weth_adjusted = price_in_weth * (10 ** (decimals0 - decimals1))
+            print(f"Price of token0 in WETH: {price_in_weth_adjusted:.18f}")
+        elif token0_address.lower() == weth_address:
+            # Token0 is WETH; invert the price
+            price_in_weth_adjusted = (1 / price_in_weth) * (10 ** (decimals1 - decimals0))
+            print(f"Price of token1 in WETH: {price_in_weth_adjusted:.18f}")
+        else:
+            print("Neither token0 nor token1 is WETH. Unable to calculate price.")
+            return None
 
         return price_in_weth_adjusted
     except Exception as e:
         print(f"Error fetching Uniswap V3 position data: {e}")
         return None
+
 
 def get_uniswap_v2_price(chain, lp_address):
     try:

@@ -41,6 +41,11 @@ BLOCKSCANNERS = { #Later TODO: Add ones that are commented out
     "POLYGON": "polygonscan.com"
 }
 
+WETH_ADDRESSES = {
+    "BASE": "0x4200000000000000000000000000000000000006",
+    "ETHEREUM": "0xC02aaa39b223FE8D0A0E5C4F27eAD9083C756Cc2",
+}
+
 WEB3_INSTANCES = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in ENDPOINTS.items()}
 for network, web3_instance in WEB3_INSTANCES.items():
     if web3_instance.is_connected():
