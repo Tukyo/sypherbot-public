@@ -17,6 +17,7 @@ from io import BytesIO
 from scripts import config # Import the config module from the scripts folder
 from decimal import Decimal
 from functools import partial
+from cachetools import TTLCache
 from threading import Timer, Thread
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
@@ -456,6 +457,7 @@ def schedule_group_monitoring(group_data):
         print(f"No token info found for group {group_id} - Not scheduling monitoring.")
 #endregion Monitoring
 
+admin_cache = TTLCache(maxsize=100, ttl=600) # Cache a list of up to 100 group's admins for 10 minutes
 def is_user_admin(update: Update, context: CallbackContext) -> bool:
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
@@ -470,11 +472,20 @@ def is_user_admin(update: Update, context: CallbackContext) -> bool:
     
     print(f"Checking if user is admin for chat {chat_id}")
 
-    chat_admins = context.bot.get_chat_administrators(chat_id) # Check if the user is an admin in this chat
+    if chat_id in admin_cache:
+        print(f"Fetching admins from cache for chat {chat_id}")
+        chat_admins = admin_cache[chat_id]
+    else:
+        print("Admins not in cache, fetching from Telegram...")
+        try:
+            chat_admins = context.bot.get_chat_administrators(chat_id, timeout=30) # Fetch from Telegram and cache the result
+            admin_cache[chat_id] = chat_admins  # Store the result in the cache
+        except Exception as e:
+            print(f"Error fetching administrators: {e}")
+            return False
+        
     user_is_admin = any(admin.user.id == user_id for admin in chat_admins)
-
     print(f"UserID: {user_id} - IsAdmin: {user_is_admin}")
-
     return user_is_admin
 
 def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> bool:
@@ -655,7 +666,7 @@ def rate_limit_check(): # Later TODO: Implement rate limiting PER GROUP
         return False
 
 def handle_message(update: Update, context: CallbackContext) -> None:
-    if not (update.message and update.message.from_user):
+    if not (update.message or not update.message.from_user):
         print("Received a message with missing update or user information.")
         return
     
@@ -743,6 +754,10 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     handle_guess(update, context)
 
 def handle_image(update: Update, context: CallbackContext) -> None:
+    if not (update.message or not update.message.from_user):
+        print("Received a message with missing update or user information.")
+        return
+    
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
     username = update.message.from_user.username or update.message.from_user.first_name
@@ -3463,13 +3478,14 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             
             print(f"New user {user_id} joined group {chat_id}")
 
-            context.bot.restrict_chat_member( # Mute the new user
-                chat_id=chat_id,
-                user_id=user_id,
-                permissions=ChatPermissions(can_send_messages=False)
-            )
+            if not is_user_admin(update, context):
+                context.bot.restrict_chat_member( # Mute the new user
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    permissions=ChatPermissions(can_send_messages=False)
+                )
 
-            print(f"User {user_id} restricted in group {chat_id}")
+                print(f"User {user_id} restricted in group {chat_id}")
 
             if anti_raid.is_raid():
                 msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
