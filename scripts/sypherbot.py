@@ -2575,21 +2575,16 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             [
                 InlineKeyboardButton("Ethereum", callback_data='ethereum'),
                 InlineKeyboardButton("Base", callback_data='base')
-
             ],
             [
                 InlineKeyboardButton("Arbitrum", callback_data='arbitrum'),
-                InlineKeyboardButton("Optimism", callback_data='optimism')
+                InlineKeyboardButton("Optimism", callback_data='optimism'),
+                InlineKeyboardButton("Polygon", callback_data='polygon')
             ],
             [
-                InlineKeyboardButton("Polygon", callback_data='polygon'),
                 InlineKeyboardButton("Fantom", callback_data='fantom'),
-                InlineKeyboardButton("Avalanche", callback_data='avalanche')
-            ],
-            [
-                InlineKeyboardButton("Binance", callback_data='binance'),
-                InlineKeyboardButton("Harmony", callback_data='harmony'),
-                InlineKeyboardButton("Mantle", callback_data='mantle')
+                InlineKeyboardButton("Avalanche", callback_data='avalanche'),
+                InlineKeyboardButton("Binance", callback_data='binance')
             ],
             [InlineKeyboardButton("Back", callback_data='setup_crypto')]
         ]
@@ -3814,7 +3809,7 @@ def fetch_ohlcv_data(time_frame, chain, liquidity_address):
     start_of_hour_timestamp = int(one_hour_ago.timestamp())
     chain_lowercase = chain.lower()
 
-    url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lowercase}/pools/{liquidity_address}/ohlcv/{time_frame}"
+    url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lowercase}/pools/{liquidity_address}/ohlcv/{time_frame}" # TODO: REMOVE API
     params = {
         'aggregate': '1' + time_frame[0],  # '1m', '1h', '1d' depending on the time frame
         'before_timestamp': start_of_hour_timestamp,
@@ -3965,7 +3960,7 @@ def handle_transfer_event(event, group_data):
         transaction_link = f"https://{blockscanner}/tx/{tx_hash}"
         message = (
             f"{header_emoji} BUY ALERT {header_emoji}\n\n"
-            f"{buyer_emoji} {token_amount:.4f} {token_name}{value_message}"
+            f"{buyer_emoji} {token_amount:,.4f} {token_name}{value_message}"
         )
         print(f"Sending buy message with transaction link for group {group_data['group_id']}")
 
@@ -5447,7 +5442,7 @@ def main() -> None:
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
     dispatcher.add_handler(CallbackQueryHandler(exit_callback, pattern='^exit_setup$'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance|harmony|mantle)$'))
+    dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance)$'))
     #endregion Crypto Setup Callbacks
     ##
     #region Authentication Setup Callbacks

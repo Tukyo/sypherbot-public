@@ -9,41 +9,46 @@ ENDPOINTS = {
     "BSC": os.getenv('BSC_ENDPOINT'),
     "ETHEREUM": os.getenv('ETHEREUM_ENDPOINT'),
     "FANTOM": os.getenv('FANTOM_ENDPOINT'),
-    "HARMONY": os.getenv('HARMONY_ENDPOINT'),
-    "MANTLE": os.getenv('MANTLE_ENDPOINT'),
     "OPTIMISM": os.getenv('OPTIMISM_ENDPOINT'),
     "POLYGON": os.getenv('POLYGON_ENDPOINT')
 }
 
 WEBSOCKETS = { # Later, TODO: Add websockets that are commented out
     "ARBITRUM": os.getenv('ARBITRUM_WEBSOCKET'),
-    # "AVALANCHE": os.getenv('AVALANCHE_WEBSOCKET'),
+    "AVALANCHE": os.getenv('AVALANCHE_WEBSOCKET'),
     "BASE": os.getenv('BASE_WEBSOCKET'),
-    # "BSC": os.getenv('BSC_WEBSOCKET'),
+    "BSC": os.getenv('BSC_WEBSOCKET'),
     "ETHEREUM": os.getenv('ETHEREUM_WEBSOCKET'),
     "FANTOM": os.getenv('FANTOM_WEBSOCKET'),
-    # "HARMONY": os.getenv('HARMONY_WEBSOCKET'),
-    # "MANTLE": os.getenv('MANTLE_WEBSOCKET'),
     "OPTIMISM": os.getenv('OPTIMISM_WEBSOCKET'),
     "POLYGON": os.getenv('POLYGON_WEBSOCKET')
 }
 
 BLOCKSCANNERS = { #Later TODO: Add ones that are commented out
     "ARBITRUM": "arbiscan.io",
-    # "AVALANCHE": "snowtrace.io",
+    "AVALANCHE": "snowtrace.io",
     "BASE": "basescan.org",
-    # "BSC": "bscscan.com",
+    "BSC": "bscscan.com",
     "ETHEREUM": "etherscan.io",
     "FANTOM": "ftmscan.com",
-    # "HARMONY": "explorer.harmony.one",
-    # "MANTLE": "mantlescan.info",
+    "MANTLE": "mantlescan.info",
     "OPTIMISM": "optimistic.etherscan.io",
     "POLYGON": "polygonscan.com"
 }
 
 WETH_ADDRESSES = {
+    "ARBITRUM": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
     "BASE": "0x4200000000000000000000000000000000000006",
     "ETHEREUM": "0xC02aaa39b223FE8D0A0E5C4F27eAD9083C756Cc2",
+    "OPTIMISM": "0x4200000000000000000000000000000000000006",
+    "POLYGON": "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619"
+}
+
+NATIVE_TOKENS = {
+    # "AVALANCHE": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7", # TODO: Determine if WAVAX works as WETH
+    # "BSC": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c", # TODO: Determine if WBNB works as WETH
+    # "FANTOM": "0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83", # TODO: Determine if WFTM works as WETH
+    # "MANTLE": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8", # TODO: Determine if WMNT works as WETH
 }
 
 WEB3_INSTANCES = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in ENDPOINTS.items()}
