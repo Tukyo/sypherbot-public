@@ -5438,7 +5438,6 @@ def main() -> None:
     #endregion Command Setup Callbacks
     ##
     #region Crypto Setup Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(check_token_details_callback, pattern='^check_token_details$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
