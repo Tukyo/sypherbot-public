@@ -4013,8 +4013,6 @@ def get_token_price_in_usd(chain, lp_address):
             print("Failed to fetch ETH price from Chainlink.")
             return None
 
-        print(f"ETH price in USD: {eth_price_in_usd}")
-
         pool_type = determine_pool_type(chain, lp_address)
         if pool_type not in ["v3", "v2"]:
             return None
@@ -4028,8 +4026,6 @@ def get_token_price_in_usd(chain, lp_address):
             print("Failed to fetch token price in WETH from Uniswap V3.")
             return None
 
-        print(f"Token price in WETH: {price_in_weth}")
-
         token_price_in_usd = price_in_weth * Decimal(eth_price_in_usd) # Step 3: Convert token price from WETH to USD
         print(f"Token price in USD: {token_price_in_usd}")
         return token_price_in_usd
@@ -4042,7 +4038,7 @@ def check_eth_price():
     try:
         latest_round_data = config.CHAINLINK_CONTRACT.functions.latestRoundData().call()
         price = latest_round_data[1] / 10 ** 8
-        print(f"ETH price: {price}")
+        print(f"ETH price: ${price}")
         return price
     except Exception as e:
         print(f"Failed to get ETH price: {e}")
@@ -4178,7 +4174,6 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
                 print("Failed to fetch Uniswap V3 position data.")
                 update.message.reply_text("Failed to fetch Uniswap V3 position data.")
                 return
-            print(f"Token price in WETH: {price_in_weth}")
             update.message.reply_text(f"{price_in_weth:.8f} ETH")
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
