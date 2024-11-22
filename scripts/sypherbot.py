@@ -2714,25 +2714,24 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
     group_data = fetch_group_info(update, context)
 
     if group_data is not None:
-        token_data = fetch_group_token(group_data, update, context)
-        if token_data is not None:
-            chain = token_data["chain"]
-            contract_address = token_data["contract_address"]
-            liquidity_address = token_data["liquidity_address"]
-            name = token_data["name"]
-            symbol = token_data["symbol"]
-            total_supply = token_data["total_supply"]
+        token_info = group_data.get('token', {})
+        chain = token_info.get('chain', 'none')
+        contract_address = token_info.get('contract_address', 'none')
+        liquidity_address = token_info.get('liquidity_address', 'none')
+        name = token_info.get('name', 'none')
+        symbol = token_info.get('symbol', 'none')
+        total_supply = token_info.get('total_supply', 'none')
 
-            if not all([chain, contract_address, liquidity_address, name, symbol, total_supply]): # Check if any required field is missing
-                msg = context.bot.send_message( # Send warning message if details are missing
-                    chat_id=update.effective_chat.id,
-                    text="*⚠️ Token Details Missing ⚠️*\n\n"
-                         "Please complete token setup first!",
-                    parse_mode='Markdown'
-                )
-                if msg is not None:
-                    track_message(msg)
-                return  # Exit the function as details are incomplete
+        if not all([chain, contract_address, liquidity_address, name, symbol, total_supply]): # Check if any required field is missing
+            msg = context.bot.send_message( # Send warning message if details are missing
+                chat_id=update.effective_chat.id,
+                text="*⚠️ Token Details Missing ⚠️*\n\n"
+                        "Please complete token setup first!",
+                parse_mode='Markdown'
+            )
+            if msg is not None:
+                track_message(msg)
+            return  # Exit the function as details are incomplete
 
         menu_change(context, update)
 
