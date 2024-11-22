@@ -4017,10 +4017,7 @@ def get_token_price_in_usd(chain, lp_address):
         if pool_type not in ["v3", "v2"]:
             return None
         
-        if pool_type == "v3":
-            price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
-        elif pool_type == "v2":
-            price_in_weth = get_uniswap_v2_price(chain, lp_address)
+        price_in_weth = get_uniswap_position_data(chain, lp_address, pool_type)
 
         if price_in_weth is None:
             print("Failed to fetch token price in WETH from Uniswap V3.")
@@ -4070,113 +4067,80 @@ def determine_pool_type(chain, lp_address):
         print(f"Error determining pool type: {e}")
         return None
     
-def get_uniswap_v3_position_data(chain, lp_address):
-    try:
-        web3_instance = config.WEB3_INSTANCES.get(chain)  # Connect to the Uniswap V3 liquidity pool
-        if not web3_instance:
-            print(f"Web3 instance for chain {chain} not found or not connected.")
-            return None
-
-        base_dir = os.path.dirname(os.path.dirname(__file__))
-
-        # Load Uniswap V3 ABI
-        abi_path = os.path.join(base_dir, 'config', 'uniswap_v3.abi.json')
-        with open(abi_path, 'r') as abi_file:
-            abi = json.load(abi_file)
-
-        address = web3_instance.to_checksum_address(lp_address)
-
-        # Fetch the pool contract
-        pair_contract = web3_instance.eth.contract(address=address, abi=abi)
-
-        # Fetch slot0 and sqrtPriceX96
-        slot0 = pair_contract.functions.slot0().call()  # Fetch slot0 data (contains sqrtPriceX96)
-        sqrt_price_x96 = slot0[0]
-        print(f"Raw sqrtPriceX96: {sqrt_price_x96}")
-
-        # Fetch token0 and token1 addresses
-        token0_address = pair_contract.functions.token0().call()
-        token1_address = pair_contract.functions.token1().call()
-
-        # Load ERC-20 ABI
-        erc20_abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
-        with open(erc20_abi_path, 'r') as erc20_abi_file:
-            your_erc20_abi = json.load(erc20_abi_file)
-
-        # Fetch token0 and token1 decimals
-        token0_contract = web3_instance.eth.contract(address=token0_address, abi=your_erc20_abi)
-        token1_contract = web3_instance.eth.contract(address=token1_address, abi=your_erc20_abi)
-        decimals0 = token0_contract.functions.decimals().call()
-        decimals1 = token1_contract.functions.decimals().call()
-
-        print(f"Token0 decimals: {decimals0}, Token1 decimals: {decimals1}")
-
-        # Adjust sqrtPriceX96 for price calculation
-        sqrt_price_x96_decimal = Decimal(sqrt_price_x96)
-        price_in_weth = (sqrt_price_x96_decimal ** 2) / Decimal(2 ** 192)
-
-        weth_address = config.WETH_ADDRESSES.get(chain).lower()
-        print(f"WETH address on {chain}: {weth_address}")
-
-        if token1_address.lower() == weth_address:
-            # Token1 is WETH; price_in_weth is already correct
-            price_in_weth_adjusted = price_in_weth * (10 ** (decimals0 - decimals1))
-            print(f"Price of token0 in WETH: {price_in_weth_adjusted:.18f}")
-        elif token0_address.lower() == weth_address:
-            # Token0 is WETH; invert the price
-            price_in_weth_adjusted = (1 / price_in_weth) * (10 ** (decimals1 - decimals0))
-            print(f"Price of token1 in WETH: {price_in_weth_adjusted:.18f}")
-        else:
-            print("Neither token0 nor token1 is WETH. Unable to calculate price.")
-            return None
-
-        return price_in_weth_adjusted
-    except Exception as e:
-        print(f"Error fetching Uniswap V3 position data: {e}")
-        return None
-
-
-def get_uniswap_v2_price(chain, lp_address):
+def get_uniswap_position_data(chain, lp_address, pool_type):
     try:
         web3_instance = config.WEB3_INSTANCES.get(chain)
         if not web3_instance:
             print(f"Web3 instance for chain {chain} not found or not connected.")
             return None
-        
+
         base_dir = os.path.dirname(os.path.dirname(__file__))
 
-        univ2_abi_path = os.path.join(base_dir, 'config', 'uniswap_v2.abi.json')
-        with open(univ2_abi_path, 'r') as univ2_abi_file:
-            univ2_abi = json.load(univ2_abi_file)
+        abi_path = os.path.join(base_dir, 'config', f'uniswap_{pool_type}.abi.json')
+        with open(abi_path, 'r') as abi_file:
+            abi = json.load(abi_file)
 
         address = web3_instance.to_checksum_address(lp_address)
-
-        pair_contract = web3_instance.eth.contract(address=address, abi=univ2_abi)
-
-        reserves = pair_contract.functions.getReserves().call()
-        reserve0 = Decimal(reserves[0])
-        reserve1 = Decimal(reserves[1])
-        print(f"Raw reserves: reserve0={reserve0}, reserve1={reserve1}")
+        pair_contract = web3_instance.eth.contract(address=address, abi=abi)
 
         erc20_abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
         with open(erc20_abi_path, 'r') as erc20_abi_file:
-            your_erc20_abi = json.load(erc20_abi_file)
+            erc20_abi = json.load(erc20_abi_file)
 
-        token0_address = pair_contract.functions.token0().call()
-        token0_contract = web3_instance.eth.contract(address=token0_address, abi=your_erc20_abi)
-        decimals0 = token0_contract.functions.decimals().call()
+        if pool_type == "v2":
+            reserves = pair_contract.functions.getReserves().call()
+            reserve0 = Decimal(reserves[0])
+            reserve1 = Decimal(reserves[1])
+            print(f"Raw reserves: reserve0={reserve0}, reserve1={reserve1}")
 
-        reserve0_adjusted = reserve0 / (10 ** decimals0)
-        reserve1_adjusted = reserve1 / (10 ** 18)  # WETH has 18 decimals
-        print(f"Adjusted reserves: reserve0={reserve0_adjusted}, reserve1={reserve1_adjusted}")
+            token0_address = pair_contract.functions.token0().call()
+            token0_contract = web3_instance.eth.contract(address=token0_address, abi=erc20_abi)
+            decimals0 = token0_contract.functions.decimals().call()
 
-        price_in_weth = reserve0_adjusted / reserve1_adjusted
-        print(f"Token price in WETH (Uniswap V2): {price_in_weth:.18f}")
-        return price_in_weth
+            reserve0_adjusted = reserve0 / (10 ** decimals0)
+            reserve1_adjusted = reserve1 / (10 ** 18)  # WETH has 18 decimals
+            print(f"Adjusted reserves: reserve0={reserve0_adjusted}, reserve1={reserve1_adjusted}")
+
+            price_in_weth = reserve0_adjusted / reserve1_adjusted
+            print(f"Token price in WETH (Uniswap V2): {price_in_weth:.18f}")
+            return price_in_weth
+
+        if pool_type == "v3":
+            slot0 = pair_contract.functions.slot0().call()  # Fetch slot0 data (contains sqrtPriceX96)
+            sqrt_price_x96 = slot0[0]
+            print(f"Raw sqrtPriceX96: {sqrt_price_x96}")
+
+            token0_address = pair_contract.functions.token0().call()
+            token1_address = pair_contract.functions.token1().call()
+
+            token0_contract = web3_instance.eth.contract(address=token0_address, abi=erc20_abi)
+            token1_contract = web3_instance.eth.contract(address=token1_address, abi=erc20_abi)
+            decimals0 = token0_contract.functions.decimals().call()
+            decimals1 = token1_contract.functions.decimals().call()
+
+            print(f"Token0 decimals: {decimals0}, Token1 decimals: {decimals1}")
+
+            sqrt_price_x96_decimal = Decimal(sqrt_price_x96) # Adjust sqrtPriceX96 for price calculation
+            price_in_weth = (sqrt_price_x96_decimal ** 2) / Decimal(2 ** 192)
+
+            weth_address = config.WETH_ADDRESSES.get(chain).lower()
+            print(f"WETH address on {chain}: {weth_address}")
+
+            if token1_address.lower() == weth_address: # If token1 is WETH; price_in_weth is already correct
+                price_in_weth_adjusted = price_in_weth * (10 ** (decimals0 - decimals1))
+                print(f"Price of token0 in WETH: {price_in_weth_adjusted:.18f}")
+            elif token0_address.lower() == weth_address: # If token0 is WETH; invert the price
+                price_in_weth_adjusted = (1 / price_in_weth) * (10 ** (decimals1 - decimals0))
+                print(f"Price of token1 in WETH: {price_in_weth_adjusted:.18f}")
+            else:
+                print("Neither token0 nor token1 is WETH. Unable to calculate price.")
+                return None
+            return price_in_weth_adjusted
+        
     except Exception as e:
-        print(f"Error fetching Uniswap V2 reserves: {e}")
+        print(f"Error fetching Uniswap {pool_type} reserves: {e}")
         return None
-    
+      
 def get_token_price(update: Update, context: CallbackContext) -> None:
     print("Fetching token price...")
 
@@ -4215,12 +4179,9 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
             if token_price_in_usd is None:
                 update.message.reply_text("Failed to fetch token price in USD.")
                 return
-            update.message.reply_text(f"${token_price_in_usd:.8f}")
+            update.message.reply_text(f"${token_price_in_usd:.9f}")
         elif modifier == "ETH":
-            if pool_type == "v3":
-                price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
-            elif pool_type == "v2":
-                price_in_weth = get_uniswap_v2_price(chain, lp_address)
+            price_in_weth = get_uniswap_position_data(chain, lp_address, pool_type)
             if price_in_weth is None:
                 print("Failed to fetch Uniswap V3 position data.")
                 update.message.reply_text("Failed to fetch Uniswap V3 position data.")
