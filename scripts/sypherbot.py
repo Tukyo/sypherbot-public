@@ -1219,7 +1219,7 @@ SETUP_CALLBACK_DATA = [
     'setup_commands',
     'setup_authentication',
     'simple_authentication', 'math_authentication', 'word_authentication', 'timeout_authentication', 'check_authentication_settings',
-    'setup_crypto', 'reset_token_details', 'check_token_details',
+    'setup_crypto', 'reset_token_details',
     'setup_premium',
     'setup_welcome_message_header', 'setup_buybot_message_header',
     'enable_sypher_trust', 'disable_sypher_trust', 'sypher_trust_preferences', 'sypher_trust_relaxed', 'sypher_trust_moderate', 'sypher_trust_strict',
@@ -2698,6 +2698,17 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     if msg is not None:
         track_message(msg)
 
+def check_token_details_callback(update: Update, context: CallbackContext) -> None:
+    query, user_id = get_query_info(update)
+
+    update = Update(update.update_id, message=query.message)
+
+    if query.data == 'check_token_details':
+        if is_user_owner(update, context, user_id):
+            check_token_details(update, context)
+        else:
+            print("User is not the owner.")
+
 def check_token_details(update: Update, context: CallbackContext) -> None:
     msg = None
     group_data = fetch_group_info(update, context)
@@ -2712,18 +2723,18 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
             symbol = token_data["symbol"]
             total_supply = token_data["total_supply"]
 
-        menu_change(context, update)
+            if not all([chain, contract_address, liquidity_address, name, symbol, total_supply]): # Check if any required field is missing
+                msg = context.bot.send_message( # Send warning message if details are missing
+                    chat_id=update.effective_chat.id,
+                    text="*⚠️ Token Details Missing ⚠️*\n\n"
+                         "Please complete token setup first!",
+                    parse_mode='Markdown'
+                )
+                if msg is not None:
+                    track_message(msg)
+                return  # Exit the function as details are incomplete
 
-        if any(detail is None for detail in [chain, contract_address, liquidity_address, name, symbol, total_supply]):
-            msg = context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="*⚠️ Token Details Missing ⚠️*\n\n"
-                "Please complete token setup first!",
-                parse_mode='Markdown'
-            )
-            if msg is not None:
-                track_message(msg)
-            return
+        menu_change(context, update)
 
         keyboard = [
             [InlineKeyboardButton("Back", callback_data='setup_crypto')]
@@ -5438,6 +5449,7 @@ def main() -> None:
     #endregion Command Setup Callbacks
     ##
     #region Crypto Setup Callbacks
+    dispatcher.add_handler(CallbackQueryHandler(check_token_details_callback, pattern='^check_token_details$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
     dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
