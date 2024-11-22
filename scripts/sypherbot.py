@@ -2722,7 +2722,7 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
         symbol = token_info.get('symbol', 'none')
         total_supply = token_info.get('total_supply', 'none')
 
-        if not all([chain, contract_address, liquidity_address, name, symbol, total_supply]): # Check if any required field is missing
+        if any(value == 'none' for value in [chain, contract_address, liquidity_address, name, symbol, total_supply]): # Check if any required field is missing
             msg = context.bot.send_message( # Send warning message if details are missing
                 chat_id=update.effective_chat.id,
                 text="*⚠️ Token Details Missing ⚠️*\n\n"
