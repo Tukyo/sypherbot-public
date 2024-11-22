@@ -4100,17 +4100,34 @@ def get_uniswap_position_data(chain, lp_address, pool_type):
             print(f"Raw reserves: reserve0={reserve0}, reserve1={reserve1}")
 
             token0_address = pair_contract.functions.token0().call()
+            token1_address = pair_contract.functions.token1().call()
+
             token0_contract = web3_instance.eth.contract(address=token0_address, abi=erc20_abi)
+            token1_contract = web3_instance.eth.contract(address=token1_address, abi=erc20_abi)
             decimals0 = token0_contract.functions.decimals().call()
+            decimals1 = token1_contract.functions.decimals().call()
 
-            reserve0_adjusted = reserve0 / (10 ** decimals0)
-            reserve1_adjusted = reserve1 / (10 ** 18)  # WETH has 18 decimals
-            print(f"Adjusted reserves: reserve0={reserve0_adjusted}, reserve1={reserve1_adjusted}")
+            print(f"Token0 decimals: {decimals0}, Token1 decimals: {decimals1}")
 
-            price_in_weth = reserve0_adjusted / reserve1_adjusted
+            weth_address = config.WETH_ADDRESSES.get(chain).lower()
+            print(f"WETH address on {chain}: {weth_address}")
+
+            
+            if token0_address.lower() == weth_address:
+                reserve_weth = reserve0 / (10 ** decimals0)
+                reserve_token = reserve1 / (10 ** decimals1)
+            elif token1_address.lower() == weth_address:
+                reserve_weth = reserve1 / (10 ** decimals1)
+                reserve_token = reserve0 / (10 ** decimals0)
+            else:
+                print("Neither token0 nor token1 is WETH. Unable to calculate price.")
+                return None
+
+            print(f"Adjusted reserves: reserve_token={reserve_token}, reserve_weth={reserve_weth}")
+
+            price_in_weth = reserve_weth / reserve_token # Calculate token price in WETH
             print(f"Token price in WETH (Uniswap V2): {price_in_weth:.18f}")
             return price_in_weth
-
         if pool_type == "v3":
             slot0 = pair_contract.functions.slot0().call()  # Fetch slot0 data (contains sqrtPriceX96)
             sqrt_price_x96 = slot0[0]
