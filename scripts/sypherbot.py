@@ -5331,7 +5331,9 @@ def chart(update: Update, context: CallbackContext) -> None:
             plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
 
             dexscreener_url = f"https://dexscreener.com/{chain_lower}/{liquidity_address}"
-            dextools_url = f"https://www.dextools.io/app/{chain_lower}/pair-explorer/{liquidity_address}"
+            if chain_lower == "ethereum":
+                chain_lower = "ether"
+            dextools_url = f"https://www.dextools.io/app/en/{chain_lower}/pair-explorer/{liquidity_address}"
 
             keyboard = [
                 [
