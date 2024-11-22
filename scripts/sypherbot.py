@@ -4076,24 +4076,50 @@ def get_uniswap_v3_position_data(chain, lp_address):
         if not web3_instance:
             print(f"Web3 instance for chain {chain} not found or not connected.")
             return None
-        
+
         base_dir = os.path.dirname(os.path.dirname(__file__))
+
+        # Load Uniswap V3 ABI
         abi_path = os.path.join(base_dir, 'config', 'uniswap_v3.abi.json')
         with open(abi_path, 'r') as abi_file:
             abi = json.load(abi_file)
 
         address = web3_instance.to_checksum_address(lp_address)
 
+        # Fetch the pool contract
         pair_contract = web3_instance.eth.contract(address=address, abi=abi)
 
-        slot0 = pair_contract.functions.slot0().call() # Fetch slot0 data (contains sqrtPriceX96)
+        # Fetch slot0 and sqrtPriceX96
+        slot0 = pair_contract.functions.slot0().call()  # Fetch slot0 data (contains sqrtPriceX96)
         sqrt_price_x96 = slot0[0]
-
         print(f"Raw sqrtPriceX96: {sqrt_price_x96}")
 
-        sqrt_price_x96_decimal = Decimal(sqrt_price_x96) # Use Decimal for precise calculations
-        price_in_weth = (sqrt_price_x96_decimal ** 2) / Decimal(2 ** 192) 
-        return price_in_weth
+        # Fetch token0 and token1 addresses
+        token0_address = pair_contract.functions.token0().call()
+        token1_address = pair_contract.functions.token1().call()
+
+        # Load ERC-20 ABI
+        erc20_abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
+        with open(erc20_abi_path, 'r') as erc20_abi_file:
+            your_erc20_abi = json.load(erc20_abi_file)
+
+        # Fetch token0 and token1 decimals
+        token0_contract = web3_instance.eth.contract(address=token0_address, abi=your_erc20_abi)
+        token1_contract = web3_instance.eth.contract(address=token1_address, abi=your_erc20_abi)
+        decimals0 = token0_contract.functions.decimals().call()
+        decimals1 = token1_contract.functions.decimals().call()
+
+        print(f"Token0 decimals: {decimals0}, Token1 decimals: {decimals1}")
+
+        # Convert sqrtPriceX96 to price_in_weth, adjusting for decimals
+        sqrt_price_x96_decimal = Decimal(sqrt_price_x96)
+        price_in_weth = (sqrt_price_x96_decimal ** 2) / Decimal(2 ** 192)
+
+        # Adjust for token decimals
+        price_in_weth_adjusted = price_in_weth * (10 ** (decimals0 - decimals1))
+        print(f"Adjusted token price in WETH (Uniswap V3): {price_in_weth_adjusted:.18f}")
+
+        return price_in_weth_adjusted
     except Exception as e:
         print(f"Error fetching Uniswap V3 position data: {e}")
         return None
@@ -4133,14 +4159,14 @@ def get_uniswap_v2_price(chain, lp_address):
         print(f"Adjusted reserves: reserve0={reserve0_adjusted}, reserve1={reserve1_adjusted}")
 
         price_in_weth = reserve0_adjusted / reserve1_adjusted
-        print(f"Token price in WETH (Uniswap V2): {price_in_weth}")
+        print(f"Token price in WETH (Uniswap V2): {price_in_weth:.18f}")
         return price_in_weth
     except Exception as e:
         print(f"Error fetching Uniswap V2 reserves: {e}")
         return None
     
 def get_token_price(update: Update, context: CallbackContext) -> None:
-    print("Fetching token price using Uniswap V3...") #TODO: Remove line about v3 when v2 works
+    print("Fetching token price...")
 
     args = context.args
     modifier = args[0].upper() if args else "USD"  # Default to "USD" if no modifier provided
@@ -4177,7 +4203,7 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
             if token_price_in_usd is None:
                 update.message.reply_text("Failed to fetch token price in USD.")
                 return
-            update.message.reply_text(f"${token_price_in_usd:.4f}")
+            update.message.reply_text(f"${token_price_in_usd:.8f}")
         elif modifier == "ETH":
             if pool_type == "v3":
                 price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
@@ -4187,7 +4213,7 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
                 print("Failed to fetch Uniswap V3 position data.")
                 update.message.reply_text("Failed to fetch Uniswap V3 position data.")
                 return
-            update.message.reply_text(f"{price_in_weth:.8f} ETH")
+            update.message.reply_text(f"{price_in_weth:.12f} ETH")
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
         update.message.reply_text("An unexpected error occurred while fetching the token price.")
