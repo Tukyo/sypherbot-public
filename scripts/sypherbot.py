@@ -3821,6 +3821,8 @@ def fetch_ohlcv_data(time_frame, chain, liquidity_address):
     chain_lowercase = chain.lower()
     if chain_lowercase == "ethereum":
         chain_lowercase = "eth"
+    if chain_lower == "polygon":
+        chain_lower = "polygon_pos"
     url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lowercase}/pools/{liquidity_address}/ohlcv/{time_frame}" # TODO: REMOVE API
     params = {
         'aggregate': '1' + time_frame[0],  # '1m', '1h', '1d' depending on the time frame
@@ -3893,7 +3895,7 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
 
     # Initialize static tracking of the last seen block
     if not hasattr(monitor_transfers, "last_seen_block"):
-        lookback_range = 100 # Check the last 100 blocks on boot
+        lookback_range = 1 # Check the last block on boot
         monitor_transfers.last_seen_block = web3_instance.eth.block_number - lookback_range
 
     last_seen_block = monitor_transfers.last_seen_block
@@ -5220,6 +5222,8 @@ def get_liquidity(chain, lp_address):
         chain_lower = chain.lower()
         if chain_lower == "ethereum":
             chain_lower = "eth"
+        if chain_lower == "polygon":
+            chain_lower = "polygon_pos"
         url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lower}/pools/{lp_address}"
         response = requests.get(url)
         response.raise_for_status()
@@ -5272,6 +5276,8 @@ def get_volume(chain, lp_address):
         chain_lower = chain.lower()
         if chain_lower == "ethereum":
             chain_lower = "eth"
+        if chain_lower == "polygon":
+            chain_lower = "polygon_pos"
         url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lower}/pools/{lp_address}"
         response = requests.get(url)
         response.raise_for_status()
