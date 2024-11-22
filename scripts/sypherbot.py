@@ -3819,7 +3819,8 @@ def fetch_ohlcv_data(time_frame, chain, liquidity_address):
     one_hour_ago = now - timedelta(hours=1)
     start_of_hour_timestamp = int(one_hour_ago.timestamp())
     chain_lowercase = chain.lower()
-
+    if chain_lowercase == "ethereum":
+        chain_lowercase = "eth"
     url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lowercase}/pools/{liquidity_address}/ohlcv/{time_frame}" # TODO: REMOVE API
     params = {
         'aggregate': '1' + time_frame[0],  # '1m', '1h', '1d' depending on the time frame
@@ -5217,6 +5218,8 @@ def liquidity(update: Update, context: CallbackContext) -> None:
 def get_liquidity(chain, lp_address):
     try:
         chain_lower = chain.lower()
+        if chain_lower == "ethereum":
+            chain_lower = "eth"
         url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lower}/pools/{lp_address}"
         response = requests.get(url)
         response.raise_for_status()
@@ -5267,6 +5270,8 @@ def volume(update: Update, context: CallbackContext) -> None:
 def get_volume(chain, lp_address):
     try:
         chain_lower = chain.lower()
+        if chain_lower == "ethereum":
+            chain_lower = "eth"
         url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lower}/pools/{lp_address}"
         response = requests.get(url)
         response.raise_for_status()
