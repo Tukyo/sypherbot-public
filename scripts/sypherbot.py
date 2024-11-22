@@ -9,12 +9,12 @@ import inspect
 import requests
 import telegram
 import threading
-import config # config.py located in scripts folder
 import pandas as pd
 import firebase_admin
 import mplfinance as mpf
 from web3 import Web3
 from io import BytesIO
+from scripts import config # Import the config module from the scripts folder
 from decimal import Decimal
 from functools import partial
 from threading import Timer, Thread
@@ -576,6 +576,16 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         print(f"Failed to fetch group info: {e}")
         return None  # Error fetching group data
 
+def fetch_group_token(group_data: dict, update: Update, context: CallbackContext): # Fetches all token-related data from a pre-fetched group_data object.
+    token_data = group_data.get('token')
+    if not token_data:
+        print("Token data not found for this group.")
+        update.message.reply_text("Token data not found for this group.")
+        return None
+
+    print(f"All token data fetched: {token_data}")
+    return token_data
+
 def get_query_info(update, get_user=True):
     query = update.callback_query
     if query is None:
@@ -744,7 +754,7 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     
     print(f"Image sent by user {update.message.from_user.id} in chat {update.message.chat.id}")
 
-    if re.search(r"@\w+", msg): # Trigger trust check
+    if msg is not None and re.search(r"@\w+", msg): # Trigger trust check
         print(f"Detected mention in message: {msg}")
         if not check_if_trusted(update, context):
             print(f"User {user_id} is not trusted to tag others.")
@@ -3997,36 +4007,37 @@ def send_buy_message(text, group_id, reply_markup=None):
 #
 #region Price Fetching
 def get_token_price_in_usd(chain, lp_address):
-    """
-    Fetch the token price in USD using Uniswap V3 position data and Chainlink for ETH price.
-    """
     try:
-        # Step 1: Get ETH price in USD using Chainlink
-        eth_price_in_usd = check_eth_price()  
+        eth_price_in_usd = check_eth_price() # Step 1: Get ETH price in USD using Chainlink
         if eth_price_in_usd is None:
             print("Failed to fetch ETH price from Chainlink.")
             return None
 
         print(f"ETH price in USD: {eth_price_in_usd}")
 
-        # Step 2: Get token price in WETH using Uniswap V3 position data
-        price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
+        pool_type = determine_pool_type(chain, lp_address)
+        if pool_type not in ["v3", "v2"]:
+            return None
+        
+        if pool_type == "v3":
+            price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
+        elif pool_type == "v2":
+            price_in_weth = get_uniswap_v2_price(chain, lp_address)
+
         if price_in_weth is None:
             print("Failed to fetch token price in WETH from Uniswap V3.")
             return None
 
         print(f"Token price in WETH: {price_in_weth}")
 
-        # Step 3: Convert token price from WETH to USD
-        # Convert eth_price_in_usd to Decimal for consistent types
-        token_price_in_usd = price_in_weth * Decimal(eth_price_in_usd)  
+        token_price_in_usd = price_in_weth * Decimal(eth_price_in_usd) # Step 3: Convert token price from WETH to USD
         print(f"Token price in USD: {token_price_in_usd}")
         return token_price_in_usd
 
     except Exception as e:
         print(f"Error fetching token price in USD: {e}")
         return None
-
+    
 def check_eth_price():
     try:
         latest_round_data = config.CHAINLINK_CONTRACT.functions.latestRoundData().call()
@@ -4037,55 +4048,89 @@ def check_eth_price():
         print(f"Failed to get ETH price: {e}")
         return None
 
+def determine_pool_type(chain, lp_address):
+    try:
+        web3_instance = config.WEB3_INSTANCES.get(chain)
+        if not web3_instance:
+            print(f"Web3 instance for chain {chain} not found or not connected.")
+            return None
+        
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        abi_path = os.path.join(base_dir, 'config', 'uniswap_v3.abi.json')
+        with open(abi_path, 'r') as abi_file:
+            abi = json.load(abi_file)
+
+        address = web3_instance.to_checksum_address(lp_address)
+
+        pair_contract = web3_instance.eth.contract(address=address, abi=abi)
+
+        pair_contract.functions.slot0().call() # Attempt to call the slot0 function
+        print("Pool is a Uniswap V3 pool.")
+        return "v3"
+    except Exception as e:
+        if "execution reverted" in str(e) or "no data" in str(e):
+            print("Pool is a Uniswap V2 pool.")
+            return "v2"
+        print(f"Error determining pool type: {e}")
+        return None
+    
 def get_uniswap_v3_position_data(chain, lp_address):
-    """
-    Fetch Uniswap V3 position data (sqrtPriceX96) for a given liquidity pool address on the specified chain.
-    Returns the token price in WETH.
-    """
     try:
         web3_instance = config.WEB3_INSTANCES.get(chain)  # Connect to the Uniswap V3 liquidity pool
         if not web3_instance:
             print(f"Web3 instance for chain {chain} not found or not connected.")
             return None
+        
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        abi_path = os.path.join(base_dir, 'config', 'uniswap_v3.abi.json')
+        with open(abi_path, 'r') as abi_file:
+            abi = json.load(abi_file)
 
-        pair_contract = web3_instance.eth.contract(
-            address=web3_instance.to_checksum_address(lp_address),
-            abi=[
-                {
-                    "constant": True,
-                    "inputs": [],
-                    "name": "slot0",
-                    "outputs": [
-                        {"name": "sqrtPriceX96", "type": "uint160"},
-                        {"name": "tick", "type": "int24"},
-                        {"name": "observationIndex", "type": "uint16"},
-                        {"name": "observationCardinality", "type": "uint16"},
-                        {"name": "observationCardinalityNext", "type": "uint16"},
-                        {"name": "feeProtocol", "type": "uint8"},
-                        {"name": "unlocked", "type": "bool"}
-                    ],
-                    "stateMutability": "view",
-                    "type": "function"
-                }
-            ]
-        )
+        address = web3_instance.to_checksum_address(lp_address)
 
-        # Fetch slot0 data (contains sqrtPriceX96)
-        slot0 = pair_contract.functions.slot0().call()
+        pair_contract = web3_instance.eth.contract(address=address, abi=abi)
+
+        slot0 = pair_contract.functions.slot0().call() # Fetch slot0 data (contains sqrtPriceX96)
         sqrt_price_x96 = slot0[0]
 
         print(f"Raw sqrtPriceX96: {sqrt_price_x96}")
 
-        # Use Decimal for precise calculations
-        sqrt_price_x96_decimal = Decimal(sqrt_price_x96)
+        sqrt_price_x96_decimal = Decimal(sqrt_price_x96) # Use Decimal for precise calculations
         price_in_weth = (sqrt_price_x96_decimal ** 2) / Decimal(2 ** 192) 
         return price_in_weth
     except Exception as e:
         print(f"Error fetching Uniswap V3 position data: {e}")
         return None
 
+def get_uniswap_v2_price(chain, lp_address):
+    try:
+        web3_instance = config.WEB3_INSTANCES.get(chain)
+        if not web3_instance:
+            print(f"Web3 instance for chain {chain} not found or not connected.")
+            return None
+        
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        abi_path = os.path.join(base_dir, 'config', 'uniswap_v2.abi.json')
+        with open(abi_path, 'r') as abi_file:
+            abi = json.load(abi_file)
+
+        address = web3_instance.to_checksum_address(lp_address)
+
+        pair_contract = web3_instance.eth.contract(address=address, abi=abi)
+
+        reserves = pair_contract.functions.getReserves().call()
+        reserve0 = Decimal(reserves[0])
+        reserve1 = Decimal(reserves[1])
+
+        price_in_weth = reserve1 / reserve0 # Reserve0 is the token and reserve1 is WETH
+        print(f"Token price in WETH (Uniswap V2): {price_in_weth}")
+        return price_in_weth
+    except Exception as e:
+        print(f"Error fetching Uniswap V2 reserves: {e}")
+        return None
+    
 def get_token_price(update: Update, context: CallbackContext) -> None:
-    print("Fetching token price using Uniswap V3...")
+    print("Fetching token price using Uniswap V3...") #TODO: Remove line about v3 when v2 works
 
     args = context.args
     modifier = args[0].upper() if args else "USD"  # Default to "USD" if no modifier provided
@@ -4097,18 +4142,14 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
 
     group_data = fetch_group_info(update, context)
     if group_data is None:
-        print("Group data not found.")
-        update.message.reply_text("Group data not found.")
         return
 
-    token_data = group_data.get('token')
+    token_data = fetch_group_token(group_data, update, context)
     if not token_data:
-        print("Token data not found for this group.")
-        update.message.reply_text("Token data not found for this group.")
         return
 
-    lp_address = token_data.get('liquidity_address')  # Extract token details
-    chain = token_data.get('chain')
+    lp_address = token_data["liquidity_address"]
+    chain = token_data["chain"]
 
     if not lp_address or not chain:
         print("Liquidity address or chain not found for this group.")
@@ -4116,17 +4157,23 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
         return
 
     try:
+        pool_type = determine_pool_type(chain, lp_address)
+        if pool_type not in ["v3", "v2"]:
+            update.message.reply_text("Failed to determine pool type.")
+            return
+        
         if modifier == "USD":
-            # Use the existing get_token_price_in_usd function
-            token_price_in_usd = get_token_price_in_usd(chain, lp_address)
+            token_price_in_usd = get_token_price_in_usd(chain, lp_address) # Use the existing get_token_price_in_usd function
             if token_price_in_usd is None:
                 update.message.reply_text("Failed to fetch token price in USD.")
                 return
             print(f"Token price in USD: {token_price_in_usd}")
             update.message.reply_text(f"${token_price_in_usd:.4f}")
         elif modifier == "ETH":
-            # Fetch token price in WETH directly
-            price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
+            if pool_type == "v3":
+                price_in_weth = get_uniswap_v3_position_data(chain, lp_address)
+            elif pool_type == "v2":
+                price_in_weth = get_uniswap_v2_price(chain, lp_address)
             if price_in_weth is None:
                 print("Failed to fetch Uniswap V3 position data.")
                 update.message.reply_text("Failed to fetch Uniswap V3 position data.")
@@ -5042,16 +5089,16 @@ def buy(update: Update, context: CallbackContext) -> None:
         if group_data is None:
             return
         
-        token_data = group_data.get('token')
-        if not token_data:
-            update.message.reply_text("Token data not found for this group.")
+        token_data = fetch_group_token(group_data, update, context)
+        if token_data is None:
             return
-        token_name = token_data.get('name')
-        token_symbol = token_data.get('symbol')
         
-        contract_address = token_data.get('contract_address')
-        if not contract_address:
-            update.message.reply_text("Contract address not found for this group.")
+        token_name = token_data["name"]
+        token_symbol = token_data["symbol"]
+        contract_address = token_data["contract_address"]
+
+        if not contract_address or not token_name or not token_symbol:
+            update.message.reply_text(f"Unable to retrieve either the contract address, token name, or token symbol for this group.")
             return
         
         buy_link = f"https://app.uniswap.org/swap?outputCurrency={contract_address}"
@@ -5082,14 +5129,13 @@ def contract(update: Update, context: CallbackContext) -> None:
         
         group_data = fetch_group_info(update, context)
         if group_data is None:
-            return  # Early exit if no data is found
+            return
         
-        token_data = group_data.get('token')
-        if not token_data:
-            update.message.reply_text("Token data not found for this group.")
+        token_data = fetch_group_token(group_data, update, context)
+        if token_data is None:
             return
 
-        contract_address = token_data.get('contract_address')
+        contract_address = token_data["contract_address"]
         if not contract_address:
             update.message.reply_text("Contract address not found for this group.")
             return
@@ -5117,14 +5163,12 @@ def liquidity(update: Update, context: CallbackContext) -> None:
         if group_data is None:
             return
 
-        token_data = group_data.get('token')
-        if not token_data:
-            update.message.reply_text("Token data not found for this group.")
+        token_data = fetch_group_token(group_data, update, context)
+        if token_data is None:
             return
 
-        lp_address = token_data.get('liquidity_address')
-        chain = token_data.get('chain')
-
+        chain = token_data["chain"]
+        lp_address = token_data["liquidity_address"]
         if not lp_address or not chain:
             update.message.reply_text("Liquidity address or chain not found for this group.")
             return
@@ -5168,14 +5212,12 @@ def volume(update: Update, context: CallbackContext) -> None:
         if group_data is None:
             return
         
-        token_data = group_data.get('token')
-        if not token_data:
-            update.message.reply_text("Token data not found for this group.")
+        token_data = fetch_group_token(group_data, update, context)
+        if token_data is None:
             return
 
-        lp_address = token_data.get('liquidity_address')
-        chain = token_data.get('chain')    
-
+        chain = token_data["chain"]
+        lp_address = token_data["liquidity_address"]
         if not lp_address or not chain:
             update.message.reply_text("Liquidity address or chain not found for this group.")
             return
@@ -5233,25 +5275,16 @@ def chart(update: Update, context: CallbackContext) -> None:
         if group_data is None:
             return  # Early exit if no data is found
         
-        token_data = group_data.get('token')
-        if not token_data:
-            update.message.reply_text("Token data not found for this group.")
-            return   
-        chain = token_data.get('chain')
-        if not chain:
-            update.message.reply_text("Chain not found for this group.")
+        token_data = fetch_group_token(group_data, update, context)
+        if token_data is None:
             return
-        liquidity_address = token_data.get('liquidity_address')
-        if not liquidity_address:
-            update.message.reply_text("Contract address not found for this group.")
-            return
-        name = token_data.get('name')
-        if not name:
-            update.message.reply_text("Token name not found for this group.")
-            return
-        symbol = token_data.get('symbol')
-        if not symbol:
-            update.message.reply_text("Token symbol not found for this group.")
+        
+        chain = token_data["chain"]
+        name = token_data["name"]
+        symbol = token_data["symbol"]
+        liquidity_address = token_data["liquidity_address"]
+        if not chain or not name or not symbol or not liquidity_address:
+            msg = update.message.reply_text("Full token data not found for this group.")
             return
 
         group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
