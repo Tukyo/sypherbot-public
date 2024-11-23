@@ -8,25 +8,21 @@ import random
 import inspect
 import requests
 import telegram
-import threading
 import pandas as pd
-import firebase_admin
-import mplfinance as mpf
-from web3 import Web3
 from io import BytesIO
-from scripts import config # Import the config module from the scripts folder
+import mplfinance as mpf
 from decimal import Decimal
-from functools import partial
+from threading import Timer
 from cachetools import TTLCache
-from threading import Timer, Thread
-from dotenv import load_dotenv
-from datetime import datetime, timedelta, timezone
 from collections import deque, defaultdict
-from google.cloud.firestore_v1 import DELETE_FIELD
-from firebase_admin import credentials, firestore, storage
+from firebase_admin import firestore, storage
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
-from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
-from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler, JobQueue
+from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
+
+from scripts import config # Import the config module from the scripts folder
+from scripts import firebase # Import the firebase module from the scripts folder
 
 #
 ## This is the public version of the bot that was developed by Tukyo for the Sypher project.
@@ -73,64 +69,14 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 ##
 #
 
-load_dotenv()
+## This is for testing, if running locally, load the environment variables from the ENV
+### If you forked this repository, you will need to create a .env file and populate all variables from config.py 
+#
+# from dotenv import load_dotenv
+# load_dotenv()
+#
+##
 
-TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
-
-MATH_0 = int(os.getenv("MATH_0"))
-MATH_1 = int(os.getenv("MATH_1"))
-MATH_2 = int(os.getenv("MATH_2"))
-MATH_3 = int(os.getenv("MATH_3"))
-MATH_4 = int(os.getenv("MATH_4"))
-WORD_0 = os.getenv("WORD_0")
-WORD_1 = os.getenv("WORD_1")
-WORD_2 = os.getenv("WORD_2")
-WORD_3 = os.getenv("WORD_3")
-WORD_4 = os.getenv("WORD_4")
-WORD_5 = os.getenv("WORD_5")
-WORD_6 = os.getenv("WORD_6")
-WORD_7 = os.getenv("WORD_7")
-WORD_8 = os.getenv("WORD_8")
-
-RELAXED_TRUST = int(os.getenv('RELAXED_TRUST'))
-MODERATE_TRUST = int(os.getenv('MODERATE_TRUST'))
-STRICT_TRUST = int(os.getenv('STRICT_TRUST'))
-
-#region Firebase
-FIREBASE_TYPE= os.getenv('FIREBASE_TYPE')
-FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID')
-FIREBASE_PRIVATE_KEY_ID= os.getenv('FIREBASE_PRIVATE_KEY_ID')
-FIREBASE_PRIVATE_KEY = os.getenv('FIREBASE_PRIVATE_KEY').replace('\\n', '\n')
-FIREBASE_CLIENT_EMAIL= os.getenv('FIREBASE_CLIENT_EMAIL')
-FIREBASE_CLIENT_ID= os.getenv('FIREBASE_CLIENT_ID')
-FIREBASE_AUTH_URL= os.getenv('FIREBASE_AUTH_URL')
-FIREBASE_TOKEN_URI= os.getenv('FIREBASE_TOKEN_URI')
-FIREBASE_AUTH_PROVIDER_X509_CERT_URL= os.getenv('FIREBASE_AUTH_PROVIDER_X509_CERT_URL')
-FIREBASE_CLIENT_X509_CERT_URL= os.getenv('FIREBASE_CLIENT_X509_CERT_URL')
-FIREBASE_STORAGE_BUCKET = os.getenv('FIREBASE_STORAGE_BUCKET')
-
-cred = credentials.Certificate({
-    "type": FIREBASE_TYPE,
-    "project_id": FIREBASE_PROJECT_ID,
-    "private_key_id": FIREBASE_PRIVATE_KEY_ID,
-    "private_key": FIREBASE_PRIVATE_KEY,
-    "client_email": FIREBASE_CLIENT_EMAIL,
-    "client_id": FIREBASE_CLIENT_ID,
-    "auth_uri": FIREBASE_AUTH_URL,
-    "token_uri": FIREBASE_TOKEN_URI,
-    "auth_provider_x509_cert_url": FIREBASE_AUTH_PROVIDER_X509_CERT_URL,
-    "client_x509_cert_url": FIREBASE_CLIENT_X509_CERT_URL
-})
-
-firebase_admin.initialize_app(cred, { 'storageBucket': FIREBASE_STORAGE_BUCKET })
-
-db = firestore.client()
-bucket = storage.bucket()
-
-print("Database: ", db)
-print("Bucket: ", bucket)
-print("Firebase initialized.")
-#endregion Firebase
 
 #region Classes
 class AntiSpam:
@@ -210,16 +156,11 @@ anti_raid = AntiRaid(user_amount=ANTI_RAID_USER_AMOUNT, time_out=ANTI_RAID_TIME_
 
 scheduler = BackgroundScheduler()
 
-BOT_USERNAME = "sypher_robot"
 
-ETH_ADDRESS_PATTERN = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
-URL_PATTERN = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
-DOMAIN_PATTERN = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
 
 RATE_LIMIT_MESSAGE_COUNT = 100  # Maximum number of allowed commands per {TIME_PERIOD}
 RATE_LIMIT_TIME_PERIOD = 60  # Time period in (seconds)
 MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
-BLOB_EXPIRATION = 15 # Expiration time for uploaded files (minutes)
 
 last_check_time = time.time()
 command_count = 0
@@ -230,7 +171,7 @@ def track_message(message):
     print(f"Tracked message: {message.message_id}")
 
 #region LOGGING
-bot = Bot(token=TELEGRAM_TOKEN)
+bot = Bot(token=config.TELEGRAM_TOKEN)
 LOG_CHAT = "-1002087245760"
 LOGGING_TIMEZONE = "America/Los_Angeles"
 MAX_TELEGRAM_MESSAGE_LENGTH = 4096
@@ -332,7 +273,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
         owner_username = inviter.username
         print(f"Adding group {group_id} to database with owner {owner_id} ({owner_username})")
         chat_id = update.effective_chat.id
-        group_doc = db.collection('groups').document(str(chat_id))
+        group_doc = firebase.db.collection('groups').document(str(chat_id))
         group_doc.set({
             'group_id': group_id,
             'owner_id': owner_id,
@@ -366,7 +307,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
 
         print(f"Group {group_id} added to database.")
 
-        group_counter = db.collection('stats').document('addedgroups')
+        group_counter = firebase.db.collection('stats').document('addedgroups')
         group_counter.update({'count': firestore.Increment(1)}) # Get the current added groups count and increment by 1
 
         bot_member = context.bot.get_chat_member(group_id, context.bot.id)  # Get bot's member info
@@ -408,14 +349,14 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
 
     if left_member.id == context.bot.id: # Bot left. not user
         print(f"Removing group {update.effective_chat.id} from database.")
-        group_counter = db.collection('stats').document('removedgroups')
+        group_counter = firebase.db.collection('stats').document('removedgroups')
         group_counter = group_counter.update({'count': firestore.Increment(1)}) # Get the current removed groups count and increment by 1
         group_doc.delete()  # Directly delete the group document
         clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 #region Monitoring
 def start_monitoring_groups():
-    groups_snapshot = db.collection('groups').get()
+    groups_snapshot = firebase.db.collection('groups').get()
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
         group_data['group_id'] = group_doc.id
@@ -556,7 +497,7 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         print(f"Returning cached data for group {group_id}")
         return cached_info["group_data"]
 
-    group_doc = db.collection('groups').document(str(group_id))
+    group_doc = firebase.db.collection('groups').document(str(group_id))
 
     if return_doc:
         print(f"Fetching group_doc for group {group_id}")
@@ -694,11 +635,11 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     print(f"Message sent by user {user_id} in chat {chat_id}")
 
     detected_patterns = []
-    if ETH_ADDRESS_PATTERN.search(msg):
+    if config.ETH_ADDRESS_PATTERN.search(msg):
         detected_patterns.append("eth_address")
-    if URL_PATTERN.search(msg):
+    if config.URL_PATTERN.search(msg):
         detected_patterns.append("url")
-    if DOMAIN_PATTERN.search(msg):
+    if config.DOMAIN_PATTERN.search(msg):
         detected_patterns.append("domain")
 
     if re.search(r"@\w+", msg): # Trigger trust check
@@ -728,7 +669,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
                 delete_blocked_addresses(update, context)
                 return
             elif pattern == "url":
-                matched_url = URL_PATTERN.search(msg).group()  # Extract the detected URL
+                matched_url = config.URL_PATTERN.search(msg).group()  # Extract the detected URL
                 normalized_msg = re.sub(r'^https?://', '', msg).strip().lower().rstrip('/')  # Normalize the URL
                 print(f"Detected URL: {matched_url} - Normalized: {normalized_msg}")
                 delete_blocked_links(update, context)
@@ -743,7 +684,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
                     print(f"Domain matches group website: {msg}.")
                     return  # Skip deletion for matching group website domain
                 
-                if not is_allowed(msg, allowlist, DOMAIN_PATTERN):
+                if not is_allowed(msg, allowlist, config.DOMAIN_PATTERN):
                     print(f"Blocked domain: {msg}")
                     context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
                     return
@@ -824,7 +765,7 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
 
     # Only send the message if the user is not in the unverified_users mapping
     if str(user_id) not in group_data.get('unverified_users', {}):
-        auth_url = f"https://t.me/{BOT_USERNAME}?start=authenticate_{chat_id}_{user_id}"
+        auth_url = f"https://t.me/{config.BOT_USERNAME}?start=authenticate_{chat_id}_{user_id}"
         keyboard = [
             [InlineKeyboardButton("Remove Restrictions", url=auth_url)]
         ]
@@ -865,7 +806,7 @@ def delete_blocked_addresses(update: Update, context: CallbackContext):
         print("No text in message.")
         return
 
-    found_addresses = ETH_ADDRESS_PATTERN.findall(message_text)
+    found_addresses = config.ETH_ADDRESS_PATTERN.findall(message_text)
 
     if not found_addresses:
         print("No addresses found in message.")
@@ -899,8 +840,8 @@ def delete_blocked_links(update: Update, context: CallbackContext):
         return
 
     # Regular expressions to find URLs and domains
-    found_links = URL_PATTERN.findall(message_text)
-    found_domains = DOMAIN_PATTERN.findall(message_text)
+    found_links = config.URL_PATTERN.findall(message_text)
+    found_domains = config.DOMAIN_PATTERN.findall(message_text)
 
     if not found_links and not found_domains:
         print("No links or domains found in message.")
@@ -1087,7 +1028,7 @@ def start(update: Update, context: CallbackContext) -> None:
                 user_id_from_link = command_args[2]
                 print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
 
-                group_doc = db.collection('groups').document(group_id)
+                group_doc = firebase.db.collection('groups').document(group_id)
                 group_data = group_doc.get()
                 if group_data.exists:
                     unverified_users = group_data.to_dict().get('unverified_users', {})
@@ -1104,7 +1045,7 @@ def start(update: Update, context: CallbackContext) -> None:
                     msg = update.message.reply_text('No such group exists.')
             else:
                 keyboard = [ # General start command handling when not triggered via deep link
-                    [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/{BOT_USERNAME}?startgroup=0")]
+                    [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/{config.BOT_USERNAME}?startgroup=0")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 msg = update.message.reply_text(
@@ -1793,7 +1734,7 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
         if context.chat_data.get('setup_stage') == 'website':
             website_url = update.message.text.strip()
 
-            if URL_PATTERN.fullmatch(website_url):  # Use the global URL_PATTERN
+            if config.URL_PATTERN.fullmatch(website_url):  # Use the global config.URL_PATTERN
                 group_id = update.effective_chat.id
                 print(f"Adding website URL {website_url} to group {group_id}")
                 group_doc = fetch_group_info(update, context, return_doc=True)
@@ -2120,7 +2061,7 @@ def toggle_command_status(update: Update, context: CallbackContext) -> None:
                 print(f"Group {chat_id} is not premium. Cannot toggle 'play' command.")
                 return
 
-        group_doc = db.collection('groups').document(str(chat_id))
+        group_doc = firebase.db.collection('groups').document(str(chat_id))
         group_data = group_doc.get().to_dict()
 
         if not group_data:
@@ -2378,7 +2319,7 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
 
 def set_authentication_timeout(group_id: int, timeout_seconds: int) -> None: # Sets the verification timeout for a specific group in the Firestore database.
     try:
-        group_ref = db.collection('groups').document(str(group_id))
+        group_ref = firebase.db.collection('groups').document(str(group_id))
 
         group_ref.update({
             'verification_info.verification_timeout': timeout_seconds
@@ -2648,7 +2589,7 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
 
 def complete_token_setup(group_id: str, context: CallbackContext):
     msg = None
-    group_doc = db.collection('groups').document(str(group_id))
+    group_doc = firebase.db.collection('groups').document(str(group_id))
     group_data = group_doc.get().to_dict()
 
     token_data = group_data.get('token')
@@ -2902,8 +2843,8 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
             filepath = f'sypherbot/public/welcome_message_header/{filename}'
 
             # Save to Firebase Storage
-            bucket = storage.bucket()
-            blob = bucket.blob(filepath)
+            firebase.bucket = storage.firebase.bucket()
+            blob = firebase.bucket.blob(filepath)
             blob.upload_from_string(
                 image_stream.getvalue(),
                 content_type='image/jpeg'
@@ -2981,8 +2922,8 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
             filepath = f'sypherbot/public/buybot_message_header/{filename}'
 
             # Save to Firebase Storage
-            bucket = storage.bucket()
-            blob = bucket.blob(filepath)
+            firebase.bucket = storage.firebase.bucket()
+            blob = firebase.bucket.blob(filepath)
             image_stream = BytesIO()
             file.download(out=image_stream)
             blob.upload_from_string(
@@ -3221,9 +3162,9 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
 
     sypher_trust_preferences = group_data.get('premium_features', {}).get('sypher_trust_preferences', 'moderate') # Determine trust preferences, default to moderate
     trust_durations = {
-        'relaxed': timedelta(days=RELAXED_TRUST),
-        'moderate': timedelta(days=MODERATE_TRUST),
-        'strict': timedelta(days=STRICT_TRUST),
+        'relaxed': timedelta(days=config.RELAXED_TRUST),
+        'moderate': timedelta(days=config.MODERATE_TRUST),
+        'strict': timedelta(days=config.STRICT_TRUST),
     }
     trust_duration = trust_durations.get(sypher_trust_preferences)
 
@@ -3233,7 +3174,7 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
 
     if time_elapsed >= trust_duration: # Check if sufficient time has passed
         print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Removing from untrusted_users.")
-        db.collection('groups').document(group_id).update({f'untrusted_users.{user_id}': firestore.DELETE_FIELD})
+        firebase.db.collection('groups').document(group_id).update({f'untrusted_users.{user_id}': firestore.DELETE_FIELD})
         clear_group_cache(group_id) # Clear the cache on all database updates
         return True
     else:
@@ -3316,7 +3257,7 @@ def handle_minimum_buy(update: Update, context: CallbackContext) -> None:
             group_id = update.effective_chat.id
             group_data = fetch_group_info(update, context)
             if group_data is not None:
-                group_doc = db.collection('groups').document(str(group_id))
+                group_doc = firebase.db.collection('groups').document(str(group_id))
                 group_doc.update({
                     'premium_features.buybot.minimumbuy': int(update.message.text)
                 })
@@ -3365,7 +3306,7 @@ def handle_small_buy(update: Update, context: CallbackContext) -> None:
             group_id = update.effective_chat.id
             group_data = fetch_group_info(update, context)
             if group_data is not None:
-                group_doc = db.collection('groups').document(str(group_id))
+                group_doc = firebase.db.collection('groups').document(str(group_id))
                 try:
                     group_doc.update({
                         'premium_features.buybot.smallbuy': int(update.message.text)
@@ -3418,7 +3359,7 @@ def handle_medium_buy(update: Update, context: CallbackContext) -> None:
             group_id = update.effective_chat.id
             group_data = fetch_group_info(update, context)
             if group_data is not None:
-                group_doc = db.collection('groups').document(str(group_id))
+                group_doc = firebase.db.collection('groups').document(str(group_id))
                 try:
                     group_doc.update({
                         'premium_features.buybot.mediumbuy': int(update.message.text)
@@ -3503,13 +3444,13 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 print(f"Sypher Trust is enabled for group {group_id}. Adding user {user_id} to untrusted_users.")
                 updates[f'untrusted_users.{user_id}'] = current_time
             
-            auth_url = f"https://t.me/{BOT_USERNAME}?start=authenticate_{chat_id}_{user_id}"
+            auth_url = f"https://t.me/{config.BOT_USERNAME}?start=authenticate_{chat_id}_{user_id}"
             keyboard = [ [InlineKeyboardButton("Start Authentication", url=auth_url)] ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
-                blob = bucket.blob(f'sypherbot/public/welcome_message_header/welcome_message_header_{group_id}.jpg')
-                welcome_image_url = blob.generate_signed_url(expiration=timedelta(minutes=BLOB_EXPIRATION))
+                blob = firebase.bucket.blob(f'sypherbot/public/welcome_message_header/welcome_message_header_{group_id}.jpg')
+                welcome_image_url = blob.generate_signed_url(expiration=timedelta(minutes=firebase.BLOB_EXPIRATION))
 
                 print(f"Group {group_id} has premium features enabled, and has a header uploaded... Sending welcome message with image.")
 
@@ -3553,7 +3494,7 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
 
     print(f"Authenticating user {user_id} for group {group_id}")
 
-    group_doc = db.collection('groups').document(group_id)
+    group_doc = firebase.db.collection('groups').document(group_id)
     group_data = group_doc.get().to_dict()
 
     if group_data:
@@ -3583,12 +3524,12 @@ def authentication_challenge(update: Update, context: CallbackContext, authentic
     group_doc = fetch_group_info(update, context, return_doc=True, group_id=group_id)
 
     if authentication_type == 'math':
-        challenges = [MATH_0, MATH_1, MATH_2, MATH_3, MATH_4]
+        challenges = [config.MATH_0, config.MATH_1, config.MATH_2, config.MATH_3, config.MATH_4]
         index = random.randint(0, 4)
         math_challenge = challenges[index]
 
-        blob = bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
-        image_url = blob.generate_signed_url(expiration=timedelta(minutes=BLOB_EXPIRATION))
+        blob = firebase.bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
+        image_url = blob.generate_signed_url(expiration=timedelta(minutes=firebase.BLOB_EXPIRATION))
 
         response = requests.get(image_url)
         print(f"Response: {response}")
@@ -3632,13 +3573,13 @@ def authentication_challenge(update: Update, context: CallbackContext, authentic
         print(f"Stored math challenge for user {user_id} in group {group_id}: {math_challenge}")
 
     elif authentication_type == 'word':
-        challenges = [WORD_0, WORD_1, WORD_2, WORD_3, WORD_4, WORD_5, WORD_6, WORD_7, WORD_8]
+        challenges = [config.WORD_0, config.WORD_1, config.WORD_2, config.WORD_3, config.WORD_4, config.WORD_5, config.WORD_6, config.WORD_7, config.WORD_8]
         original_challenges = challenges.copy()  # Copy the original list before shuffling
         random.shuffle(challenges)
         word_challenge = challenges[0]  # The word challenge is the first word in the shuffled list
         index = original_challenges.index(word_challenge)  # Get the index of the word challenge in the original list
 
-        blob = bucket.blob(f'sypherbot/private/auth/word_{index}.jpg')
+        blob = firebase.bucket.blob(f'sypherbot/private/auth/word_{index}.jpg')
         image_url = blob.generate_signed_url(expiration=timedelta(minutes=15), version="v4")
     
         keyboard = []
@@ -3684,7 +3625,7 @@ def callback_word_response(update: Update, context: CallbackContext):
 
     print(f"User ID: {user_id} - Group ID: {group_id} - Response: {response}")
 
-    group_doc = db.collection('groups').document(group_id)
+    group_doc = firebase.db.collection('groups').document(group_id)
     group_data = group_doc.get()
 
     if group_data.exists:
@@ -3723,7 +3664,7 @@ def callback_math_response(update: Update, context: CallbackContext):
 
     print(f"User ID: {user_id} - Group ID: {group_id} - Response: {response}")
 
-    group_doc = db.collection('groups').document(group_id)
+    group_doc = firebase.db.collection('groups').document(group_id)
     group_data = group_doc.get()
 
     if group_data.exists:
@@ -3751,7 +3692,7 @@ def callback_math_response(update: Update, context: CallbackContext):
 def authenticate_user(context, group_id, user_id):
     # Always check the database when authenticating the user
     # This is to avoid using stale cached data
-    group_doc = db.collection('groups').document(group_id)
+    group_doc = firebase.db.collection('groups').document(group_id)
     group_data = group_doc.get().to_dict()
 
     print(f"Authenticating user {user_id} in group {group_id}")
@@ -4019,7 +3960,7 @@ def categorize_buyer(usd_value, small_buy, medium_buy):
         return "🤑", "🐳"
     
 def send_buy_message(text, group_id, reply_markup=None):
-    bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    bot = telegram.Bot(token=config.TELEGRAM_TOKEN)
     if rate_limit_check():
         try:
             msg = bot.send_message(chat_id=group_id, text=text, parse_mode='Markdown', reply_markup=reply_markup)
@@ -4277,7 +4218,7 @@ def mute(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
 
     if is_user_admin(update, context):
-        group_doc = db.collection('groups').document(str(chat_id))
+        group_doc = firebase.db.collection('groups').document(str(chat_id))
         group_data = group_doc.get().to_dict()
 
         if group_data is None or not group_data.get('admin', {}).get('mute', False):
@@ -4315,7 +4256,7 @@ def unmute(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
 
-    group_doc = db.collection('groups').document(str(chat_id))
+    group_doc = firebase.db.collection('groups').document(str(chat_id))
     group_data = group_doc.get().to_dict()
 
     if group_data is None or not group_data.get('admin', {}).get('mute', False):
@@ -4359,7 +4300,7 @@ def warn(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
 
     if is_user_admin(update, context):
-        group_doc = db.collection('groups').document(str(chat_id))
+        group_doc = firebase.db.collection('groups').document(str(chat_id))
         group_data = group_doc.get().to_dict()
 
         if group_data is None or not group_data.get('admin', {}).get('warn', False): # Check if warns enabled
@@ -4409,7 +4350,7 @@ def warn(update: Update, context: CallbackContext):
 def clear_warns_for_user(update: Update, context: CallbackContext):
     msg = None
     chat_id = update.effective_chat.id
-    group_doc = db.collection('groups').document(str(chat_id))
+    group_doc = firebase.db.collection('groups').document(str(chat_id))
     group_data = group_doc.get().to_dict()
 
     if is_user_admin(update, context):
@@ -4607,9 +4548,9 @@ def allow(update: Update, context: CallbackContext):
         command_text = update.message.text[len('/allow '):].strip()
 
         # Validate against patterns
-        if not (ETH_ADDRESS_PATTERN.match(command_text) or 
-                URL_PATTERN.match(command_text) or 
-                DOMAIN_PATTERN.match(command_text)):
+        if not (config.ETH_ADDRESS_PATTERN.match(command_text) or 
+                config.URL_PATTERN.match(command_text) or 
+                config.DOMAIN_PATTERN.match(command_text)):
             msg = update.message.reply_text(
                 "Invalid format. Only crypto addresses, URLs, or domain names can be added to the allowlist."
             )
@@ -4808,10 +4749,9 @@ def report(update: Update, context: CallbackContext) -> None:
 
     chat_admins = context.bot.get_chat_administrators(chat_id) # Get the list of admins
     admin_usernames = [admin.user.username for admin in chat_admins if admin.user.username is not None]
-    bot_username = context.bot.username
     print(f"Message from {reported_user} in chat {chat_id} reported to admins {admin_usernames}")
 
-    if reported_user in admin_usernames or reported_user == bot_username:
+    if reported_user in admin_usernames or reported_user == config.BOT_USERNAME:
         context.bot.send_message(chat_id, text="Nice try lol") # If the reported user is an admin, send a message saying that admins cannot be reported
     else:
         admin_mentions = ' '.join(['@' + username for username in admin_usernames])  # Add '@' for mentions
@@ -5418,7 +5358,7 @@ def website(update: Update, context: CallbackContext) -> None:
 #endregion User Controls
 
 def main() -> None:
-    updater = Updater(TELEGRAM_TOKEN, use_context=True) # Create the Updater and pass it the bot's token
+    updater = Updater(config.TELEGRAM_TOKEN, use_context=True) # Create the Updater and pass it the bot's token
     dispatcher = updater.dispatcher # Get the dispatcher to register handlers
     
     #region Slash Command Handlers
