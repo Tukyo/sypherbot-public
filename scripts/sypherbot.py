@@ -3691,88 +3691,76 @@ def plot_candlestick_chart(data_frame, group_id):
 #region Monitoring
 MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
 scheduler = BackgroundScheduler()
+last_seen_blocks = {} # Initialize a dictionary to store the last seen block for each chain
 def start_monitoring_groups():
-    groups_snapshot = firebase.db.collection('groups').get()
+    premium_groups_by_chain = {}
+
+    groups_snapshot = firebase.db.collection('groups').get() # Consolidate premium groups by blockchain
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
         group_data['group_id'] = group_doc.id
 
-        if group_data.get('premium', False):  # Check if premium is True
-            schedule_group_monitoring(group_data)
-        else:
-            print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
+        if group_data.get('premium', False):  # Only include premium groups
+            chain = group_data['token']['chain']
+            if chain not in premium_groups_by_chain:
+                premium_groups_by_chain[chain] = []
+            premium_groups_by_chain[chain].append(group_data)
 
-    scheduler.start()
-
-def schedule_group_monitoring(group_data):
-    group_id = str(group_data['group_id'])
-    job_id = f"monitoring_{group_id}"
-    token_info = group_data.get('token')
-
-    if token_info:
-        chain = token_info.get('chain')
-        liquidity_address = token_info.get('liquidity_address')
+    for chain, premium_groups in premium_groups_by_chain.items(): # Schedule one monitoring job per blockchain
         web3_instance = config.WEB3_INSTANCES.get(chain)
-
         if web3_instance and web3_instance.is_connected():
-            existing_job = scheduler.get_job(job_id)  # Check for existing job with ID
+            job_id = f"monitoring_chain_{chain}"
+            existing_job = scheduler.get_job(job_id)
             if existing_job:
-                existing_job.remove()  # Remove existing job to update with new information
+                existing_job.remove()
 
             scheduler.add_job(
-                monitor_transfers,
+                monitor_chain,
                 'interval',
                 seconds=MONITOR_INTERVAL,
-                args=[web3_instance, liquidity_address, group_data],
-                id=job_id,  # Unique ID for the job
-                timezone=pytz.utc  # Use the UTC timezone from the pytz library
+                args=[web3_instance, chain, premium_groups],
+                id=job_id,
+                timezone=pytz.utc
             )
-            print(f"Scheduled monitoring for premium group {group_id}")
+            print(f"Scheduled chain monitoring for chain {chain} with {len(premium_groups)} premium groups.")
         else:
-            print(f"Web3 instance not connected for group {group_id} on chain {chain}")
-    else:
-        print(f"No token info found for group {group_id} - Not scheduling monitoring.")
+            print(f"Web3 instance not connected for chain {chain}. Skipping monitoring.")
 #endregion Monitoring
 
-def monitor_transfers(web3_instance, liquidity_address, group_data):
-    base_dir = os.path.dirname(os.path.dirname(__file__))
-    abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
+def monitor_chain(web3_instance, chain, premium_groups):
+    global last_seen_blocks
 
-    with open(abi_path, 'r') as abi_file:
-        abi = json.load(abi_file)
-    
-    contract_address = group_data['token']['contract_address']
-    
-    contract = web3_instance.eth.contract(address=contract_address, abi=abi)
+    if chain not in last_seen_blocks: # Initialize last seen block for the chain
+        lookback_range = 100  # Check the last 100 blocks on boot
+        last_seen_blocks[chain] = web3_instance.eth.block_number - lookback_range
 
-    # Initialize static tracking of the last seen block
-    if not hasattr(monitor_transfers, "last_seen_block"):
-        lookback_range = 100 # Check the last block on boot
-        monitor_transfers.last_seen_block = web3_instance.eth.block_number - lookback_range
-
-    last_seen_block = monitor_transfers.last_seen_block
+    last_seen_block = last_seen_blocks[chain]
     latest_block = web3_instance.eth.block_number
 
     if last_seen_block >= latest_block:
-        print(f"No new blocks to process for group {group_data['group_id']}.")
-        return  # Exit if no new blocks
+        print(f"No new blocks to process for chain {chain}.")
+        return
 
-    print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
+    print(f"Processing blocks {last_seen_block + 1} to {latest_block} for chain {chain}.")
 
-    try:
-        logs = contract.events.Transfer().get_logs( # Fetch Transfer events in the specified block range
-            from_block=last_seen_block + 1,
-            to_block=latest_block,
-            argument_filters={'from': liquidity_address}
-        )
+    contract_addresses = [group['token']['contract_address'] for group in premium_groups] # Gather all contract addresses for premium groups on this chain
 
-        for log in logs: # Process each log
-            handle_transfer_event(log, group_data)  # Pass the decoded log to your handler
+    try: # Fetch Transfer events for all monitored contracts
+        logs = web3_instance.eth.filter({
+            'fromBlock': last_seen_block + 1,
+            'toBlock': latest_block,
+            'address': contract_addresses
+        }).get_all_entries()
 
-        monitor_transfers.last_seen_block = latest_block # Update static last_seen_block
+        for log in logs: # Dispatch events to respective groups
+            for group in premium_groups:
+                if log['address'] == group['token']['contract_address']:
+                    handle_transfer_event(log, group)  # Process event for the group
+
+        last_seen_blocks[chain] = latest_block  # Update last seen block for the chain
 
     except Exception as e:
-        print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
+        print(f"Error during transfer monitoring for chain {chain}: {e}")
 
 def handle_transfer_event(event, group_data):
     fetched_data, group_doc = utils.fetch_group_info(
