@@ -4871,12 +4871,12 @@ def play(update: Update, context: CallbackContext) -> None:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         base_dir = os.path.dirname(os.path.dirname(__file__))
-        photo_path = os.path.join(base_dir, 'assets', 'banner.gif')
+        gif_path = os.path.join(base_dir, 'assets', 'banner.gif')
         
-        with open(photo_path, 'rb') as photo:
-            context.bot.send_photo(
+        with open(gif_path, 'rb') as gif:
+            context.bot.send_animation(
                 chat_id=update.effective_chat.id,
-                photo=photo,
+                animation=gif,
                 caption='Welcome to deSypher! Click the button below to start a game!\n\nTo end an ongoing game, use the command /endgame.',
                 reply_markup=reply_markup
             )
