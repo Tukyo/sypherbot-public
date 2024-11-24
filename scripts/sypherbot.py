@@ -2944,8 +2944,8 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
 
         validation_result = validate_media(update)
 
-        if not validation_result['valid']: 
-            msg = context.bot.send_message( # Send validation error to the user
+        if not validation_result['valid']:
+            msg = context.bot.send_message(  # Send validation error to the user
                 chat_id=update.effective_chat.id,
                 text=validation_result['error'],
                 parse_mode='Markdown'
@@ -2957,11 +2957,14 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
         file_stream = validation_result['file_stream']
         file_extension = validation_result['file_extension']
 
+        print(f"File size: {file_stream.getbuffer().nbytes} bytes.")
+
         filename = f'buybot_message_header_{group_id}.{file_extension}'
         filepath = f'sypherbot/public/buybot_message_header/{filename}'
 
         bucket = firebase.bucket  # Save to Firebase Storage
         blob = bucket.blob(filepath)
+
         # Determine the correct MIME type explicitly
         if file_extension == "gif":
             mime_type = "image/gif"
@@ -2972,11 +2975,8 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
         else:
             mime_type = "application/octet-stream"  # Fallback for unknown types
 
-        # Upload the file with the correct MIME type
-        blob.upload_from_string(
-            file_stream.getvalue(),
-            content_type=mime_type
-        )
+        file_stream.seek(0)  # Ensure stream is at the beginning
+        blob.upload_from_file(file_stream, content_type=mime_type)
         blob.make_public()  # Make the file publicly accessible
 
         buybot_header_url = blob.public_url  # Store the public URL
@@ -3001,17 +3001,18 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
         if msg is not None:
             track_message(msg)
 
-def validate_media(update, max_width=700, max_height=250, max_size=100000):
+def validate_media(update, max_width=700, max_height=250, max_size=1000000):
     media = None
     file_extension = None
+    file_stream = BytesIO()
 
-    if update.message.photo: # Handle photos (PNG, JPG)
+    if update.message.photo:  # Handle photos (PNG, JPG)
         media = update.message.photo[-1]
         file_extension = "jpg"  # Assume JPG for Telegram photos
-    elif update.message.animation: # Handle GIFs
+    elif update.message.animation:  # Handle GIFs
         media = update.message.animation
         file_extension = "gif"
-    elif update.message.video: # Handle MP4 videos
+    elif update.message.video:  # Handle MP4 videos
         media = update.message.video
         file_extension = "mp4"
     else:
@@ -3023,23 +3024,23 @@ def validate_media(update, max_width=700, max_height=250, max_size=100000):
             'error': "Unsupported file type. Please upload a PNG, JPG, GIF, or MP4 file."
         }
 
-    file = update.message.bot.get_file(media.file_id) # Download the file
-    file_stream = BytesIO()
+    file = update.message.bot.get_file(media.file_id)  # Download the file
     file.download(out=file_stream)
     file_size = len(file_stream.getvalue())  # File size in bytes
 
-    if media.width <= max_width and media.height <= max_height and file_size <= max_size: # Validate dimensions and size
-        return {
-            'valid': True,
-            'media': media,
-            'file_extension': file_extension,
-            'file_stream': file_stream,
-            'error': None
-        }
+    if hasattr(media, "width") and hasattr(media, "height"): # Validate dimensions and size
+        if media.width <= max_width and media.height <= max_height and file_size <= max_size:
+            return {
+                'valid': True,
+                'media': media,
+                'file_extension': file_extension,
+                'file_stream': file_stream,
+                'error': None
+            }
 
-    error_message = "Please ensure the media is less than {}x{} pixels".format(max_width, max_height) # If validation fails, return an error
+    error_message = f"Please ensure the media is less than {max_width}x{max_height} pixels"
     if file_size > max_size:
-        error_message += " and smaller than {} KB".format(max_size // 1000)
+        error_message += f" and smaller than {max_size // 1000} KB"
     error_message += " and try again."
 
     return {
@@ -3049,6 +3050,7 @@ def validate_media(update, max_width=700, max_height=250, max_size=100000):
         'file_stream': None,
         'error': error_message
     }
+
 #endregion Customization Setup
 ##
 #
