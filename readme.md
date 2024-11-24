@@ -1,5 +1,5 @@
 # Sypherbot - Public Repository for the Telegram Sypherbot
-![Banner](assets/readme_banner.jpg)
+![Banner](assets/img/readme_banner.jpg)
 ## 💾 Technologies Used
 ![License](https://img.shields.io/badge/license-MIT-green) ![Python](https://img.shields.io/badge/python-3.10-blue.svg)
 

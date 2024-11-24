@@ -32,6 +32,11 @@ ETH_ADDRESS_PATTERN = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
 URL_PATTERN = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 DOMAIN_PATTERN = re.compile(r'\b[\w\.-]+\.[a-zA-Z]{2,}\b')
 
+BOT_RATE_LIMIT_MESSAGE_COUNT = 100  # Maximum number of allowed commands per {TIME_PERIOD}
+BOT_RATE_LIMIT_TIME_PERIOD = 60  # Time period in (seconds)
+GROUP_RATE_LIMIT_MESSAGE_COUNT = 25  # Maximum number of allowed commands per {TIME_PERIOD} per group
+GROUP_RATE_LIMIT_TIME_PERIOD = 15  # Time period in (seconds) per group
+
 ENDPOINTS = {
     "ARBITRUM": os.getenv('ARBITRUM_ENDPOINT'),
     "AVALANCHE": os.getenv('AVALANCHE_ENDPOINT'),

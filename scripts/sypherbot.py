@@ -9,21 +9,25 @@ import inspect
 import requests
 import telegram
 import pandas as pd
+from web3 import Web3
 from io import BytesIO
 import mplfinance as mpf
 from decimal import Decimal
 from threading import Timer
-from cachetools import TTLCache
 from collections import deque, defaultdict
-from firebase_admin import firestore, storage
+from firebase_admin import firestore
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
-from web3 import Web3
 
-from scripts import config # Import the config module from the scripts folder
-from scripts import firebase # Import the firebase module from the scripts folder
+## Import the needed modules from the config folder
+# {config.py} - Environment variables and global variables used in the bot
+# {firebase.py} - Firebase configuration and database initialization
+# {utils.py} - Utility functions and variables used in the bot
+from scripts import config
+from scripts import utils
+from scripts import firebase
 
 #
 ## This is the public version of the bot that was developed by Tukyo for the Sypher project.
@@ -77,7 +81,6 @@ from scripts import firebase # Import the firebase module from the scripts folde
 # load_dotenv()
 #
 ##
-
 
 #region Classes
 class AntiSpam:
@@ -154,12 +157,6 @@ ANTI_RAID_LOCKDOWN_TIME = 180
 
 anti_spam = AntiSpam(rate_limit=ANTI_SPAM_RATE_LIMIT, time_window=ANTI_SPAM_TIME_WINDOW, mute_duration=ANTI_SPAM_MUTE_DURATION)
 anti_raid = AntiRaid(user_amount=ANTI_RAID_USER_AMOUNT, time_out=ANTI_RAID_TIME_OUT, anti_raid_time=ANTI_RAID_LOCKDOWN_TIME)
-
-RATE_LIMIT_MESSAGE_COUNT = 100  # Maximum number of allowed commands per {TIME_PERIOD}
-RATE_LIMIT_TIME_PERIOD = 60  # Time period in (seconds)
-
-last_check_time = time.time()
-command_count = 0
 
 #region LOGGING
 bot = Bot(token=config.TELEGRAM_TOKEN)
@@ -294,7 +291,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 'volume': True
             }
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         print(f"Group {group_id} added to database.")
 
@@ -310,7 +307,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 "Thank you for adding me to your group! Please click 'Setup' to continue.",
                 reply_markup=setup_markup
             )
-            store_message_id(context, msg.message_id)
+            store_setup_message(context, msg.message_id)
             print(f"Sent setup message to group {group_id}")
         else: # Bot is not admin, send the "Give me admin perms" message
             setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
@@ -320,10 +317,10 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
                 reply_markup=setup_markup
             )
             print(f"Bot does not have admin permissions in group: {group_id}")
-            store_message_id(context, msg.message_id)
+            store_setup_message(context, msg.message_id)
  
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
     left_member = update.message.left_chat_member
@@ -332,7 +329,7 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         delete_service_messages(update, context)
         return
 
-    group_doc = fetch_group_info(update, context, return_doc=True) # Fetch the Firestore document reference directly
+    group_doc = utils.fetch_group_info(update, context, return_doc=True) # Fetch the Firestore document reference directly
 
     if not group_doc:  # If group doesn't exist in Firestore, log and skip deletion
         print(f"Group {update.effective_chat.id} not found in database. No deletion required.")
@@ -343,269 +340,9 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         group_counter = firebase.db.collection('stats').document('removedgroups')
         group_counter = group_counter.update({'count': firestore.Increment(1)}) # Get the current removed groups count and increment by 1
         group_doc.delete()  # Directly delete the group document
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-
-bot_messages = []
-def track_message(message):
-    bot_messages.append((message.chat.id, message.message_id))
-    print(f"Tracked message: {message.message_id}")
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
     
-#region Monitoring
-MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
-scheduler = BackgroundScheduler()
-def start_monitoring_groups():
-    groups_snapshot = firebase.db.collection('groups').get()
-    for group_doc in groups_snapshot:
-        group_data = group_doc.to_dict()
-        group_data['group_id'] = group_doc.id
-
-        if group_data.get('premium', False):  # Check if premium is True
-            schedule_group_monitoring(group_data)
-        else:
-            print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
-
-    scheduler.start()
-
-def schedule_group_monitoring(group_data):
-    group_id = str(group_data['group_id'])
-    job_id = f"monitoring_{group_id}"
-    token_info = group_data.get('token')
-
-    if token_info:
-        chain = token_info.get('chain')
-        liquidity_address = token_info.get('liquidity_address')
-        web3_instance = config.WEB3_INSTANCES.get(chain)
-
-        if web3_instance and web3_instance.is_connected():
-            existing_job = scheduler.get_job(job_id)  # Check for existing job with ID
-            if existing_job:
-                existing_job.remove()  # Remove existing job to update with new information
-
-            scheduler.add_job(
-                monitor_transfers,
-                'interval',
-                seconds=MONITOR_INTERVAL,
-                args=[web3_instance, liquidity_address, group_data],
-                id=job_id,  # Unique ID for the job
-                timezone=pytz.utc  # Use the UTC timezone from the pytz library
-            )
-            print(f"Scheduled monitoring for premium group {group_id}")
-        else:
-            print(f"Web3 instance not connected for group {group_id} on chain {chain}")
-    else:
-        print(f"No token info found for group {group_id} - Not scheduling monitoring.")
-#endregion Monitoring
-
-admin_cache = TTLCache(maxsize=100, ttl=600) # Cache a list of up to 100 group's admins for 10 minutes
-def is_user_admin(update: Update, context: CallbackContext) -> bool:
-    chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-
-    if update.callback_query: # Check if the update has a callback_query
-        user_id = update.callback_query.from_user.id
-    else:
-        user_id = update.effective_user.id
-
-    if update.effective_chat.type == 'private':
-        return False
-    
-    print(f"Checking if user is admin for chat {chat_id}")
-
-    if chat_id in admin_cache:
-        print(f"Fetching admins from cache for chat {chat_id}")
-        chat_admins = admin_cache[chat_id]
-    else:
-        print("Admins not in cache, fetching from Telegram...")
-        try:
-            chat_admins = context.bot.get_chat_administrators(chat_id, timeout=30) # Fetch from Telegram and cache the result
-            admin_cache[chat_id] = chat_admins  # Store the result in the cache
-        except Exception as e:
-            print(f"Error fetching administrators: {e}")
-            return False
-        
-    user_is_admin = any(admin.user.id == user_id for admin in chat_admins)
-    print(f"UserID: {user_id} - IsAdmin: {user_is_admin}")
-    return user_is_admin
-
-def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> bool:
-    chat_id = update.effective_chat.id
-
-    if update.effective_chat.type == 'private':
-        print("User is in a private chat.")
-        return False
-
-    print(f"Checking if user is owner for chat {chat_id}")
-
-    group_data = fetch_group_info(update, context)
-
-    if not group_data:
-        print(f"No data found for group {chat_id}. Group may not be registered.")
-        return False  # Default to False if no data is found
-
-    user_is_owner = group_data['owner_id'] == user_id # Check if the user is the owner of this group
-
-    print(f"UserID: {user_id} - OwnerID: {group_data['owner_id']} - IsOwner: {user_is_owner}")
-
-    if not user_is_owner:
-        print(f"User {user_id} is not the owner of group {chat_id}")
-
-    return user_is_owner
-
-def is_bot_or_admin(update: Update, context: CallbackContext, user_id: int, send_message: bool = True, message: str = "Nice try lol") -> bool:
-    chat_id = update.effective_chat.id
-    chat_admins = context.bot.get_chat_administrators(chat_id)
-    admin_user_ids = [admin.user.id for admin in chat_admins]
-    bot_id = context.bot.id
-
-    if int(user_id) in admin_user_ids or int(user_id) == bot_id:
-        if send_message:
-            msg = update.message.reply_text(message)
-            if msg is not None:
-                track_message(msg)
-        return True
-    return False
-
-def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool = False, update_attr: bool = False, return_both: bool = False, group_id: str = None):
-    if update is not None:
-        if update.effective_chat.type == 'private' and group_id is None:
-            print(f"Private chat detected when attempting to fetch group info. No group_id provided either.")
-            return None  # Private chats have no group data and no group_id was provided
-
-        if update_attr and group_id is None:  # Determines whether or not the group_id is fetched from a message update or chat
-            print(f"group_id not manually provided, fetching from message.")
-            group_id = str(update.message.chat.id)
-        elif group_id is None:
-            print(f"group_id not manually provided, fetching from chat.")
-            group_id = str(update.effective_chat.id)
-        else:
-            print(f"group_id manually provided: {group_id}")
-    elif group_id is None:
-        print(f"Neither update nor group_id provided. Unable to fetch group info.")
-        return None  # No valid source for group_id
-
-    cached_info = fetch_cached_group_info(group_id)
-
-    if cached_info: # Return cached data based on the flags
-        if return_both:
-            print(f"Returning cached document and data for group {group_id}")
-            return cached_info["group_data"], cached_info["group_doc"]
-        if return_doc:
-            print(f"Returning cached document for group {group_id}")
-            return cached_info["group_doc"]
-        print(f"Returning cached data for group {group_id}")
-        return cached_info["group_data"]
-
-    group_doc = firebase.db.collection('groups').document(str(group_id))
-
-    if return_doc:
-        print(f"Fetching group_doc for group {group_id}")
-    else:
-        print(f"Fetching group_data for group {group_id}")
-
-    try:
-        doc_snapshot = group_doc.get()
-        if doc_snapshot.exists:
-            group_data = doc_snapshot.to_dict()
-
-            print(f"Fetched group data from Firestore: {group_data}")
-
-            cache_group_info(group_id, group_data, group_doc) # Cache the group data and document reference
-
-            if return_both:
-                print(f"Group document and data found for group {group_id}")
-                return group_data, group_doc  # Return both the document reference and the data
-
-            if return_doc:
-                print(f"Group document found for group {group_id}")
-                return group_doc  # Return the document reference
-            else:
-                print(f"Group data found for group {group_id}")
-                return group_data  # Return the document data
-        else:
-            print(f"No data found for group {group_id}. Group may not be registered.")
-            return None  # No data found for this group
-    except Exception as e:
-        print(f"Failed to fetch group info: {e}")
-        return None  # Error fetching group data
-
-def fetch_group_token(group_data: dict, update: Update, context: CallbackContext): # Fetches all token-related data from a pre-fetched group_data object.
-    token_data = group_data.get('token')
-    if not token_data:
-        print("Token data not found for this group.")
-        update.message.reply_text("Token data not found for this group.")
-        return None
-
-    print(f"All token data fetched: {token_data}")
-    return token_data
-
-def get_query_info(update, get_user=True):
-    query = update.callback_query
-    if query is None:
-        print("Error: Callback query is None.", file=sys.stderr)
-        return None if not get_user else (None, None)
-
-    query.answer()  # Safely answer the query
-    if get_user:
-        if query.from_user is None:
-            print("Error: No user information in callback query.", file=sys.stderr)
-            return query, None
-        print(f"Query data returned for user {query.from_user.id}")
-        return query, query.from_user.id
-    else:
-        print(f"Query data returned without user_id")
-        return query  # Return only the query if get_user is False
-
-#region Caching
-group_info_cache = {}
-def cache_group_info(group_id: str, group_data: dict, group_doc: object) -> None: # Caches the group data and document reference for a specific group ID.
-    group_id = str(group_id)
-    group_info_cache[group_id] = {
-        "group_data": group_data,
-        "group_doc": group_doc
-    }
-
-    print(f"Cached info for group {group_id}.")
-
-def fetch_cached_group_info(group_id: str) -> dict | None: # Retrieves cached group data and document reference for a specific group ID.
-    group_id = str(group_id)
-    cached_info = group_info_cache.get(group_id)
-
-    if cached_info:
-        print(f"Found cache for group {group_id}.")
-        return cached_info
-    else:
-        print(f"No cache for group {group_id}.")
-        return None
-
-def clear_group_cache(group_id: str) -> None: # Clears the cache for a specific group ID.
-    group_id = str(group_id)
-    if group_id in group_info_cache:
-        del group_info_cache[group_id]
-        print(f"Cache cleared for group {group_id}.")
-    else:
-        print(f"No cache entry found for group {group_id}.")
-#endregion Caching
-##
-#
-##
 #region Message Handling
-def rate_limit_check(): # Later TODO: Implement rate limiting PER GROUP
-    print("Checking rate limit...")
-    global last_check_time, command_count
-    current_time = time.time()
-
-    # Reset count if time period has expired
-    if current_time - last_check_time > RATE_LIMIT_TIME_PERIOD:
-        command_count = 0
-        last_check_time = current_time
-
-    # Check if the bot is within the rate limit
-    if command_count < RATE_LIMIT_MESSAGE_COUNT:
-        command_count += 1
-        return True
-    else:
-        return False
-
 def handle_message(update: Update, context: CallbackContext) -> None:
     if not update.message or not update.message.from_user:
         print("Received a message with missing update or user information.")
@@ -620,7 +357,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         print("No message text found.")
         return
 
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         handle_setup_inputs_from_admin(update, context)
         handle_guess(update, context)
         return
@@ -652,7 +389,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
             print(f"User {user_id} is trusted to tag others.")
 
     if detected_patterns and msg is not None: # Check the allowlist if any patterns matched
-        group_data = fetch_group_info(update, context)
+        group_data = utils.fetch_group_info(update, context)
 
         if not group_data or not group_data.get('admin', {}).get('allowlist', False):  # Default to False
             print("Allowlist check is disabled in admin settings. Skipping allowlist verification.")
@@ -704,7 +441,7 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     username = update.message.from_user.username or update.message.from_user.first_name
     msg = None
 
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         handle_setup_inputs_from_admin(update, context)
         return
     
@@ -723,10 +460,10 @@ def handle_image(update: Update, context: CallbackContext) -> None:
         handle_spam(update, context, chat_id, user_id, username)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def handle_document(update: Update, context: CallbackContext) -> None:
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         handle_setup_inputs_from_admin(update, context)
         return
     
@@ -741,7 +478,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
         handle_spam(update, context, chat_id, user_id, username)
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, username) -> None:
     if user_id == context.bot.id:
@@ -756,7 +493,7 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
     print(f"User {username} has been muted for spamming in chat {chat_id}.")
 
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -786,7 +523,7 @@ def handle_spam(update: Update, context: CallbackContext, chat_id, user_id, user
         }
         group_doc.update({'unverified_users': user_data})  # Update the document with structured data
         print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 def is_allowed(message, allowlist, pattern): # Check if any detected matches in the message are present in the allowlist.
     print(f"Pattern found, checking message: {message}")
@@ -812,7 +549,7 @@ def delete_blocked_addresses(update: Update, context: CallbackContext):
         print("No addresses found in message.")
         return
 
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
     if group_data is None:
         return
 
@@ -848,7 +585,7 @@ def delete_blocked_links(update: Update, context: CallbackContext):
         return
 
     # Fetch the group-specific allowlist
-    group_info = fetch_group_info(update, context)
+    group_info = utils.fetch_group_info(update, context)
     if not group_info:
         print("No group info available.")
         return
@@ -891,7 +628,7 @@ def delete_blocked_phrases(update: Update, context: CallbackContext):
 
     message_text = message_text.lower()
 
-    group_info = fetch_group_info(update, context) # Fetch the group info to get the blocklist
+    group_info = utils.fetch_group_info(update, context) # Fetch the group info to get the blocklist
     if not group_info:
         print("No group info available.")
         return
@@ -929,12 +666,6 @@ def delete_service_messages(update, context):
             print(f"Deleted service message in chat {update.message.chat_id}")
         except Exception as e:
             print(f"Failed to delete service message: {str(e)}")
-
-def store_message_id(context, message_id):
-    if 'setup_bot_message' in context.chat_data:
-        context.chat_data['setup_bot_message'].append(message_id)
-    else:
-        context.chat_data['setup_bot_message'] = [message_id]
 #endregion Message Handling
 #
 ##
@@ -943,6 +674,12 @@ def store_message_id(context, message_id):
 #
 ##
 #region Bot Setup
+def store_setup_message(context, message_id):
+    if 'setup_bot_message' in context.chat_data:
+        context.chat_data['setup_bot_message'].append(message_id)
+    else:
+        context.chat_data['setup_bot_message'] = [message_id]
+
 def menu_change(context: CallbackContext, update: Update):
     messages_to_delete = [ 'setup_bot_message' ]
 
@@ -965,7 +702,7 @@ def exit_callback(update: Update, context: CallbackContext) -> None:
     msg = None
     user_id = update.effective_user.id
     
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         query = update.callback_query
         query.answer()
         print(f"Exiting setup mode in group {update.effective_chat.id}")
@@ -975,7 +712,7 @@ def exit_callback(update: Update, context: CallbackContext) -> None:
         print("User is not the owner.")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> None:
     setup_stage = context.chat_data.get('setup_stage')
@@ -1022,57 +759,54 @@ def start(update: Update, context: CallbackContext) -> None:
     print(f"Received args: {command_args} - User ID: {user_id} - Chat Type: {chat_type}")
 
     if chat_type == "private":
-        if rate_limit_check():
-            if len(command_args) == 3 and command_args[0] == 'authenticate':
-                group_id = command_args[1]
-                user_id_from_link = command_args[2]
-                print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
+        if len(command_args) == 3 and command_args[0] == 'authenticate':
+            group_id = command_args[1]
+            user_id_from_link = command_args[2]
+            print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
 
-                group_doc = firebase.db.collection('groups').document(group_id)
-                group_data = group_doc.get()
-                if group_data.exists:
-                    unverified_users = group_data.to_dict().get('unverified_users', {})
-                    print(f"Unverified users list: {unverified_users}")
-                    if str(user_id_from_link) in unverified_users:
+            group_doc = firebase.db.collection('groups').document(group_id)
+            group_data = group_doc.get()
+            if group_data.exists:
+                unverified_users = group_data.to_dict().get('unverified_users', {})
+                print(f"Unverified users list: {unverified_users}")
+                if str(user_id_from_link) in unverified_users:
 
-                        keyboard = [[InlineKeyboardButton("Authenticate", callback_data=f'authenticate_{group_id}_{user_id_from_link}')]]
-                        reply_markup = InlineKeyboardMarkup(keyboard)
-                        msg = update.message.reply_text('Press the button below to start authentication.', reply_markup=reply_markup)
+                    keyboard = [[InlineKeyboardButton("Authenticate", callback_data=f'authenticate_{group_id}_{user_id_from_link}')]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    msg = update.message.reply_text('Press the button below to start authentication.', reply_markup=reply_markup)
 
-                    else:
-                        msg = update.message.reply_text('You are already verified or not a member.')
                 else:
-                    msg = update.message.reply_text('No such group exists.')
+                    msg = update.message.reply_text('You are already verified or not a member.')
             else:
-                keyboard = [ # General start command handling when not triggered via deep link
-                    [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/{config.BOT_USERNAME}?startgroup=0")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                msg = update.message.reply_text(
-                    'Hello! I am Sypherbot. Please add me to your group to get started.',
-                    reply_markup=reply_markup
-                )
+                msg = update.message.reply_text('No such group exists.')
         else:
-            msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+            keyboard = [ # General start command handling when not triggered via deep link
+                [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/{config.BOT_USERNAME}?startgroup=0")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            msg = update.message.reply_text(
+                'Hello! I am Sypherbot. Please add me to your group to get started.',
+                reply_markup=reply_markup
+            )
     else:
-        if is_user_owner(update, context, user_id):
+        if utils.is_user_owner(update, context, user_id):
             setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
             setup_markup = InlineKeyboardMarkup(setup_keyboard)
             msg = update.message.reply_text(
                 "Click 'Setup' to manage your group.",
                 reply_markup=setup_markup
             )
-            store_message_id(context, msg.message_id)
+            store_setup_message(context, msg.message_id)
         else:
             msg = update.message.reply_text("You are not the owner of this group.")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def setup_home_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         chat_member = context.bot.get_chat_member(update.effective_chat.id, context.bot.id) # Check if the bot is an admin
         if not chat_member.can_invite_users:
             try:
@@ -1099,7 +833,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
 def setup_home(update: Update, context: CallbackContext, user_id) -> None:
     msg = None
     group_id = update.effective_chat.id
-    group_doc = fetch_group_info(update, context, return_doc=True)
+    group_doc = utils.fetch_group_info(update, context, return_doc=True)
 
     try:
         group_link = context.bot.export_chat_invite_link(group_id)
@@ -1155,16 +889,16 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
     group_doc.update({
         'group_info.group_link': group_link,
         'group_info.group_username': group_username,
     })
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
 SETUP_CALLBACK_DATA = [
     'setup_admin', 'reset_admin_settings',
@@ -1182,11 +916,11 @@ SETUP_CALLBACK_DATA = [
     'setup_buybot'
 ] # Ensure callback data names match the function names so that you can access them dynamically via globals()
 def handle_setup_callbacks(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
     chosen_callback = query.data
 
     if chosen_callback in SETUP_CALLBACK_DATA:
-        if is_user_owner(update, context, user_id):
+        if utils.is_user_owner(update, context, user_id):
             try:
                 globals()[chosen_callback](update, context) # Dynamically invoke the function
                 print(f"Callback {chosen_callback} handled.")
@@ -1231,14 +965,14 @@ def setup_admin(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def reset_admin_settings(update: Update, context: CallbackContext) -> None:
     group_id = update.effective_chat.id  # Get the group ID
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1258,15 +992,15 @@ def reset_admin_settings(update: Update, context: CallbackContext) -> None:
         'blocklist': False
     }
     group_doc.update({'admin': new_admin_settings})
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = update.message.reply_text("Admin settings have been reset to default.")
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     print(f"Admin settings for group {group_id} have been reset to: {new_admin_settings}")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 #region Mute Setup
 def setup_mute(update: Update, context: CallbackContext) -> None:
@@ -1294,15 +1028,15 @@ def setup_mute(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def enable_mute(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1320,22 +1054,22 @@ def enable_mute(update: Update, context: CallbackContext) -> None:
             'admin.mute': True
         })
     
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='✔️ Muting has been enabled in this group ✔️'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def disable_mute(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1353,22 +1087,22 @@ def disable_mute(update: Update, context: CallbackContext) -> None:
             'admin.mute': False
         })
 
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='❌ Muting has been disabled in this group ❌'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def check_mute_list(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
 
     mute_list_text = '*Current Mute List:*\n\n'
     if group_data is None or 'muted_users' not in group_data or not group_data['muted_users']:
@@ -1397,10 +1131,10 @@ def check_mute_list(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown'
     )
     context.bot_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 #endregion Mute Setup
 #
 #region Warn Setup
@@ -1430,15 +1164,15 @@ def setup_warn(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def enable_warn(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1456,22 +1190,22 @@ def enable_warn(update: Update, context: CallbackContext) -> None:
             'admin.warn': True
         })
 
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='✔️ Warning has been enabled in this group ✔️'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def disable_warn(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1489,17 +1223,17 @@ def disable_warn(update: Update, context: CallbackContext) -> None:
             'admin.warn': False
         })
 
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='❌ Warning has been disabled in this group ❌'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def check_warn_list(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1509,7 +1243,7 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     group_id = update.effective_chat.id
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
 
     warn_list_text = '*Current Warned Users List:*\n\n'
     if group_data is None or 'warnings' not in group_data or not group_data['warnings']:
@@ -1539,10 +1273,10 @@ def check_warn_list(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def set_max_warns(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1554,13 +1288,13 @@ def set_max_warns(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown'
     )
     context.chat_data['setup_stage'] = 'set_max_warns'
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def handle_max_warns(update: Update, context: CallbackContext) -> None:
-    group_doc = fetch_group_info(update, context, return_doc=True)
+    group_doc = utils.fetch_group_info(update, context, return_doc=True)
 
     if update.message.text:
         try:
@@ -1572,22 +1306,22 @@ def handle_max_warns(update: Update, context: CallbackContext) -> None:
             )
 
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
 
         group_doc.update({
             'admin.max_warns': max_warns
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=f'Maximum number of warnings set to {max_warns}.'
         )
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 #endregion Warn Setup
 #
 #region Allowlist Setup
@@ -1623,16 +1357,16 @@ def setup_allowlist(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def enable_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1652,7 +1386,7 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
             'admin.allowlist': True
         })
     
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1660,16 +1394,16 @@ def enable_allowlist(update: Update, context: CallbackContext) -> None:
     )
 
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def disable_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1689,7 +1423,7 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
             'admin.allowlist': False
         })
     
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -1699,13 +1433,13 @@ def disable_allowlist(update: Update, context: CallbackContext) -> None:
     context.chat_data['setup_stage'] = None
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def setup_website(update: Update, context: CallbackContext) -> None:
     msg = None
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
 
         keyboard = [
             [InlineKeyboardButton("Back", callback_data='setup_allowlist')]
@@ -1721,25 +1455,25 @@ def setup_website(update: Update, context: CallbackContext) -> None:
         )
         context.chat_data['setup_stage'] = 'website'
         print("Requesting website URL.")
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def handle_website_url(update: Update, context: CallbackContext) -> None:
     msg = None
     user_id = update.message.from_user.id
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         if context.chat_data.get('setup_stage') == 'website':
             website_url = update.message.text.strip()
 
             if config.URL_PATTERN.fullmatch(website_url):  # Use the global config.URL_PATTERN
                 group_id = update.effective_chat.id
                 print(f"Adding website URL {website_url} to group {group_id}")
-                group_doc = fetch_group_info(update, context, return_doc=True)
+                group_doc = utils.fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'group_info.website_url': website_url})
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+                utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 context.chat_data['setup_stage'] = None
 
                 if update.message is not None:
@@ -1749,15 +1483,15 @@ def handle_website_url(update: Update, context: CallbackContext) -> None:
             else:
                 msg = update.message.reply_text("Please send a valid website URL! It must include 'https://' or 'http://'.")
 
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def check_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
 
     allowlist_text = '*Current Allowlist:*\n\n'
     if group_data is None or 'allowlist' not in group_data or not group_data['allowlist']:
@@ -1772,16 +1506,16 @@ def check_allowlist(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def clear_allowlist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1799,17 +1533,17 @@ def clear_allowlist(update: Update, context: CallbackContext) -> None:
             'allowlist': []
         })
 
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='❌ Allowlist has been cleared in this group ❌'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 #endregion Allowlist Setup
 #
 #region Blocklist Setup
@@ -1843,16 +1577,16 @@ def setup_blocklist(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def enable_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1872,23 +1606,23 @@ def enable_blocklist(update: Update, context: CallbackContext) -> None:
             'admin.blocklist': True
         })
 
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='✔️ Blocklisting has been enabled in this group ✔️'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def disable_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1908,23 +1642,23 @@ def disable_blocklist(update: Update, context: CallbackContext) -> None:
             'admin.blocklist': False
         })
 
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='❌ Blocklisting has been disabled in this group ❌'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def check_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
 
     if group_data is None:
         print(f"Failed to fetch blocklist data for group {group_id}.")
@@ -1950,16 +1684,16 @@ def check_blocklist(update: Update, context: CallbackContext) -> None:
         parse_mode='Markdown'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def clear_blocklist(update: Update, context: CallbackContext) -> None:
     msg = None
 
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -1977,17 +1711,17 @@ def clear_blocklist(update: Update, context: CallbackContext) -> None:
             'blocklist': []
         })
 
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='❌ Blocklist has been cleared in this group ❌'
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 #endregion Blocklist Setup
 #
 ##
@@ -1999,7 +1733,7 @@ def clear_blocklist(update: Update, context: CallbackContext) -> None:
 def setup_commands(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
 
     if not group_data:
         print(f"No group data found for group {chat_id}. Cannot set up commands.")
@@ -2043,17 +1777,17 @@ def setup_commands(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def toggle_command_status(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     chat_id = query.message.chat.id
     user_id = query.from_user.id
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         command = query.data.replace('toggle_', '')  # Extract the command name
 
         if command == "play": # Check if the command is "play"
@@ -2077,14 +1811,14 @@ def toggle_command_status(update: Update, context: CallbackContext) -> None:
 
         status_text = "enabled" if new_status else "disabled"
         query.answer(text=f"Command '{command}' is now {status_text}.", show_alert=False)
-        clear_group_cache(str(chat_id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(chat_id)) # Clear the cache on all database updates
 
         setup_commands(update, context)
     else:
         print("User is not the owner.")
 
 def check_command_status(update: Update, context: CallbackContext, command: str) -> bool:
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
 
     if not group_data:
         print(f"No group data found for group {update.effective_chat.id}. Defaulting '{command}' to disabled.")
@@ -2121,15 +1855,15 @@ def setup_authentication(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def simple_authentication(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -2152,7 +1886,7 @@ def simple_authentication(update: Update, context: CallbackContext) -> None:
             }
         })
     
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     menu_change(context, update)
 
@@ -2167,15 +1901,15 @@ def simple_authentication(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def math_authentication(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -2198,7 +1932,7 @@ def math_authentication(update: Update, context: CallbackContext) -> None:
             }
         })
 
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     keyboard = [
         [InlineKeyboardButton("Back", callback_data='setup_authentication')]
@@ -2214,16 +1948,16 @@ def math_authentication(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def word_authentication(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -2246,7 +1980,7 @@ def word_authentication(update: Update, context: CallbackContext) -> None:
             }
         })
 
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     context.chat_data['setup_stage'] = 'setup_word_verification'
 
@@ -2264,11 +1998,11 @@ def word_authentication(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def timeout_authentication(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2293,16 +2027,16 @@ def timeout_authentication(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         timeout_seconds = int(query.data.split('_')[1]) # Extract the timeout value from the callback_data
 
         group_id = update.effective_chat.id # Call set_verification_timeout with the group_id and timeout_seconds
@@ -2312,10 +2046,10 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
             chat_id=update.effective_chat.id,
             text=f"Authentication timeout set to {timeout_seconds // 60} minutes."
         )
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def set_authentication_timeout(group_id: int, timeout_seconds: int) -> None: # Sets the verification timeout for a specific group in the Firestore database.
     try:
@@ -2332,7 +2066,7 @@ def set_authentication_timeout(group_id: int, timeout_seconds: int) -> None: # S
 
 def check_authentication_settings(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
 
     if group_data is not None:
         authentication_info = group_data.get('verification_info', {})
@@ -2354,10 +2088,10 @@ def check_authentication_settings(update: Update, context: CallbackContext) -> N
             reply_markup=reply_markup
         )
         context.chat_data['setup_stage'] = None
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 #endregion Authentication Setup
 ##
 #
@@ -2366,7 +2100,7 @@ def check_authentication_settings(update: Update, context: CallbackContext) -> N
 def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = None
 
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
     if not group_data:
         return
 
@@ -2421,16 +2155,16 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def setup_contract(update: Update, context: CallbackContext) -> None:
     msg = None
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
 
         keyboard = [
             [InlineKeyboardButton("Back", callback_data='setup_crypto')]
@@ -2446,16 +2180,16 @@ def setup_contract(update: Update, context: CallbackContext) -> None:
         )
         context.chat_data['setup_stage'] = 'contract'
         print("Requesting contract address.")
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def handle_contract_address(update: Update, context: CallbackContext) -> None:
     msg = None
     user_id = update.message.from_user.id
     
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         if context.chat_data.get('setup_stage') == 'contract':
             eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
             contract_address = update.message.text.strip()
@@ -2464,9 +2198,9 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
                 checksum_address = Web3.to_checksum_address(contract_address)
                 group_id = update.effective_chat.id
                 print(f"Adding contract address {checksum_address} to group {group_id}")
-                group_doc = fetch_group_info(update, context, return_doc=True)
+                group_doc = utils.fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'token.contract_address': checksum_address})
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+                utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 context.chat_data['setup_stage'] = None
 
                 if update.message is not None:
@@ -2478,16 +2212,16 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
             else:
                 msg = update.message.reply_text("Please send a valid Contract Address!")
 
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def setup_liquidity(update: Update, context: CallbackContext) -> None:
     msg = None
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
     
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         keyboard = [
             [InlineKeyboardButton("Back", callback_data='setup_crypto')]
         ]
@@ -2501,17 +2235,17 @@ def setup_liquidity(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.chat_data['setup_stage'] = 'liquidity'
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
         print("Requesting liquidity address.")
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
     msg = None
     user_id = update.message.from_user.id
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         msg = None
         if context.chat_data.get('setup_stage') == 'liquidity':
             eth_address_pattern = re.compile(r'\b0x[a-fA-F0-9]{40}\b')
@@ -2521,9 +2255,9 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
                 checksum_address = Web3.to_checksum_address(liquidity_address)
                 group_id = update.effective_chat.id
                 print(f"Adding liquidity address {checksum_address} to group {group_id}")
-                group_doc = fetch_group_info(update, context, return_doc=True)
+                group_doc = utils.fetch_group_info(update, context, return_doc=True)
                 group_doc.update({'token.liquidity_address': checksum_address})
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+                utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 context.chat_data['setup_stage'] = None
 
                 # Check if update.message is not None before using it
@@ -2540,16 +2274,16 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
                 elif update.callback_query is not None:
                     msg = update.callback_query.message.reply_text("Please send a valid Liquidity Address!")
 
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def setup_chain(update: Update, context: CallbackContext) -> None:
     msg = None
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
     
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
 
         keyboard = [
             [
@@ -2583,33 +2317,33 @@ def setup_chain(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.chat_data['setup_stage'] = 'chain'
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
         print("Requesting Chain.")
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def handle_chain(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         if context.chat_data.get('setup_stage') == 'chain':
             chain = update.callback_query.data.upper()  # Convert chain to uppercase
             group_id = update.effective_chat.id
             print(f"Adding chain {chain} to group {group_id}")
-            group_doc = fetch_group_info(update, context, return_doc=True)
+            group_doc = utils.fetch_group_info(update, context, return_doc=True)
             group_doc.update({'token.chain': chain})
-            clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+            utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
             context.chat_data['setup_stage'] = None
 
             complete_token_setup(group_id, context)
 
             msg = query.message.reply_text("Chain has been saved.")
 
-            store_message_id(context, msg.message_id)
+            store_setup_message(context, msg.message_id)
 
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
 
 def complete_token_setup(group_id: str, context: CallbackContext):
     msg = None
@@ -2665,7 +2399,7 @@ def complete_token_setup(group_id: str, context: CallbackContext):
         'token.setup_complete': True
     })
 
-    clear_group_cache(str(group_id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(group_id)) # Clear the cache on all database updates
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
 
@@ -2681,22 +2415,22 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     )
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def check_token_details_callback(update: Update, context: CallbackContext) -> None:
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
 
     update = Update(update.update_id, message=query.message)
 
     if query.data == 'check_token_details':
-        if is_user_owner(update, context, user_id):
+        if utils.is_user_owner(update, context, user_id):
             check_token_details(update, context)
         else:
             print("User is not the owner.")
 
 def check_token_details(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
 
     if group_data is not None:
         token_info = group_data.get('token', {})
@@ -2715,7 +2449,7 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
                 parse_mode='Markdown'
             )
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return  # Exit the function as details are incomplete
 
         menu_change(context, update)
@@ -2733,14 +2467,14 @@ def check_token_details(update: Update, context: CallbackContext) -> None:
             reply_markup=reply_markup
         )
         context.chat_data['setup_stage'] = None
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def reset_token_details(update: Update, context: CallbackContext) -> None:
     msg = None
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -2752,7 +2486,7 @@ def reset_token_details(update: Update, context: CallbackContext) -> None:
             'token': {}
         })
 
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2761,7 +2495,7 @@ def reset_token_details(update: Update, context: CallbackContext) -> None:
         )
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 #endregion Crypto Setup
 ##
 #
@@ -2803,14 +2537,14 @@ def setup_premium(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def is_premium_group(update: Update, context: CallbackContext) -> bool:
     group_id = update.effective_chat.id
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
     
     if group_data is not None and group_data.get('premium') is not True:
         msg = context.bot.send_message(
@@ -2818,7 +2552,7 @@ def is_premium_group(update: Update, context: CallbackContext) -> bool:
             text="This feature is only available to premium users. Please contact @tukyowave for more information.",
             parse_mode='Markdown'
         )
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
         print(f"{group_id} is not a premium group.")
         return False
     else:
@@ -2839,15 +2573,15 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
     )
     context.chat_data['expecting_welcome_message_header_image'] = True  # Flag to check in the image handler
     context.chat_data['setup_stage'] = 'welcome_message_header'
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def handle_welcome_message_image(update: Update, context: CallbackContext) -> None:
     if context.chat_data.get('expecting_welcome_message_header_image'):
         group_id = update.effective_chat.id
-        result = fetch_group_info(update, context, return_both=True)  # Fetch both group_data and group_doc
+        result = utils.fetch_group_info(update, context, return_both=True)  # Fetch both group_data and group_doc
         if not result:
             print("Failed to fetch group info. No action taken.")
             return
@@ -2863,7 +2597,7 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
                 parse_mode='Markdown'
             )
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
 
         file_stream = validation_result['file_stream']
@@ -2899,7 +2633,7 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
                 'premium_features.welcome_header': True,
                 'premium_features.welcome_header_url': welcome_message_url
             })
-            clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
+            utils.clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2908,10 +2642,10 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
         )
         context.chat_data['expecting_welcome_message_header_image'] = False  # Reset the flag
         context.chat_data['setup_stage'] = None
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def setup_buybot_message_header(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -2927,15 +2661,15 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
     )
     context.chat_data['expecting_buybot_header_image'] = True  # Flag to check in the image handler
     context.chat_data['setup_stage'] = 'buybot_message_header'
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def handle_buybot_message_image(update: Update, context: CallbackContext) -> None:
     if context.chat_data.get('expecting_buybot_header_image'):
         group_id = update.effective_chat.id
-        result = fetch_group_info(update, context, return_both=True)  # Fetch both group_data and group_doc
+        result = utils.fetch_group_info(update, context, return_both=True)  # Fetch both group_data and group_doc
         if not result:
             print("Failed to fetch group info. No action taken.")
             return
@@ -2951,7 +2685,7 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
                 parse_mode='Markdown'
             )
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
 
         file_stream = validation_result['file_stream']
@@ -2987,7 +2721,7 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
                 'premium_features.buybot_header': True,
                 'premium_features.buybot_header_url': buybot_header_url
             })
-            clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
+            utils.clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -2996,10 +2730,10 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
         )
         context.chat_data['expecting_buybot_header_image'] = False  # Reset the flag
         context.chat_data['setup_stage'] = None
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def validate_media(update, max_width=700, max_height=250, max_size=1000000):
     media = None
@@ -3050,7 +2784,6 @@ def validate_media(update, max_width=700, max_height=250, max_size=1000000):
         'file_stream': None,
         'error': error_message
     }
-
 #endregion Customization Setup
 ##
 #
@@ -3058,7 +2791,7 @@ def validate_media(update, max_width=700, max_height=250, max_size=1000000):
 #region Sypher Trust Setup
 def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
     msg = None
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -3072,7 +2805,7 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
             'premium_features.sypher_trust': True,
             'premium_features.sypher_trust_preferences': 'moderate'
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3080,14 +2813,14 @@ def enable_sypher_trust(update: Update, context: CallbackContext) -> None:
             parse_mode='Markdown'
         )
         context.chat_data['setup_stage'] = None
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
     msg = None
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -3100,7 +2833,7 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'premium_features.sypher_trust': False
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -3108,10 +2841,10 @@ def disable_sypher_trust(update: Update, context: CallbackContext) -> None:
             parse_mode='Markdown'
         )
         context.chat_data['setup_stage'] = None
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -3144,14 +2877,14 @@ def sypher_trust_preferences(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
     msg = None
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -3162,21 +2895,21 @@ def sypher_trust_relaxed(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'premium_features.sypher_trust_preferences': 'relaxed'
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text='*🟢 Relaxed Trust Level Enabled 🟢*',
             parse_mode='Markdown'
         )
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
     msg = None
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -3187,21 +2920,21 @@ def sypher_trust_moderate(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'premium_features.sypher_trust_preferences': 'moderate'
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text='*🟡 Moderate Trust Level Enabled 🟡*',
             parse_mode='Markdown'
         )
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
     msg = None
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -3212,23 +2945,23 @@ def sypher_trust_strict(update: Update, context: CallbackContext) -> None:
         group_doc.update({
             'premium_features.sypher_trust_preferences': 'strict'
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
         msg = context.bot.send_message(
             chat_id=update.effective_chat.id,
             text='*🔴 Strict Trust Level Enabled 🔴*',
             parse_mode='Markdown'
         )
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def check_if_trusted(update: Update, context: CallbackContext) -> None:
     user_id = str(update.effective_user.id)
     group_id = str(update.effective_chat.id)
 
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
     if not group_data:
         print(f"No group data found for group {group_id}. Assuming Sypher Trust is not enabled.")
         return False
@@ -3268,7 +3001,7 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
     if time_elapsed >= trust_duration: # Check if sufficient time has passed
         print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Removing from untrusted_users.")
         firebase.db.collection('groups').document(group_id).update({f'untrusted_users.{user_id}': firestore.DELETE_FIELD})
-        clear_group_cache(group_id) # Clear the cache on all database updates
+        utils.clear_group_cache(group_id) # Clear the cache on all database updates
         return True
     else:
         print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Still untrusted.")
@@ -3311,16 +3044,16 @@ def setup_buybot(update: Update, context: CallbackContext) -> None:
         reply_markup=reply_markup
     )
     context.chat_data['setup_stage'] = None
-    store_message_id(context, msg.message_id)
+    store_setup_message(context, msg.message_id)
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def setup_minimum_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
 
         keyboard = [
             [InlineKeyboardButton("Back", callback_data='setup_buybot')]
@@ -3336,40 +3069,40 @@ def setup_minimum_buy_callback(update: Update, context: CallbackContext) -> None
         )
         context.chat_data['setup_stage'] = 'minimum_buy'
         print("Requesting minumum buy amount.")
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def handle_minimum_buy(update: Update, context: CallbackContext) -> None:
     msg = None
     user_id = update.message.from_user.id
     
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         if context.chat_data.get('setup_stage') == 'minimum_buy':
             group_id = update.effective_chat.id
-            group_data = fetch_group_info(update, context)
+            group_data = utils.fetch_group_info(update, context)
             if group_data is not None:
                 group_doc = firebase.db.collection('groups').document(str(group_id))
                 group_doc.update({
                     'premium_features.buybot.minimumbuy': int(update.message.text)
                 })
                 msg = update.message.reply_text("Minimum buy value updated successfully!")
-                clear_group_cache(str(group_id)) # Clear the cache on all database updates
+                utils.clear_group_cache(str(group_id)) # Clear the cache on all database updates
 
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
     else:
         print("User is not the owner.")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def setup_small_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
 
         keyboard = [
             [InlineKeyboardButton("Back", callback_data='setup_buybot')]
@@ -3385,44 +3118,44 @@ def setup_small_buy_callback(update: Update, context: CallbackContext) -> None:
         )
         context.chat_data['setup_stage'] = 'small_buy'
         print("Requesting medium buy amount.")
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def handle_small_buy(update: Update, context: CallbackContext) -> None:
     msg = None
     user_id = update.message.from_user.id
     
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         if context.chat_data.get('setup_stage') == 'small_buy':
             group_id = update.effective_chat.id
-            group_data = fetch_group_info(update, context)
+            group_data = utils.fetch_group_info(update, context)
             if group_data is not None:
                 group_doc = firebase.db.collection('groups').document(str(group_id))
                 try:
                     group_doc.update({
                         'premium_features.buybot.smallbuy': int(update.message.text)
                     })
-                    clear_group_cache(str(group_id))  # Clear the cache on all database updates
+                    utils.clear_group_cache(str(group_id))  # Clear the cache on all database updates
                     msg = update.message.reply_text("Small buy value updated successfully!")
                 except Exception as e:
                     msg = update.message.reply_text(f"Error updating small buy value: {e}")
         
         if msg:
-            store_message_id(context, msg.message_id)
+            store_setup_message(context, msg.message_id)
 
     else:
         print("User is not the owner.")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def setup_medium_buy_callback(update: Update, context: CallbackContext) -> None:
     msg = None
-    query, user_id = get_query_info(update)
+    query, user_id = utils.get_query_info(update)
 
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
 
         keyboard = [
             [InlineKeyboardButton("Back", callback_data='setup_buybot')]
@@ -3438,38 +3171,38 @@ def setup_medium_buy_callback(update: Update, context: CallbackContext) -> None:
         )
         context.chat_data['setup_stage'] = 'medium_buy'
         print("Requesting medium buy amount.")
-        store_message_id(context, msg.message_id)
+        store_setup_message(context, msg.message_id)
 
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
 
 def handle_medium_buy(update: Update, context: CallbackContext) -> None:
     msg = None
     user_id = update.message.from_user.id
     
-    if is_user_owner(update, context, user_id):
+    if utils.is_user_owner(update, context, user_id):
         if context.chat_data.get('setup_stage') == 'medium_buy':
             group_id = update.effective_chat.id
-            group_data = fetch_group_info(update, context)
+            group_data = utils.fetch_group_info(update, context)
             if group_data is not None:
                 group_doc = firebase.db.collection('groups').document(str(group_id))
                 try:
                     group_doc.update({
                         'premium_features.buybot.mediumbuy': int(update.message.text)
                     })
-                    clear_group_cache(str(group_id))  # Clear the cache on all database updates
+                    utils.clear_group_cache(str(group_id))  # Clear the cache on all database updates
                     msg = update.message.reply_text("Medium buy value updated successfully!")
                 except Exception as e:
                     msg = update.message.reply_text(f"Error updating medium buy value: {e}")
         
         if msg:
-            store_message_id(context, msg.message_id)
+            store_setup_message(context, msg.message_id)
 
     else:
         print("User is not the owner.")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 #endregion Buybot Setup
 ##
 #
@@ -3485,7 +3218,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
     bot_added_to_group(update, context)
     msg = None
     group_id = update.message.chat.id
-    result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
     if not result:
         print("Failed to fetch group info. No action taken.")
         return
@@ -3512,7 +3245,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             
             print(f"New user {user_id} joined group {chat_id}")
 
-            if not is_user_admin(update, context):
+            if not utils.is_user_admin(update, context):
                 context.bot.restrict_chat_member( # Mute the new user
                     chat_id=chat_id,
                     user_id=user_id,
@@ -3590,10 +3323,10 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             if updates:
                 group_doc.update(updates)
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+                utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
             
 def authentication_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -3630,7 +3363,7 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
         query.edit_message_text(text="No such group exists.")
 
 def authentication_challenge(update: Update, context: CallbackContext, authentication_type, group_id, user_id):
-    group_doc = fetch_group_info(update, context, return_doc=True, group_id=group_id)
+    group_doc = utils.fetch_group_info(update, context, return_doc=True, group_id=group_id)
 
     if authentication_type == 'math':
         challenges = [config.MATH_0, config.MATH_1, config.MATH_2, config.MATH_3, config.MATH_4]
@@ -3678,7 +3411,7 @@ def authentication_challenge(update: Update, context: CallbackContext, authentic
         group_doc.update({ # Update Firestore with the challenge
             f'unverified_users.{user_id}.challenge': math_challenge
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
         print(f"Stored math challenge for user {user_id} in group {group_id}: {math_challenge}")
 
     elif authentication_type == 'word':
@@ -3713,7 +3446,7 @@ def authentication_challenge(update: Update, context: CallbackContext, authentic
         group_doc.update({ # Update Firestore with the challenge
             f'unverified_users.{user_id}.challenge': word_challenge
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
         print(f"Stored word challenge for user {user_id} in group {group_id}: {word_challenge}")
     
     else:
@@ -3822,7 +3555,7 @@ def authenticate_user(context, group_id, user_id):
         print(f"Removed user {user_id} from unverified users in group {group_id}")
 
         group_doc.set(group_data) # Write the updated group data back to Firestore
-        clear_group_cache(str(group_id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(group_id)) # Clear the cache on all database updates
 
     context.bot.send_message(
         chat_id=user_id,
@@ -3845,7 +3578,7 @@ def authenticate_user(context, group_id, user_id):
 
 def authentication_failed(update: Update, context: CallbackContext, group_id, user_id):
     print(f"Authentication failed for user {user_id} in group {group_id}")
-    group_doc = fetch_group_info(update, context, return_doc=True)
+    group_doc = utils.fetch_group_info(update, context, return_doc=True)
     group_data = group_doc.get().to_dict() 
 
     if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
@@ -3854,7 +3587,7 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
     print(f"Reset challenge for user {user_id} in group {group_id}")
 
     group_doc.set(group_data) # Write the updated group data back to Firestore
-    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     context.bot.delete_message(
         chat_id=update.effective_chat.id,
@@ -3952,6 +3685,55 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Chart
 #
 #region Buybot
+##
+#
+##
+#region Monitoring
+MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
+scheduler = BackgroundScheduler()
+def start_monitoring_groups():
+    groups_snapshot = firebase.db.collection('groups').get()
+    for group_doc in groups_snapshot:
+        group_data = group_doc.to_dict()
+        group_data['group_id'] = group_doc.id
+
+        if group_data.get('premium', False):  # Check if premium is True
+            schedule_group_monitoring(group_data)
+        else:
+            print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
+
+    scheduler.start()
+
+def schedule_group_monitoring(group_data):
+    group_id = str(group_data['group_id'])
+    job_id = f"monitoring_{group_id}"
+    token_info = group_data.get('token')
+
+    if token_info:
+        chain = token_info.get('chain')
+        liquidity_address = token_info.get('liquidity_address')
+        web3_instance = config.WEB3_INSTANCES.get(chain)
+
+        if web3_instance and web3_instance.is_connected():
+            existing_job = scheduler.get_job(job_id)  # Check for existing job with ID
+            if existing_job:
+                existing_job.remove()  # Remove existing job to update with new information
+
+            scheduler.add_job(
+                monitor_transfers,
+                'interval',
+                seconds=MONITOR_INTERVAL,
+                args=[web3_instance, liquidity_address, group_data],
+                id=job_id,  # Unique ID for the job
+                timezone=pytz.utc  # Use the UTC timezone from the pytz library
+            )
+            print(f"Scheduled monitoring for premium group {group_id}")
+        else:
+            print(f"Web3 instance not connected for group {group_id} on chain {chain}")
+    else:
+        print(f"No token info found for group {group_id} - Not scheduling monitoring.")
+#endregion Monitoring
+
 def monitor_transfers(web3_instance, liquidity_address, group_data):
     base_dir = os.path.dirname(os.path.dirname(__file__))
     abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
@@ -3993,7 +3775,7 @@ def monitor_transfers(web3_instance, liquidity_address, group_data):
         print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
 
 def handle_transfer_event(event, group_data):
-    fetched_data, group_doc = fetch_group_info(
+    fetched_data, group_doc = utils.fetch_group_info(
         update=None,  # No update object is available in this context
         context=None,  # No context object is used here
         return_both=True,
@@ -4069,55 +3851,54 @@ def categorize_buyer(usd_value, small_buy, medium_buy):
         return "🤑", "🐳"
     
 def send_buy_message(text, group_id, reply_markup=None):
+    msg = None
     bot = telegram.Bot(token=config.TELEGRAM_TOKEN)
-    group_data = fetch_group_info(None, None, group_id)
+    group_data = utils.fetch_group_info(None, None, group_id)
     
-    if rate_limit_check():
-        try:
-            if group_data and group_data.get('premium') and group_data.get('premium_features', {}).get('buybot_header'):
-                buybot_header_url = group_data['premium_features'].get('buybot_header_url')
+    if not utils.rate_limit_check(group_id):
+        msg = bot.send_message(chat_id=group_id, text="Bot rate limit exceeded. Please try again later.")
+        return
+    
+    try:
+        if group_data and group_data.get('premium') and group_data.get('premium_features', {}).get('buybot_header'):
+            buybot_header_url = group_data['premium_features'].get('buybot_header_url')
 
-                if not buybot_header_url:
-                    print(f"No buybot header URL found for group {group_id}. Sending message without media.")
+            if not buybot_header_url:
+                print(f"No buybot header URL found for group {group_id}. Sending message without media.")
 
-                print(f"Group {group_id} has premium features enabled, and has a buybot header uploaded... Determining media type.")
-                
-                if buybot_header_url.endswith('.gif') or buybot_header_url.endswith('.mp4'):
-                    msg = bot.send_animation(
-                        chat_id=group_id,
-                        animation=buybot_header_url,
-                        caption=text,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
-                    print(f"Sending buybot message as animation for group {group_id}.")
-                else:
-                    msg = bot.send_photo(
-                        chat_id=group_id,
-                        photo=buybot_header_url,
-                        caption=text,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
-                    print(f"Sending buybot message as photo for group {group_id}.")
-            else: # Default behavior: send as text-only message
-                print(f"Group {group_id} does not have premium features or buybot header enabled. Sending message without media.")
-                msg = bot.send_message(
+            print(f"Group {group_id} has premium features enabled, and has a buybot header uploaded... Determining media type.")
+            
+            if buybot_header_url.endswith('.gif') or buybot_header_url.endswith('.mp4'):
+                msg = bot.send_animation(
                     chat_id=group_id,
-                    text=text,
+                    animation=buybot_header_url,
+                    caption=text,
                     parse_mode='Markdown',
                     reply_markup=reply_markup
                 )
-        except Exception as e:
-            print(f"Error sending message: {e}")
-    else:
-        try:
-            bot.send_message(chat_id=group_id, text="Bot rate limit exceeded. Please try again later.")
-        except Exception as e:
-            print(f"Error sending rate limit message: {e}")
+                print(f"Sending buybot message as animation for group {group_id}.")
+            else:
+                msg = bot.send_photo(
+                    chat_id=group_id,
+                    photo=buybot_header_url,
+                    caption=text,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+                print(f"Sending buybot message as photo for group {group_id}.")
+        else: # Default behavior: send as text-only message
+            print(f"Group {group_id} does not have premium features or buybot header enabled. Sending message without media.")
+            msg = bot.send_message(
+                chat_id=group_id,
+                text=text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+    except Exception as e:
+        print(f"Error sending message: {e}")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 #endregion Buybot
 #
 #region Price Fetching
@@ -4284,11 +4065,11 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
         update.message.reply_text("Invalid modifier! Use /price USD or /price ETH.")
         return
 
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
     if group_data is None:
         return
 
-    token_data = fetch_group_token(group_data, update, context)
+    token_data = utils.fetch_group_token(group_data, update, context)
     if not token_data:
         return
 
@@ -4331,7 +4112,7 @@ def get_token_price(update: Update, context: CallbackContext) -> None:
 #region Admin Controls
 def admin_commands(update: Update, context: CallbackContext) -> None:
     msg = None
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         msg = update.message.reply_text(
             "*Admin Commands:*\n"
             "*/admincommands | /adminhelp*\nList all admin commands\n"
@@ -4356,33 +4137,33 @@ def admin_commands(update: Update, context: CallbackContext) -> None:
         msg = update.message.reply_text("You must be an admin to use this command.")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def mute(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
 
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         group_doc = firebase.db.collection('groups').document(str(chat_id))
         group_data = group_doc.get().to_dict()
 
         if group_data is None or not group_data.get('admin', {}).get('mute', False):
             msg = update.message.reply_text("Muting is not enabled in this group.")
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
         
         if update.message.reply_to_message is None:
             msg = update.message.reply_text("This command must be used in response to another message!")
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
         reply_to_message = update.message.reply_to_message
         if reply_to_message:
             user_id = reply_to_message.from_user.id
             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
 
-        if is_bot_or_admin(update, context, user_id): return
+        if utils.is_bot_or_admin(update, context, user_id): return
 
         context.bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=ChatPermissions(can_send_messages=False))
         msg = update.message.reply_text(f"User {username} has been muted.")
@@ -4390,12 +4171,12 @@ def mute(update: Update, context: CallbackContext) -> None:
         group_doc.update({ # Add the user to the muted_users mapping in the database
             f'muted_users.{user_id}': datetime.now().isoformat()
         })
-        clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
     else:
         msg = update.message.reply_text("You must be an admin to use this command.")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def unmute(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -4407,14 +4188,14 @@ def unmute(update: Update, context: CallbackContext) -> None:
     if group_data is None or not group_data.get('admin', {}).get('mute', False):
         msg = update.message.reply_text("Admins are not allowed to use the unmute command in this group.")
         if msg is not None:
-            track_message(msg)
+            utils.track_message(msg)
         return
 
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         if not context.args:
             msg = update.message.reply_text("You must provide a username to unmute.")
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
         username_to_unmute = context.args[0].lstrip('@')
 
@@ -4428,7 +4209,7 @@ def unmute(update: Update, context: CallbackContext) -> None:
                     group_doc.update({ # Remove the user from the muted_users mapping in the database
                         f'muted_users.{user_id}': firestore.DELETE_FIELD
                     })
-                    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+                    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                     break
             except Exception:
                 continue
@@ -4438,26 +4219,26 @@ def unmute(update: Update, context: CallbackContext) -> None:
         msg = update.message.reply_text("You must be an admin to use this command.")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def warn(update: Update, context: CallbackContext):
     msg = None
     chat_id = update.effective_chat.id
 
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         group_doc = firebase.db.collection('groups').document(str(chat_id))
         group_data = group_doc.get().to_dict()
 
         if group_data is None or not group_data.get('admin', {}).get('warn', False): # Check if warns enabled
             msg = update.message.reply_text("Warning system is not enabled in this group.")
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
         
         if update.message.reply_to_message is None:
             msg = update.message.reply_text("This command must be used in response to another message!")
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
         
         reply_to_message = update.message.reply_to_message
@@ -4465,7 +4246,7 @@ def warn(update: Update, context: CallbackContext):
             user_id = str(reply_to_message.from_user.id)
             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
 
-        if is_bot_or_admin(update, context, user_id): return
+        if utils.is_bot_or_admin(update, context, user_id): return
         
         try:
             doc_snapshot = group_doc.get()
@@ -4478,7 +4259,7 @@ def warn(update: Update, context: CallbackContext):
                 warnings_dict[user_id] = current_warnings
 
                 group_doc.update({'warnings': warnings_dict}) # Update the group document with the new warnings count
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+                utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 msg = update.message.reply_text(f"{username} has been warned. Total warnings: {current_warnings}")
 
                 process_warns(update, context, user_id, current_warnings) # Check if the user has reached the warning limit
@@ -4490,7 +4271,7 @@ def warn(update: Update, context: CallbackContext):
         msg = update.message.reply_text("You must be an admin to use this command.")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def clear_warns_for_user(update: Update, context: CallbackContext):
     msg = None
@@ -4498,11 +4279,11 @@ def clear_warns_for_user(update: Update, context: CallbackContext):
     group_doc = firebase.db.collection('groups').document(str(chat_id))
     group_data = group_doc.get().to_dict()
 
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         if not context.args:
             msg = update.message.reply_text("You must provide a username to clear warnings.")
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
         username_to_clear = context.args[0].lstrip('@')
 
@@ -4514,7 +4295,7 @@ def clear_warns_for_user(update: Update, context: CallbackContext):
                     group_doc.update({
                         f'warnings.{user_id}': firestore.DELETE_FIELD
                     })
-                    clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+                    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                     msg = update.message.reply_text(f"Warnings cleared for @{username_to_clear}.")
                     break
             except Exception:
@@ -4525,7 +4306,7 @@ def clear_warns_for_user(update: Update, context: CallbackContext):
         msg = update.message.reply_text("You must be an admin to use this command.")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def process_warns(update: Update, context: CallbackContext, user_id: str, warnings: int):
     msg = None
@@ -4537,13 +4318,13 @@ def process_warns(update: Update, context: CallbackContext, user_id: str, warnin
             msg = update.message.reply_text(f"Failed to kick {user_id}: {str(e)}")
         
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def check_warnings(update: Update, context: CallbackContext):
     msg = None
-    if is_user_admin(update, context) and update.message.reply_to_message:
+    if utils.is_user_admin(update, context) and update.message.reply_to_message:
         user_id = str(update.message.reply_to_message.from_user.id)
-        group_doc = fetch_group_info(update, context, return_doc=True)
+        group_doc = utils.fetch_group_info(update, context, return_doc=True)
 
         try:
             doc_snapshot = group_doc.get()
@@ -4561,24 +4342,24 @@ def check_warnings(update: Update, context: CallbackContext):
             msg = update.message.reply_text(f"Failed to check warnings: {str(e)}")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def kick(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
 
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         if update.message.reply_to_message is None:
             msg = update.message.reply_text("This command must be used in response to another message!")
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
         reply_to_message = update.message.reply_to_message
         if reply_to_message:
             user_id = reply_to_message.from_user.id
             username = reply_to_message.from_user.username or reply_to_message.from_user.first_name
 
-        if is_bot_or_admin(update, context, user_id): return
+        if utils.is_bot_or_admin(update, context, user_id): return
 
         context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
         msg = update.message.reply_text(f"User {username} has been kicked.")
@@ -4586,18 +4367,18 @@ def kick(update: Update, context: CallbackContext) -> None:
         msg = update.message.reply_text("You must be an admin to use this command.")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def block(update: Update, context: CallbackContext):
     msg = None
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         command_text = update.message.text[len('/block '):].strip().lower()
 
         if not command_text:
             msg = update.message.reply_text("Please provide some text to block.")
             return
 
-        group_doc = fetch_group_info(update, context, return_doc=True)
+        group_doc = utils.fetch_group_info(update, context, return_doc=True)
         blocklist_field = 'blocklist'
 
         try:
@@ -4615,12 +4396,12 @@ def block(update: Update, context: CallbackContext):
                     current_blocklist.append(command_text)  # Add new blocked text to the list
                     group_doc.update({blocklist_field: current_blocklist})  # Update the blocklist in the group's document
                     msg = update.message.reply_text(f"'{command_text}' added to blocklist!")
-                    clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
+                    utils.clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
                     print("Updated blocklist:", current_blocklist)
             else:
                 group_doc.set({blocklist_field: [command_text]})  # If no blocklist exists, create it with the current command text
                 msg = update.message.reply_text(f"'{command_text}' blocked!")
-                clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
+                utils.clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
                 print("Created new blocklist with:", [command_text])
 
         except Exception as e:
@@ -4628,26 +4409,26 @@ def block(update: Update, context: CallbackContext):
             print(f"Error updating blocklist: {e}")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def remove_block(update: Update, context: CallbackContext):
     msg = None
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         command_text = update.message.text[len('/removeblock '):].strip().lower()
 
         if not command_text:
             msg = update.message.reply_text("Please provide a valid blocklist item to remove.")
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
 
-        group_doc = fetch_group_info(update, context, return_doc=True)
+        group_doc = utils.fetch_group_info(update, context, return_doc=True)
         blocklist_field = 'blocklist'
 
         try: # Use Firestore's arrayRemove to remove the item from the blocklist array
             group_doc.update({blocklist_field: firestore.ArrayRemove([command_text])})
             msg = update.message.reply_text(f"'{command_text}' removed from the blocklist!")
-            clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+            utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
             print(f"Removed '{command_text}' from the blocklist.")
         
         except Exception as e:
@@ -4655,12 +4436,12 @@ def remove_block(update: Update, context: CallbackContext):
             print(f"Error removing from blocklist: {e}")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def blocklist(update: Update, context: CallbackContext):
     msg = None
-    if is_user_admin(update, context):
-        group_doc = fetch_group_info(update, context, return_doc=True)
+    if utils.is_user_admin(update, context):
+        group_doc = utils.fetch_group_info(update, context, return_doc=True)
 
         try:
             doc_snapshot = group_doc.get()
@@ -4685,11 +4466,11 @@ def blocklist(update: Update, context: CallbackContext):
             print(f"Error retrieving blocklist: {e}")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def allow(update: Update, context: CallbackContext):
     msg = None
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         command_text = update.message.text[len('/allow '):].strip()
 
         # Validate against patterns
@@ -4700,35 +4481,35 @@ def allow(update: Update, context: CallbackContext):
                 "Invalid format. Only crypto addresses, URLs, or domain names can be added to the allowlist."
             )
             if msg is not None:
-                track_message(msg)
+                utils.track_message(msg)
             return
 
-        group_doc = fetch_group_info(update, context, return_doc=True)
+        group_doc = utils.fetch_group_info(update, context, return_doc=True)
         allowlist_field = 'allowlist'
 
         try: # Use Firestore's arrayUnion to add the item to the allowlist array
             group_doc.update({allowlist_field: firestore.ArrayUnion([command_text])}) 
             msg = update.message.reply_text(f"'{command_text}' added to the allowlist!")
-            clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+            utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
             print(f"Added '{command_text}' to allowlist.")
 
         except Exception as e:
             if 'NOT_FOUND' in str(e): # Handle the case where the document doesn't exist
                 group_doc.set({allowlist_field: [command_text]})
                 msg = update.message.reply_text(f"'{command_text}' added to a new allowlist!")
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
+                utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 print(f"Created new allowlist with: {command_text}")
             else:
                 msg = update.message.reply_text(f"Failed to update allowlist: {str(e)}")
                 print(f"Error updating allowlist: {e}")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def allowlist(update: Update, context: CallbackContext):
     msg = None
-    if is_user_admin(update, context):
-        group_doc = fetch_group_info(update, context, return_doc=True)
+    if utils.is_user_admin(update, context):
+        group_doc = utils.fetch_group_info(update, context, return_doc=True)
 
         try:
             doc_snapshot = group_doc.get() # Fetch the group's document
@@ -4751,13 +4532,13 @@ def allowlist(update: Update, context: CallbackContext):
             print(f"Error retrieving allowlist: {e}")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def cleargames(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
 
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         keys_to_delete = [key for key in context.chat_data.keys() if key.startswith(f"{chat_id}_")]
         for key in keys_to_delete:
             del context.chat_data[key]
@@ -4769,11 +4550,11 @@ def cleargames(update: Update, context: CallbackContext) -> None:
         print(f"User {update.effective_user.id} tried to clear games but is not an admin in chat {update.effective_chat.id}.")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def cleanbot(update: Update, context: CallbackContext):
     global bot_messages
-    if is_user_admin(update, context):
+    if utils.is_user_admin(update, context):
         chat_id = update.effective_chat.id
 
         messages_to_delete = [msg_id for cid, msg_id in bot_messages if cid == chat_id]
@@ -4788,14 +4569,14 @@ def cleanbot(update: Update, context: CallbackContext):
 
 def clear_cache(update: Update, context: CallbackContext):
     msg = None
-    if is_user_admin(update, context):
-        clear_group_cache(str(update.effective_chat.id))
+    if utils.is_user_admin(update, context):
+        utils.clear_group_cache(str(update.effective_chat.id))
         msg = update.message.reply_text("Cache cleared.")
     else:
         msg = update.message.reply_text("You must be an admin to use this command.")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 #endregion Admin Controls
 #
 #region User Controls
@@ -4803,40 +4584,41 @@ def commands(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = str(update.effective_chat.id)
 
-    if rate_limit_check():
-        enabled_commands = []
-
-        for command in ['play', 'website', 'buy', 'contract', 'price', 'chart', 'liquidity', 'volume']: # Check the status of each command
-            if check_command_status(update, context, command):
-                enabled_commands.append(command)
-
-        if not enabled_commands: # Handle case where no commands are enabled
-            msg = update.message.reply_text(
-                "Sorry, you disabled all my commands!"
-            )
-        else:
-            keyboard = [ # Generate dynamic keyboard for enabled commands
-                [InlineKeyboardButton(f"/{cmd}", callback_data=f'commands_{cmd}')] for cmd in enabled_commands
-            ]
-
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            base_dir = os.path.dirname(os.path.dirname(__file__))
-            image_path = os.path.join(base_dir, 'assets', 'banner.jpg')
-
-            with open(image_path, 'rb') as photo:
-                context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=photo,
-                    caption='Welcome to Sypherbot!\n\n'
-                    'Below you will find all my enabled commands:',
-                    reply_markup=reply_markup
-                )
-    else:
+    if not utils.rate_limit_check(chat_id):
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
+    
+    enabled_commands = []
+
+    for command in ['play', 'website', 'buy', 'contract', 'price', 'chart', 'liquidity', 'volume']: # Check the status of each command
+        if check_command_status(update, context, command):
+            enabled_commands.append(command)
+
+    if not enabled_commands: # Handle case where no commands are enabled
+        msg = update.message.reply_text(
+            "Sorry, you disabled all my commands!"
+        )
+    else:
+        keyboard = [ # Generate dynamic keyboard for enabled commands
+            [InlineKeyboardButton(f"/{cmd}", callback_data=f'commands_{cmd}')] for cmd in enabled_commands
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        image_path = os.path.join(base_dir, 'assets', 'img', 'banner.jpg')
+
+        with open(image_path, 'rb') as photo:
+            context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption='Welcome to Sypherbot!\n\n'
+                'Below you will find all my enabled commands:',
+                reply_markup=reply_markup
+            )
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def command_buttons(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -4909,105 +4691,112 @@ def report(update: Update, context: CallbackContext) -> None:
 
 def save(update: Update, context: CallbackContext):
     msg = None
-    if rate_limit_check():
-        target_message = update.message.reply_to_message
-        if target_message is None:
-            msg = update.message.reply_text("Please reply to the message you want to save with /save.")
-            return
+    chat_id = str(update.effective_chat.id)
 
-        user = update.effective_user
-        if user is None:
-            msg = update.message.reply_text("Could not identify the user.")
-            return
-
-        # Determine the type of the message
-        content = None
-        content_type = None
-        if target_message.text:
-            content = target_message.text
-            content_type = 'text'
-        elif target_message.photo:
-            content = target_message.photo[-1].file_id
-            content_type = 'photo'
-        elif target_message.audio:
-            content = target_message.audio.file_id
-            content_type = 'audio'
-        elif target_message.document:
-            content = target_message.document.file_id
-            content_type = 'document'
-        elif target_message.animation:
-            content = target_message.animation.file_id
-            content_type = 'animation'
-        elif target_message.video:
-            content = target_message.video.file_id
-            content_type = 'video'
-        elif target_message.voice:
-            content = target_message.voice.file_id
-            content_type = 'voice'
-        elif target_message.video_note:
-            content = target_message.video_note.file_id
-            content_type = 'video_note'
-        elif target_message.sticker:
-            content = target_message.sticker.file_id
-            content_type = 'sticker'
-        elif target_message.contact:
-            content = target_message.contact
-            content_type = 'contact'
-        elif target_message.location:
-            content = target_message.location
-            content_type = 'location'
-        else:
-            msg = update.message.reply_text("The message format is not supported.")
-            return
-
-        try: # Send the message or media to the user's DM
-            if content_type == 'text':
-                context.bot.send_message(chat_id=user.id, text=content)
-            elif content_type in ['photo', 'audio', 'document', 'animation', 'video', 'voice', 'video_note', 'sticker']:
-                send_function = getattr(context.bot, f'send_{content_type}')
-                send_function(chat_id=user.id, **{content_type: content})
-            elif content_type == 'contact':
-                context.bot.send_contact(chat_id=user.id, phone_number=content.phone_number, first_name=content.first_name, last_name=content.last_name)
-            elif content_type == 'location':
-                context.bot.send_location(chat_id=user.id, latitude=content.latitude, longitude=content.longitude)
-            
-
-            msg = update.message.reply_text("Check your DMs.")
-        except Exception as e:
-            msg = update.message.reply_text(f"Failed to send DM: {str(e)}")
-    else:
+    if not utils.rate_limit_check(chat_id):
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
+    
+    target_message = update.message.reply_to_message
+    if target_message is None:
+        msg = update.message.reply_text("Please reply to the message you want to save with /save.")
+        return
+
+    user = update.effective_user
+    if user is None:
+        msg = update.message.reply_text("Could not identify the user.")
+        return
+
+    content = None
+    content_type = None
+    if target_message.text:
+        content = target_message.text
+        content_type = 'text'
+    elif target_message.photo:
+        content = target_message.photo[-1].file_id
+        content_type = 'photo'
+    elif target_message.audio:
+        content = target_message.audio.file_id
+        content_type = 'audio'
+    elif target_message.document:
+        content = target_message.document.file_id
+        content_type = 'document'
+    elif target_message.animation:
+        content = target_message.animation.file_id
+        content_type = 'animation'
+    elif target_message.video:
+        content = target_message.video.file_id
+        content_type = 'video'
+    elif target_message.voice:
+        content = target_message.voice.file_id
+        content_type = 'voice'
+    elif target_message.video_note:
+        content = target_message.video_note.file_id
+        content_type = 'video_note'
+    elif target_message.sticker:
+        content = target_message.sticker.file_id
+        content_type = 'sticker'
+    elif target_message.contact:
+        content = target_message.contact
+        content_type = 'contact'
+    elif target_message.location:
+        content = target_message.location
+        content_type = 'location'
+    else:
+        msg = update.message.reply_text("The message format is not supported.")
+        return
+
+    try: # Send the message or media to the user's DM
+        if content_type == 'text':
+            context.bot.send_message(chat_id=user.id, text=content)
+        elif content_type in ['photo', 'audio', 'document', 'animation', 'video', 'voice', 'video_note', 'sticker']:
+            send_function = getattr(context.bot, f'send_{content_type}')
+            send_function(chat_id=user.id, **{content_type: content})
+        elif content_type == 'contact':
+            context.bot.send_contact(chat_id=user.id, phone_number=content.phone_number, first_name=content.first_name, last_name=content.last_name)
+        elif content_type == 'location':
+            context.bot.send_location(chat_id=user.id, latitude=content.latitude, longitude=content.longitude)
+        
+
+        msg = update.message.reply_text("Check your DMs.")
+    except Exception as e:
+        msg = update.message.reply_text(f"Failed to send DM: {str(e)}")
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 #region Play Game
 def play(update: Update, context: CallbackContext) -> None:
+    msg = None
     chat_id = str(update.effective_chat.id)
 
-    if rate_limit_check():
-        function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(update, context, function_name):
-            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
-            print(f"Attempted to use disabled command /play in group {chat_id}.")
-            return
-        
-        keyboard = [[InlineKeyboardButton("Click Here to Start a Game!", callback_data='startGame')]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        base_dir = os.path.dirname(os.path.dirname(__file__))
-        gif_path = os.path.join(base_dir, 'assets', 'banner.gif')
-        
-        with open(gif_path, 'rb') as gif:
-            context.bot.send_animation(
-                chat_id=update.effective_chat.id,
-                animation=gif,
-                caption='Welcome to deSypher! Click the button below to start a game!\n\nTo end an ongoing game, use the command /endgame.',
-                reply_markup=reply_markup
-            )
-    else:
-        update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+    if not utils.rate_limit_check(chat_id):
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
 
+    function_name = inspect.currentframe().f_code.co_name
+    if not check_command_status(update, context, function_name):
+        update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+        print(f"Attempted to use disabled command /play in group {chat_id}.")
+        return
+    
+    keyboard = [[InlineKeyboardButton("Click Here to Start a Game!", callback_data='startGame')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    gif_path = os.path.join(base_dir, 'assets', 'img', 'banner.gif')
+    
+    with open(gif_path, 'rb') as gif:
+        msg = context.bot.send_animation(
+            chat_id=update.effective_chat.id,
+            animation=gif,
+            caption='Welcome to deSypher! Click the button below to start a game!\n\nTo end an ongoing game, use the command /endgame.',
+            reply_markup=reply_markup
+        )
+    
+    if msg is not None:
+        utils.track_message(msg)
+        
 def end_game(update: Update, context: CallbackContext) -> None:
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
@@ -5167,7 +4956,7 @@ def handle_guess(update: Update, context: CallbackContext) -> None:
         print(f"Game over. User failed to guess the word {chosen_word}. Clearing game data.")
         del context.chat_data[key]
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def fetch_random_word() -> str:
     base_dir = os.path.dirname(os.path.dirname(__file__))
@@ -5180,149 +4969,156 @@ def fetch_random_word() -> str:
 
 video_cache = {}
 def send_rick_video(update: Update, context: CallbackContext) -> None:
+    msg = None
     chat_id = update.effective_chat.id
     args = context.args
 
-    if rate_limit_check():
-        video_mapping = { # Map arguments to specific videos
-            "alien": "assets/RICK_ALIEN.mp4",
-            "duncan": "assets/RICK_DUNCAN.mp4",
-            "saintlaurent": "assets/RICK_SAINTLAURENT.mp4",
-            "shoenice": "assets/RICK_SHOENICE.mp4"
-        }
+    if not utils.rate_limit_check(chat_id):
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
+    
+    video_mapping = { # Map arguments to specific videos
+        "alien": "assets/video/RICK_ALIEN.mp4",
+        "duncan": "assets/video/RICK_DUNCAN.mp4",
+        "saintlaurent": "assets/video/RICK_SAINTLAURENT.mp4",
+        "shoenice": "assets/video/RICK_SHOENICE.mp4"
+    }
 
-        if not args:  # If no arguments are passed, send a random video
-            video_path = random.choice(list(video_mapping.values()))
-        else:
-            video_key = args[0].lower() # Check if the argument matches a key in the mapping
-            video_path = video_mapping.get(video_key)
-
-        if not video_path: # If no match is found, send a default response
-            keyboard = [[InlineKeyboardButton("Rick", url="https://www.instagram.com/bigf0ck/")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            context.bot.send_message(chat_id=chat_id, text="ALIEN", reply_markup=reply_markup)
-            return
-
-        if video_path in video_cache: # Use cached file_id if available
-            file_id = video_cache[video_path]
-            context.bot.send_video(chat_id=chat_id, video=file_id)
-        else: 
-            with open(video_path, 'rb') as video_file: # Upload the video and cache the file_id
-                message = context.bot.send_video(chat_id=chat_id, video=video_file)
-            file_id = message.video.file_id
-            video_cache[video_path] = file_id
+    if not args:  # If no arguments are passed, send a random video
+        video_path = random.choice(list(video_mapping.values()))
     else:
-        update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        video_key = args[0].lower() # Check if the argument matches a key in the mapping
+        video_path = video_mapping.get(video_key)
+
+    if not video_path: # If no match is found, send a default response
+        keyboard = [[InlineKeyboardButton("Rick", url="https://www.instagram.com/bigf0ck/")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        context.bot.send_message(chat_id=chat_id, text="ALIEN", reply_markup=reply_markup)
+        return
+
+    if video_path in video_cache: # Use cached file_id if available
+        file_id = video_cache[video_path]
+        context.bot.send_video(chat_id=chat_id, video=file_id)
+    else: 
+        with open(video_path, 'rb') as video_file: # Upload the video and cache the file_id
+            message = context.bot.send_video(chat_id=chat_id, video=video_file)
+        file_id = message.video.file_id
+        video_cache[video_path] = file_id
+
+    if msg is not None:
+        utils.track_message(msg)
 
 def buy(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = str(update.effective_chat.id)
 
-    if rate_limit_check():
-        function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(update, context, function_name):
-            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
-            print(f"Attempted to use disabled command /play in group {chat_id}.")
-            return
-        
-        group_data = fetch_group_info(update, context)
-        if group_data is None:
-            return
-        
-        token_data = fetch_group_token(group_data, update, context)
-        if token_data is None:
-            return
-        
-        token_name = token_data["name"]
-        token_symbol = token_data["symbol"]
-        contract_address = token_data["contract_address"]
-
-        if not contract_address or not token_name or not token_symbol:
-            update.message.reply_text(f"Unable to retrieve either the contract address, token name, or token symbol for this group.")
-            return
-        
-        buy_link = f"https://app.uniswap.org/swap?outputCurrency={contract_address}"
-        
-        keyboard = [[InlineKeyboardButton(f"Buy {token_name} Here", url=buy_link)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        msg = update.message.reply_text(
-            f"{token_name} • {token_symbol}",
-            reply_markup=reply_markup
-        )
-    else:
+    if not utils.rate_limit_check(chat_id):
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
+    
+    function_name = inspect.currentframe().f_code.co_name
+    if not check_command_status(update, context, function_name):
+        update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+        print(f"Attempted to use disabled command /play in group {chat_id}.")
+        return
+    
+    group_data = utils.fetch_group_info(update, context)
+    if group_data is None:
+        return
+    
+    token_data = utils.fetch_group_token(group_data, update, context)
+    if token_data is None:
+        return
+    
+    token_name = token_data["name"]
+    token_symbol = token_data["symbol"]
+    contract_address = token_data["contract_address"]
+
+    if not contract_address or not token_name or not token_symbol:
+        update.message.reply_text(f"Unable to retrieve either the contract address, token name, or token symbol for this group.")
+        return
+    
+    buy_link = f"https://app.uniswap.org/swap?outputCurrency={contract_address}"
+    
+    keyboard = [[InlineKeyboardButton(f"Buy {token_name} Here", url=buy_link)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    msg = update.message.reply_text(
+        f"{token_name} • {token_symbol}",
+        reply_markup=reply_markup
+    )
 
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def contract(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = str(update.effective_chat.id)
-
-    if rate_limit_check():
-        function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(update, context, function_name):
-            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
-            print(f"Attempted to use disabled command /play in group {chat_id}.")
-            return
-        
-        group_data = fetch_group_info(update, context)
-        if group_data is None:
-            return
-        
-        token_data = fetch_group_token(group_data, update, context)
-        if token_data is None:
-            return
-
-        contract_address = token_data["contract_address"]
-        if not contract_address:
-            update.message.reply_text("Contract address not found for this group.")
-            return
-        
-        msg = update.message.reply_text(contract_address)
-
-    else:
+    
+    if not utils.rate_limit_check(chat_id):
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
+
+    function_name = inspect.currentframe().f_code.co_name
+    if not check_command_status(update, context, function_name):
+        update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+        print(f"Attempted to use disabled command /play in group {chat_id}.")
+        return
+    
+    group_data = utils.fetch_group_info(update, context)
+    if group_data is None:
+        return
+    
+    token_data = utils.fetch_group_token(group_data, update, context)
+    if token_data is None:
+        return
+
+    contract_address = token_data["contract_address"]
+    if not contract_address:
+        update.message.reply_text("Contract address not found for this group.")
+        return
+    
+    msg = update.message.reply_text(contract_address)
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def liquidity(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = str(update.effective_chat.id)
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
 
-    if rate_limit_check():
-        function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(update, context, function_name):
-            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
-            print(f"Attempted to use disabled command /play in group {chat_id}.")
-            return
-        
-        if group_data is None:
-            return
-
-        token_data = fetch_group_token(group_data, update, context)
-        if token_data is None:
-            return
-
-        chain = token_data["chain"]
-        lp_address = token_data["liquidity_address"]
-        if not lp_address or not chain:
-            update.message.reply_text("Liquidity address or chain not found for this group.")
-            return
-
-        liquidity_usd = get_liquidity(chain, lp_address)
-        if liquidity_usd:
-            msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
-        else:
-            msg = update.message.reply_text("Failed to fetch liquidity data.")
-    else:
+    if not utils.rate_limit_check(chat_id):
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
+    
+    function_name = inspect.currentframe().f_code.co_name
+    if not check_command_status(update, context, function_name):
+        update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+        print(f"Attempted to use disabled command /play in group {chat_id}.")
+        return
+    
+    if group_data is None:
+        return
+
+    token_data = utils.fetch_group_token(group_data, update, context)
+    if token_data is None:
+        return
+
+    chain = token_data["chain"]
+    lp_address = token_data["liquidity_address"]
+    if not lp_address or not chain:
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    liquidity_usd = get_liquidity(chain, lp_address)
+    if liquidity_usd:
+        msg = update.message.reply_text(f"Liquidity: ${liquidity_usd}")
+    else:
+        msg = update.message.reply_text("Failed to fetch liquidity data.")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def get_liquidity(chain, lp_address):
     try:
@@ -5343,40 +5139,41 @@ def get_liquidity(chain, lp_address):
     
 def volume(update: Update, context: CallbackContext) -> None:
     msg = None
-    group_data = fetch_group_info(update, context)
+    group_data = utils.fetch_group_info(update, context)
     chat_id = str(update.effective_chat.id)
 
-    if rate_limit_check():
-        function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(update, context, function_name):
-            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
-            print(f"Attempted to use disabled command /play in group {chat_id}.")
-            return
-
-        if group_data is None:
-            return
-        
-        token_data = fetch_group_token(group_data, update, context)
-        if token_data is None:
-            return
-
-        chain = token_data["chain"]
-        lp_address = token_data["liquidity_address"]
-        if not lp_address or not chain:
-            update.message.reply_text("Liquidity address or chain not found for this group.")
-            return
-        
-        volume_24h_usd = get_volume(chain, lp_address)
-        if volume_24h_usd:
-            volume_24h_usd = float(volume_24h_usd) # Ensure the value is treated as a float for formatting
-            msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd:.4f}")
-        else:
-            msg = update.message.reply_text("Failed to fetch volume data.")
-    else:
+    if not utils.rate_limit_check(chat_id):
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
+    
+    function_name = inspect.currentframe().f_code.co_name
+    if not check_command_status(update, context, function_name):
+        update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+        print(f"Attempted to use disabled command /play in group {chat_id}.")
+        return
+
+    if group_data is None:
+        return
+    
+    token_data = utils.fetch_group_token(group_data, update, context)
+    if token_data is None:
+        return
+
+    chain = token_data["chain"]
+    lp_address = token_data["liquidity_address"]
+    if not lp_address or not chain:
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+    
+    volume_24h_usd = get_volume(chain, lp_address)
+    if volume_24h_usd:
+        volume_24h_usd = float(volume_24h_usd) # Ensure the value is treated as a float for formatting
+        msg = update.message.reply_text(f"24-hour trading volume in USD: ${volume_24h_usd:.4f}")
+    else:
+        msg = update.message.reply_text("Failed to fetch volume data.")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
     
 def get_volume(chain, lp_address):
     try:
@@ -5396,6 +5193,7 @@ def get_volume(chain, lp_address):
         return None
 
 def chart(update: Update, context: CallbackContext) -> None:
+    msg = None
     args = context.args
     chat_id = update.effective_chat.id
     time_frame = 'minute'  # default to minute if no argument is provided
@@ -5412,96 +5210,100 @@ def chart(update: Update, context: CallbackContext) -> None:
             msg = update.message.reply_text('Invalid time frame specified. Please use /chart with m, h, or d.')
             return
         
-    if rate_limit_check():
-        function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(update, context, function_name):
-            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
-            print(f"Attempted to use disabled command /play in group {chat_id}.")
-            return
-        
-        group_data = fetch_group_info(update, context)
-        if group_data is None:
-            return  # Early exit if no data is found
-        
-        token_data = fetch_group_token(group_data, update, context)
-        if token_data is None:
-            return
-        
-        chain = token_data["chain"]
-        name = token_data["name"]
-        symbol = token_data["symbol"]
-        liquidity_address = token_data["liquidity_address"]
-        if not chain or not name or not symbol or not liquidity_address:
-            msg = update.message.reply_text("Full token data not found for this group.")
-            return
-
-        group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
-        ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
-        
-        if ohlcv_data:
-            chain_lower = chain.lower()
-            data_frame = prepare_data_for_chart(ohlcv_data)
-            plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
-
-            dexscreener_url = f"https://dexscreener.com/{chain_lower}/{liquidity_address}"
-            if chain_lower == "ethereum":
-                chain_lower = "ether"
-            dextools_url = f"https://www.dextools.io/app/en/{chain_lower}/pair-explorer/{liquidity_address}"
-
-            keyboard = [
-                [
-                    InlineKeyboardButton("Dexscreener", url=dexscreener_url),
-                    InlineKeyboardButton("Dextools", url=dextools_url),
-                ]
-            ]
-
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            msg = update.message.reply_photo(
-                photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
-                caption=f"*{name}* • *{symbol}* • {time_frame.capitalize()} Chart",
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        else:
-            msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
-    else:
+    if not utils.rate_limit_check(chat_id):
         msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
+    
+    function_name = inspect.currentframe().f_code.co_name
+    if not check_command_status(update, context, function_name):
+        msg = update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+        print(f"Attempted to use disabled command /play in group {chat_id}.")
+        return
+    
+    group_data = utils.fetch_group_info(update, context)
+    if group_data is None:
+        return  # Early exit if no data is found
+    
+    token_data = utils.fetch_group_token(group_data, update, context)
+    if token_data is None:
+        return
+    
+    chain = token_data["chain"]
+    name = token_data["name"]
+    symbol = token_data["symbol"]
+    liquidity_address = token_data["liquidity_address"]
+    if not chain or not name or not symbol or not liquidity_address:
+        msg = update.message.reply_text("Full token data not found for this group.")
+        return
+
+    group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
+    ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
+    
+    if ohlcv_data:
+        chain_lower = chain.lower()
+        data_frame = prepare_data_for_chart(ohlcv_data)
+        plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
+
+        dexscreener_url = f"https://dexscreener.com/{chain_lower}/{liquidity_address}"
+        if chain_lower == "ethereum":
+            chain_lower = "ether"
+        dextools_url = f"https://www.dextools.io/app/en/{chain_lower}/pair-explorer/{liquidity_address}"
+
+        keyboard = [
+            [
+                InlineKeyboardButton("Dexscreener", url=dexscreener_url),
+                InlineKeyboardButton("Dextools", url=dextools_url),
+            ]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        msg = update.message.reply_photo(
+            photo=open(f'/tmp/candlestick_chart_{group_id}.png', 'rb'),
+            caption=f"*{name}* • *{symbol}* • {time_frame.capitalize()} Chart",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    else:
+        msg = update.message.reply_text('Failed to fetch data or generate chart. Please try again later.')
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 
 def website(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
     
-    if rate_limit_check():
-        function_name = inspect.currentframe().f_code.co_name
-        if not check_command_status(update, context, function_name):
-            update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
-            print(f"Attempted to use disabled command /play in group {chat_id}.")
-            return
-        
-        group_data = fetch_group_info(update, context)
-        if group_data is None:
-            return  # Early exit if no data is found
-        
-        group_info = group_data.get('group_info')
+    if not utils.rate_limit_check(chat_id):
+        msg = update.message.reply_text('Bot rate limit exceeded. Please try again later.')
+        return
+    
+    function_name = inspect.currentframe().f_code.co_name
+    if not check_command_status(update, context, function_name):
+        update.message.reply_text(f"The /{function_name} command is currently disabled in this group.")
+        print(f"Attempted to use disabled command /play in group {chat_id}.")
+        return
+    
+    group_data = utils.fetch_group_info(update, context)
+    if group_data is None:
+        return  # Early exit if no data is found
+    
+    group_info = group_data.get('group_info')
 
-        if group_info is None:
-            msg = update.message.reply_text("Group info not found.")
-            return
-        
-        group_website = group_info.get('website_url')
+    if group_info is None:
+        msg = update.message.reply_text("Group info not found.")
+        return
+    
+    group_website = group_info.get('website_url')
 
-        if group_website is None:
-            msg = update.message.reply_text("Group link not found.")
-            return
-        
-        msg = update.message.reply_text(f"{group_website}")
+    if group_website is None:
+        msg = update.message.reply_text("Group link not found.")
+        return
+    
+    msg = update.message.reply_text(f"{group_website}")
     
     if msg is not None:
-        track_message(msg)
+        utils.track_message(msg)
 #endregion User Controls
 
 def main() -> None:
