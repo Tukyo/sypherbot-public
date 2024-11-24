@@ -2875,10 +2875,15 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
             file_stream.getvalue(),
             content_type=f"image/{file_extension}" if file_extension in ["jpg", "png"] else f"video/{file_extension}"
         )
+        blob.make_public()  # Make the file publicly accessible
+
+        welcome_message_url = blob.public_url  # Store the public URL
+        print(f"Welcome message header URL: {welcome_message_url}")
 
         if group_data is not None:
             group_doc.update({
-                'premium_features.welcome_header': True
+                'premium_features.welcome_header': True,
+                'premium_features.welcome_header_url': welcome_message_url
             })
             clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
 
@@ -2947,10 +2952,15 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
             file_stream.getvalue(),
             content_type=f"image/{file_extension}" if file_extension in ["jpg", "png"] else f"video/{file_extension}"
         )
+        blob.make_public()  # Make the file publicly accessible
+
+        buybot_header_url = blob.public_url  # Store the public URL
+        print(f"Buybot header URL: {buybot_header_url}")
 
         if group_data is not None:
             group_doc.update({
-                'premium_features.buybot_header': True
+                'premium_features.buybot_header': True,
+                'premium_features.buybot_header_url': buybot_header_url
             })
             clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
 
@@ -3505,10 +3515,16 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
-                blob = firebase.bucket.blob(f'sypherbot/public/welcome_message_header/welcome_message_header_{group_id}.jpg')
-                welcome_media_url = blob.generate_signed_url(expiration=timedelta(minutes=firebase.BLOB_EXPIRATION))
+                welcome_media_url = group_data.get('premium_features', {}).get('welcome_header_url')
 
-                print(f"Group {group_id} has premium features enabled, and has a header uploaded... Determining media type.")
+                if not welcome_media_url:
+                    print(f"No URL found for welcome header in group {group_id}. Sending text-only message.")
+                    msg = update.message.reply_text(
+                        f"Welcome to {group_name}! Please press the button below to authenticate.",
+                        reply_markup=reply_markup
+                    )
+                else:
+                    print(f"Group {group_id} has premium features enabled, and a header uploaded... Determining media type.")
 
                 # Determine the correct method to send media
                 if welcome_media_url.endswith('.gif') or welcome_media_url.endswith('.mp4'):
@@ -4031,16 +4047,18 @@ def send_buy_message(text, group_id, reply_markup=None):
     
     if rate_limit_check():
         try:
-            if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('buybot_header'): # Check if the group is premium and has a buybot header
-                blob = firebase.bucket.blob(f'sypherbot/public/buybot_message_header/buybot_message_header_{group_id}.jpg') # Generate the URL for the buybot header
-                buybot_media_url = blob.generate_signed_url(expiration=timedelta(minutes=firebase.BLOB_EXPIRATION))
+            if group_data and group_data.get('premium') and group_data.get('premium_features', {}).get('buybot_header'):
+                buybot_header_url = group_data['premium_features'].get('buybot_header_url')
+
+                if not buybot_header_url:
+                    print(f"No buybot header URL found for group {group_id}. Sending message without media.")
 
                 print(f"Group {group_id} has premium features enabled, and has a buybot header uploaded... Determining media type.")
                 
-                if buybot_media_url.endswith('.gif') or buybot_media_url.endswith('.mp4'):
+                if buybot_header_url.endswith('.gif') or buybot_header_url.endswith('.mp4'):
                     msg = bot.send_animation(
                         chat_id=group_id,
-                        animation=buybot_media_url,
+                        animation=buybot_header_url,
                         caption=text,
                         parse_mode='Markdown',
                         reply_markup=reply_markup
@@ -4049,7 +4067,7 @@ def send_buy_message(text, group_id, reply_markup=None):
                 else:
                     msg = bot.send_photo(
                         chat_id=group_id,
-                        photo=buybot_media_url,
+                        photo=buybot_header_url,
                         caption=text,
                         parse_mode='Markdown',
                         reply_markup=reply_markup
