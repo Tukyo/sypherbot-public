@@ -5314,11 +5314,6 @@ def main() -> None:
     updater = Updater(config.TELEGRAM_TOKEN, use_context=True) # Create the Updater and pass it the bot's token
     dispatcher = updater.dispatcher # Get the dispatcher to register handlers
 
-    updater.start_polling() # Start the Bot
-    start_monitoring_groups() # Start monitoring premium groups
-    updater.idle() # Run the bot until stopped
-
-    
     #region Slash Command Handlers
     #
     #region User Slash Command Handlers
