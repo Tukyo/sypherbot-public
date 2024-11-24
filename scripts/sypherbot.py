@@ -2871,9 +2871,20 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
 
         bucket = firebase.bucket  # Save to Firebase Storage
         blob = bucket.blob(filepath)
+        # Determine the correct MIME type explicitly
+        if file_extension == "gif":
+            mime_type = "image/gif"
+        elif file_extension in ["jpg", "png"]:
+            mime_type = f"image/{file_extension}"
+        elif file_extension == "mp4":
+            mime_type = "video/mp4"
+        else:
+            mime_type = "application/octet-stream"  # Fallback for unknown types
+
+        # Upload the file with the correct MIME type
         blob.upload_from_string(
             file_stream.getvalue(),
-            content_type=f"image/{file_extension}" if file_extension in ["jpg", "png"] else f"video/{file_extension}"
+            content_type=mime_type
         )
         blob.make_public()  # Make the file publicly accessible
 
@@ -2948,9 +2959,20 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
 
         bucket = firebase.bucket  # Save to Firebase Storage
         blob = bucket.blob(filepath)
+        # Determine the correct MIME type explicitly
+        if file_extension == "gif":
+            mime_type = "image/gif"
+        elif file_extension in ["jpg", "png"]:
+            mime_type = f"image/{file_extension}"
+        elif file_extension == "mp4":
+            mime_type = "video/mp4"
+        else:
+            mime_type = "application/octet-stream"  # Fallback for unknown types
+
+        # Upload the file with the correct MIME type
         blob.upload_from_string(
             file_stream.getvalue(),
-            content_type=f"image/{file_extension}" if file_extension in ["jpg", "png"] else f"video/{file_extension}"
+            content_type=mime_type
         )
         blob.make_public()  # Make the file publicly accessible
 
