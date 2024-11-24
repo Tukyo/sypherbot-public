@@ -506,6 +506,8 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         if doc_snapshot.exists:
             group_data = doc_snapshot.to_dict()
 
+            print(f"Fetched group data from Firestore: {group_data}")
+
             cache_group_info(group_id, group_data, group_doc) # Cache the group data and document reference
 
             if return_both:
