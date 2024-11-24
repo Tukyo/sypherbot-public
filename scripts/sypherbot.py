@@ -2403,10 +2403,10 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
 
-    if group_data.get('premium', False):  # Check if premium is True
-        schedule_group_monitoring(group_data) # Instantly start monitoring the group
-    else:
-        print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
+    # if group_data.get('premium', False):  # Check if premium is True
+    #     schedule_group_monitoring(group_data) # Instantly start monitoring the group
+    # else:
+    #     print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
 
     msg = context.bot.send_message(
         chat_id=group_id,
