@@ -3689,14 +3689,13 @@ def plot_candlestick_chart(data_frame, group_id):
 #
 ##
 #region Monitoring
-MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
+MONITOR_INTERVAL = 20 # Interval for monitoring jobs (seconds)
 scheduler = BackgroundScheduler()
 last_seen_blocks = {} # Initialize a dictionary to store the last seen block for each chain
 def start_monitoring_groups():
     premium_groups_by_chain = {}
 
-    # Group premium groups by blockchain
-    groups_snapshot = firebase.db.collection('groups').get()
+    groups_snapshot = firebase.db.collection('groups').get() # Group premium groups by blockchain
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
         group_data['group_id'] = group_doc.id
@@ -3751,24 +3750,32 @@ def monitor_chain(web3_instance, chain, premium_groups):
 
     print(f"Processing blocks {last_seen_block + 1} to {latest_block} for chain {chain}.")
 
-    contract_addresses = [group['token']['contract_address'] for group in premium_groups] # Gather all contract addresses for premium groups on this chain
+    contract_addresses = [group['token']['contract_address'] for group in premium_groups]
 
-    try: # Fetch Transfer events for all monitored contracts
+    try:
         logs = web3_instance.eth.filter({
             'fromBlock': last_seen_block + 1,
             'toBlock': latest_block,
             'address': contract_addresses
         }).get_all_entries()
 
-        for log in logs: # Dispatch events to respective groups
+        print(f"Fetched {len(logs)} logs for chain {chain}")
+        for log in logs:
             for group in premium_groups:
                 if log['address'] == group['token']['contract_address']:
-                    handle_transfer_event(log, group)  # Process event for the group
+                    print(f"Dispatching event to group {group['group_id']}")
+                    handle_transfer_event(log, group)
 
-        last_seen_blocks[chain] = latest_block  # Update last seen block for the chain
+        last_seen_blocks[chain] = latest_block  # Update last seen block
 
-    except Exception as e:
-        print(f"Error during transfer monitoring for chain {chain}: {e}")
+    except ValueError as e:
+        error_data = e.args[0]
+        if isinstance(error_data, dict) and error_data.get('code') == -32000:
+            print(f"Invalid block range for chain {chain}. Error: {error_data['message']}")
+            last_seen_blocks[chain] = web3_instance.eth.block_number  # Reset to the latest block
+        else:
+            print(f"Unexpected error during monitoring for chain {chain}: {e}", exc_info=True)
+            raise
 #endregion Monitoring
 
 def handle_transfer_event(event, group_data):
