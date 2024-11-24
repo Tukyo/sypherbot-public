@@ -51,7 +51,7 @@ Here, you may configure **all admin settings** for your group.
 
 `Warn:` Enable/Disable Warn, Check Warn List, Max Warns
 
-#### Filtering
+#### Blocklist / Allowlist
 `Allowlist:` Add/Remove Links from Allowlist, Check Allowlist or Disable Allowlisting for Links
 
 `Blocklist:` Add/Remove Phrases from Blocklist, Check Blocklist
@@ -90,7 +90,7 @@ Sypherbot offers a plethora of features to manage and control your group. The bo
 - `deSypher` - You can play deSypher with this bot!
 - `anti-spam` - Control spam within your group by auto-muting spammers.
 - `anti-raid` - Stop group raids from happening by blocking new members from joining if a raid is detected.
-- `filtering`
+- `blocklist / allowlist`
   - `allowlist` - Add specific links or domains or crypto addresses to the allowlist. Your `{group_website}` will always be allowed, as well as your LP + Contract addresses.
   - `blocklist` - Block any phrases, words or specific things from being sent via text to your group.
 - `mute/warn` - Admins may mute or warn users. You can choose the maximum amount of warns. You must reply to a user's message to mute/warn them with the bot. If you need to unmute a user, check the `/mutelist` and unmute them by username.
@@ -136,8 +136,8 @@ Sypherbot offers a plethora of features to manage and control your group. The bo
 - `/warnlist` - Get a list of all warnings
 - `/clearwarns` - Clear warnings for a specific user
 - `/warnings` - Check warnings for a specific user
-- `/block | /filter` - Block a user or contract address
-- `/removeblock | /unblock | /unfilter` - Remove a user or contract address from the block list
-- `/blocklist | /filterlist` - View the block list
+- `/block` - Block a user or contract address
+- `/removeblock | /unblock` - Remove a user or contract address from the block list
+- `/blocklist` - View the block list
 - `/allow` - Allow a specific user or contract
 - `/allowlist` - View the allow list

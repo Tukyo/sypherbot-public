@@ -62,8 +62,8 @@ from scripts import firebase # Import the firebase module from the scripts folde
 ### /clearwarns - Clear warnings for a specific user
 ### /warnings - Check warnings for a specific user
 ### /block - Block a user or contract address
-### /removeblock /unblock /unfilter - Remove a user or contract address from the block list
-### /blocklist /filterlist - View the block list
+### /removeblock /unblock - Remove a user or contract address from the block list
+### /blocklist - View the block list
 ### /allow - Allow a specific user or contract
 ### /allowlist - View the allow list
 ##
@@ -879,7 +879,7 @@ def delete_blocked_links(update: Update, context: CallbackContext):
                 print(f"Failed to delete message: {e}")
 
 def delete_blocked_phrases(update: Update, context: CallbackContext):
-    print("Checking message for filtered phrases...")
+    print("Checking message for blocked phrases...")
     message_text = update.message.text
 
     if message_text is None:
@@ -4220,9 +4220,9 @@ def admin_commands(update: Update, context: CallbackContext) -> None:
             "*/warnlist*\nList all warnings in the chat\n"
             "*/clearwarns*\nClear warnings for a specific user (reply to their message)\n"
             "*/warnings*\nCheck warnings for a specific user (reply to their message)\n"
-            "*/block | /filter*\nAdd something to the blocklist\n"
-            "*/removeblock | /unblock | /unfilter*\nRemove something from the block list\n"
-            "*/blocklist | /filterlist*\nView the block list\n"
+            "*/block*\nAdd something to the blocklist\n"
+            "*/removeblock | /unblock*\nRemove something from the block list\n"
+            "*/blocklist*\nView the block list\n"
             "*/allow*\nAllow a contract address, URL or domain\n"
             "*/allowlist*\nView the allow list\n",
             parse_mode='Markdown'
@@ -4908,19 +4908,15 @@ def handle_start_game(update: Update, context: CallbackContext) -> None:
         chat_id = query.message.chat_id
         key = f"{chat_id}_{user_id}"
 
-        # Check if the user already has an ongoing game
-        if key in context.chat_data:
-            # Delete the old message
-            context.bot.delete_message(chat_id=chat_id, message_id=query.message.message_id)
-            # Send a new message
+        if key in context.chat_data: # Check if the user already has an ongoing game
+            context.bot.delete_message(chat_id=chat_id, message_id=query.message.message_id) # Delete the old message
             context.bot.send_message(chat_id=chat_id, text="You already have an active game. Please use the command */endgame* to end your previous game before starting a new one!", parse_mode='Markdown')
             return
 
         word = fetch_random_word()
         print(f"Chosen word: {word} for key: {key}")
 
-        # Initialize the game state for this user in this chat
-        if key not in context.chat_data:
+        if key not in context.chat_data: # Initialize the game state for this user in this chat
             context.chat_data[key] = {
                 'chosen_word': word,
                 'guesses': [],
@@ -4933,10 +4929,8 @@ def handle_start_game(update: Update, context: CallbackContext) -> None:
         row_template = "⬛⬛⬛⬛⬛"
         game_layout = "\n".join([row_template for _ in range(num_rows)])
         
-        # Delete the old message
-        context.bot.delete_message(chat_id=chat_id, message_id=query.message.message_id)
+        context.bot.delete_message(chat_id=chat_id, message_id=query.message.message_id) # Delete the old message
 
-        # Send a new message with the game layout and store the message ID
         game_message = context.bot.send_message(chat_id=chat_id, text=f"*{first_name}'s Game*\nPlease guess a five letter word!\n\n{game_layout}", parse_mode='Markdown')
         context.chat_data[key]['game_message_id'] = game_message.message_id
         
@@ -4949,21 +4943,17 @@ def handle_guess(update: Update, context: CallbackContext) -> None:
     msg = None
 
     if key not in context.chat_data:
-        # No active game found for key
         return
     
     player_name = context.chat_data[key].get('player_name', 'Player')
-
     
     if key not in context.chat_data or 'chosen_word' not in context.chat_data[key]: # Check if there's an ongoing game for this user in this chat
-        # print(f"No active game found for key: {key}")
         return
 
     user_guess = update.message.text.lower()
     chosen_word = context.chat_data[key].get('chosen_word')
 
-    # Check if the guess is not 5 letters and the user has an active game
-    if len(user_guess) != 5 or not user_guess.isalpha():
+    if len(user_guess) != 5 or not user_guess.isalpha(): # Check if the guess is not 5 letters and the user has an active game
         print(f"Invalid guess length: {len(user_guess)}")
         msg = update.message.reply_text("Please guess a five letter word containing only letters!")
         return
@@ -4975,66 +4965,78 @@ def handle_guess(update: Update, context: CallbackContext) -> None:
     context.chat_data[key]['guesses'].append(user_guess)
     print(f"Updated guesses list: {context.chat_data[key]['guesses']}")
 
-    # Check the guess and build the game layout
-    def get_game_layout(guesses, chosen_word):
+    def get_game_layout(guesses, chosen_word): # Check the guess and build the game layout
         layout = []
+        
+        def count_letters(word):
+            counts = {}
+            for char in word:
+                counts[char] = counts.get(char, 0) + 1
+            return counts
+        
+        letter_counts = count_letters(chosen_word) # Count occurrences of each letter in the chosen word
+        
         for guess in guesses:
-            row = ""
+            row = ["⬛"] * len(guess)  # Initialize the row with empty squares
+            temp_counts = letter_counts.copy()  # Track remaining occurrences of each letter
+
+            # First pass: Assign green squares (🟩) for correct letters in correct positions
             for i, char in enumerate(guess):
                 if char == chosen_word[i]:
-                    row += "🟩"  # Correct letter in the correct position
-                elif char in chosen_word:
-                    row += "🟨"  # Correct letter in the wrong position
-                else:
-                    row += "🟥"  # Incorrect letter
-            layout.append(row + " - " + guess)
+                    row[i] = "🟩"
+                    temp_counts[char] -= 1  # Reduce the count for matched letter
 
+            # Second pass: Assign yellow squares (🟨) for correct letters in wrong positions
+            for i, char in enumerate(guess):
+                if row[i] == "⬛" and char in temp_counts and temp_counts[char] > 0:
+                    row[i] = "🟨"
+                    temp_counts[char] -= 1  # Reduce the count for this matched letter
+
+            # Replace unmatched squares with red (🟥) for incorrect letters
+            row = [cell if cell != "⬛" else "🟥" for cell in row]
+
+            # Combine row into a string with the guess appended
+            layout.append("".join(row) + " - " + guess)
+
+        # Add empty rows for remaining guesses
         while len(layout) < 4:
             layout.append("⬛⬛⬛⬛⬛")
-        
+
         return "\n".join(layout)
 
-    # Delete the previous game message
-    if 'game_message_id' in context.chat_data[key]:
+    if 'game_message_id' in context.chat_data[key]: # Delete the previous game message
         try:
             context.bot.delete_message(chat_id=chat_id, message_id=context.chat_data[key]['game_message_id'])
         except telegram.error.BadRequest:
             print("Message to delete not found")
 
-    # Update the game layout
-    game_layout = get_game_layout(context.chat_data[key]['guesses'], chosen_word)
+    game_layout = get_game_layout(context.chat_data[key]['guesses'], chosen_word) # Update the game layout
 
     # Check if it's not the 4th guess and the user hasn't guessed the word correctly before sending the game message
     if len(context.chat_data[key]['guesses']) < 4 and user_guess != chosen_word:
         game_message = context.bot.send_message(chat_id=chat_id, text=f"*{player_name}'s Game*\nPlease guess a five letter word!\n\n{game_layout}", parse_mode='Markdown')
     
-        # Store the new message ID
-        context.chat_data[key]['game_message_id'] = game_message.message_id
+        context.chat_data[key]['game_message_id'] = game_message.message_id # Store the new message ID
 
-    # Check if the user has guessed the word correctly
-    if user_guess == chosen_word:
-        # Delete the previous game message
-        if 'game_message_id' in context.chat_data[key]:
+    if user_guess == chosen_word: # Check if the user has guessed the word correctly
+        if 'game_message_id' in context.chat_data[key]: # Delete the previous game message
             try:
                 context.bot.delete_message(chat_id=chat_id, message_id=context.chat_data[key]['game_message_id'])
             except telegram.error.BadRequest:
                 print("Message to delete not found")
 
-        # Update the game layout
-        game_layout = get_game_layout(context.chat_data[key]['guesses'], chosen_word)
+        game_layout = get_game_layout(context.chat_data[key]['guesses'], chosen_word) # Update the game layout
         game_message = context.bot.send_message(chat_id=chat_id, text=f"*{player_name}'s Final Results:*\n\n{game_layout}\n\nCongratulations! You've guessed the word correctly!\n\nIf you enjoyed this, you can play the game with SYPHER tokens on the [website](https://desypher.net/).", parse_mode='Markdown')
         print("User guessed the word correctly. Clearing game data.")
         del context.chat_data[key]
     elif len(context.chat_data[key]['guesses']) >= 4:
-        # Delete the previous game message
-        if 'game_message_id' in context.chat_data[key]:
+        if 'game_message_id' in context.chat_data[key]: # Delete the previous game message
             try:
                 context.bot.delete_message(chat_id=chat_id, message_id=context.chat_data[key]['game_message_id'])
             except telegram.error.BadRequest:
                 print("Message to delete not found")
 
-        # Update the game layout
-        game_layout = get_game_layout(context.chat_data[key]['guesses'], chosen_word)
+        game_layout = get_game_layout(context.chat_data[key]['guesses'], chosen_word) # Update the game layout
         game_message = context.bot.send_message(chat_id=chat_id, text=f"*{player_name}'s Final Results:*\n\n{game_layout}\n\nGame over! The correct word was: {chosen_word}\n\nTry again on the [website](https://desypher.net/), you'll probably have a better time playing with SPYHER tokens.", parse_mode='Markdown')
 
         print(f"Game over. User failed to guess the word {chosen_word}. Clearing game data.")
@@ -5406,9 +5408,9 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("clearcache", clear_cache))
     dispatcher.add_handler(CommandHandler('cleargames', cleargames))
     dispatcher.add_handler(CommandHandler(['kick', 'ban'], kick))
-    dispatcher.add_handler(CommandHandler(['block', 'filter'], block))
-    dispatcher.add_handler(CommandHandler(['removeblock', 'unblock', 'unfilter'], remove_block))
-    dispatcher.add_handler(CommandHandler(['blocklist', 'filterlist'], blocklist))
+    dispatcher.add_handler(CommandHandler("block", block))
+    dispatcher.add_handler(CommandHandler(['removeblock', 'unblock'], remove_block))
+    dispatcher.add_handler(CommandHandler("blocklist", blocklist))
     dispatcher.add_handler(CommandHandler("allow", allow))
     dispatcher.add_handler(CommandHandler("allowlist", allowlist))
     dispatcher.add_handler(CommandHandler(['mute', 'stfu'], mute))
