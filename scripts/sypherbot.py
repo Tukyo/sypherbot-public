@@ -3731,8 +3731,9 @@ def start_monitoring_groups():
             print(f"Scheduled chain monitoring for chain {chain} with {len(premium_groups)} premium groups.")
         else:
             print(f"Web3 instance not connected for chain {chain}. Skipping monitoring.")
-
-#endregion Monitoring
+    
+    scheduler.start()
+    print("Scheduler started.")
 
 def monitor_chain(web3_instance, chain, premium_groups):
     global last_seen_blocks
@@ -3768,6 +3769,7 @@ def monitor_chain(web3_instance, chain, premium_groups):
 
     except Exception as e:
         print(f"Error during transfer monitoring for chain {chain}: {e}")
+#endregion Monitoring
 
 def handle_transfer_event(event, group_data):
     fetched_data, group_doc = utils.fetch_group_info(
@@ -5304,6 +5306,11 @@ def website(update: Update, context: CallbackContext) -> None:
 def main() -> None:
     updater = Updater(config.TELEGRAM_TOKEN, use_context=True) # Create the Updater and pass it the bot's token
     dispatcher = updater.dispatcher # Get the dispatcher to register handlers
+
+    updater.start_polling() # Start the Bot
+    start_monitoring_groups() # Start monitoring premium groups
+    updater.idle() # Run the bot until stopped
+
     
     #region Slash Command Handlers
     #
