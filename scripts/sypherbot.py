@@ -1118,7 +1118,7 @@ def setup_home(update: Update, context: CallbackContext, user_id) -> None:
             InlineKeyboardButton("Crypto", callback_data='setup_crypto')
         ],
         [
-            InlineKeyboardButton("Premium", callback_data='setup_premium')
+            InlineKeyboardButton("🚀 Premium 🚀", callback_data='setup_premium')
         ],
         [InlineKeyboardButton("Exit", callback_data='exit_setup')]
     ]
@@ -2867,7 +2867,7 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
         filename = f'welcome_message_header_{group_id}.{file_extension}'
         filepath = f'sypherbot/public/welcome_message_header/{filename}'
 
-        bucket = firebase.bucket()  # Save to Firebase Storage
+        bucket = firebase.bucket  # Save to Firebase Storage
         blob = bucket.blob(filepath)
         blob.upload_from_string(
             file_stream.getvalue(),
@@ -2939,7 +2939,7 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
         filename = f'buybot_message_header_{group_id}.{file_extension}'
         filepath = f'sypherbot/public/buybot_message_header/{filename}'
 
-        bucket = firebase.bucket()  # Save to Firebase Storage
+        bucket = firebase.bucket  # Save to Firebase Storage
         blob = bucket.blob(filepath)
         blob.upload_from_string(
             file_stream.getvalue(),
