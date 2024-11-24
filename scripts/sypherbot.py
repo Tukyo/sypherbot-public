@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
+from web3 import Web3
 
 from scripts import config # Import the config module from the scripts folder
 from scripts import firebase # Import the firebase module from the scripts folder
@@ -2460,10 +2461,11 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
             contract_address = update.message.text.strip()
 
             if eth_address_pattern.fullmatch(contract_address):
+                checksum_address = Web3.toChecksumAddress(contract_address)
                 group_id = update.effective_chat.id
-                print(f"Adding contract address {contract_address} to group {group_id}")
+                print(f"Adding contract address {checksum_address} to group {group_id}")
                 group_doc = fetch_group_info(update, context, return_doc=True)
-                group_doc.update({'token.contract_address': contract_address})
+                group_doc.update({'token.contract_address': checksum_address})
                 clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 context.chat_data['setup_stage'] = None
 
@@ -2516,10 +2518,11 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
             liquidity_address = update.message.text.strip()
 
             if eth_address_pattern.fullmatch(liquidity_address):
+                checksum_address = Web3.toChecksumAddress(liquidity_address)
                 group_id = update.effective_chat.id
-                print(f"Adding liquidity address {liquidity_address} to group {group_id}")
+                print(f"Adding liquidity address {checksum_address} to group {group_id}")
                 group_doc = fetch_group_info(update, context, return_doc=True)
-                group_doc.update({'token.liquidity_address': liquidity_address})
+                group_doc.update({'token.liquidity_address': checksum_address})
                 clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
                 context.chat_data['setup_stage'] = None
 
