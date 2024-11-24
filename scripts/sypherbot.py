@@ -2461,7 +2461,7 @@ def handle_contract_address(update: Update, context: CallbackContext) -> None:
             contract_address = update.message.text.strip()
 
             if eth_address_pattern.fullmatch(contract_address):
-                checksum_address = Web3.toChecksumAddress(contract_address)
+                checksum_address = Web3.to_checksum_address(contract_address)
                 group_id = update.effective_chat.id
                 print(f"Adding contract address {checksum_address} to group {group_id}")
                 group_doc = fetch_group_info(update, context, return_doc=True)
@@ -2518,7 +2518,7 @@ def handle_liquidity_address(update: Update, context: CallbackContext) -> None:
             liquidity_address = update.message.text.strip()
 
             if eth_address_pattern.fullmatch(liquidity_address):
-                checksum_address = Web3.toChecksumAddress(liquidity_address)
+                checksum_address = Web3.to_checksum_address(liquidity_address)
                 group_id = update.effective_chat.id
                 print(f"Adding liquidity address {checksum_address} to group {group_id}")
                 group_doc = fetch_group_info(update, context, return_doc=True)
