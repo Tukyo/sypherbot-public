@@ -154,21 +154,11 @@ ANTI_RAID_LOCKDOWN_TIME = 180
 anti_spam = AntiSpam(rate_limit=ANTI_SPAM_RATE_LIMIT, time_window=ANTI_SPAM_TIME_WINDOW, mute_duration=ANTI_SPAM_MUTE_DURATION)
 anti_raid = AntiRaid(user_amount=ANTI_RAID_USER_AMOUNT, time_out=ANTI_RAID_TIME_OUT, anti_raid_time=ANTI_RAID_LOCKDOWN_TIME)
 
-scheduler = BackgroundScheduler()
-
-
-
 RATE_LIMIT_MESSAGE_COUNT = 100  # Maximum number of allowed commands per {TIME_PERIOD}
 RATE_LIMIT_TIME_PERIOD = 60  # Time period in (seconds)
-MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
 
 last_check_time = time.time()
 command_count = 0
-
-bot_messages = []
-def track_message(message):
-    bot_messages.append((message.chat.id, message.message_id))
-    print(f"Tracked message: {message.message_id}")
 
 #region LOGGING
 bot = Bot(token=config.TELEGRAM_TOKEN)
@@ -354,7 +344,14 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         group_doc.delete()  # Directly delete the group document
         clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
+bot_messages = []
+def track_message(message):
+    bot_messages.append((message.chat.id, message.message_id))
+    print(f"Tracked message: {message.message_id}")
+    
 #region Monitoring
+MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
+scheduler = BackgroundScheduler()
 def start_monitoring_groups():
     groups_snapshot = firebase.db.collection('groups').get()
     for group_doc in groups_snapshot:
@@ -607,7 +604,7 @@ def rate_limit_check(): # Later TODO: Implement rate limiting PER GROUP
         return False
 
 def handle_message(update: Update, context: CallbackContext) -> None:
-    if not (update.message or not update.message.from_user):
+    if not update.message or not update.message.from_user:
         print("Received a message with missing update or user information.")
         return
     
@@ -695,7 +692,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     handle_guess(update, context)
 
 def handle_image(update: Update, context: CallbackContext) -> None:
-    if not (update.message or not update.message.from_user):
+    if not update.message or not update.message.from_user:
         print("Received a message with missing update or user information.")
         return
     
@@ -2365,25 +2362,47 @@ def check_authentication_settings(update: Update, context: CallbackContext) -> N
 #region Crypto Setup
 def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = None
-    keyboard = [
-        [
-            InlineKeyboardButton("Chain", callback_data='setup_chain')
-        ],
-        [
-            InlineKeyboardButton("Contract", callback_data='setup_contract'),
-            InlineKeyboardButton("Liquidity", callback_data='setup_liquidity')
-        ],
-        [
-            InlineKeyboardButton("Check Token Details", callback_data='check_token_details'),
-        ],
-        [
-            InlineKeyboardButton("❗ Reset Token Details ❗", callback_data='reset_token_details')
-        ],
-        [
-            InlineKeyboardButton("Back", callback_data='setup_home')
+
+    group_data = fetch_group_info(update, context)
+    if not group_data:
+        return
+
+    token_data = group_data.get('token', {})
+    setup_complete = token_data.get('setup_complete', False) # Check if token setup is complete
+
+    if setup_complete:
+        keyboard = [
+            [
+                InlineKeyboardButton("Check Token Details", callback_data='check_token_details'),
+            ],
+            [
+                InlineKeyboardButton("❗ Reset Token Details ❗", callback_data='reset_token_details'),
+            ],
+            [
+                InlineKeyboardButton("Back", callback_data='setup_home'),
+            ]
         ]
-        
-    ]
+    else:
+        keyboard = [
+            [
+                InlineKeyboardButton("Chain", callback_data='setup_chain')
+            ],
+            [
+                InlineKeyboardButton("Contract", callback_data='setup_contract'),
+                InlineKeyboardButton("Liquidity", callback_data='setup_liquidity')
+            ],
+            [
+                InlineKeyboardButton("Check Token Details", callback_data='check_token_details'),
+            ],
+            [
+                InlineKeyboardButton("❗ Reset Token Details ❗", callback_data='reset_token_details')
+            ],
+            [
+                InlineKeyboardButton("Back", callback_data='setup_home')
+            ]
+            
+        ]
+
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     menu_change(context, update)
@@ -2391,10 +2410,10 @@ def setup_crypto(update: Update, context: CallbackContext) -> None:
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='*🔑 Crypto Setup 🔑*\n\n'
-        'Here you can setup the Buybot, Pricebot and Chartbot functionality.\n\n'
+        'Here you can setup your token details.\n\n'
         '• This functionality currently is only setup for WETH paired tokens.\n\n'
         '*⚠️ Updating Token Details ⚠️*\n'
-        'To enter new token details, you must click *Reset Token Details* first.',
+        'Once you have setup a token, if you would like to add a different token, click *Reset Token Details* first.',
         parse_mode='markdown',
         reply_markup=reply_markup
     )
@@ -2637,7 +2656,8 @@ def complete_token_setup(group_id: str, context: CallbackContext):
         'token.name': token_name,
         'token.symbol': token_symbol,
         'token.total_supply': total_supply,
-        'token.decimals': decimals
+        'token.decimals': decimals,
+        'token.setup_complete': True
     })
 
     clear_group_cache(str(group_id)) # Clear the cache on all database updates
