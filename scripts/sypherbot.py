@@ -2867,8 +2867,8 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
         filename = f'welcome_message_header_{group_id}.{file_extension}'
         filepath = f'sypherbot/public/welcome_message_header/{filename}'
 
-        firebase.bucket = storage.firebase.bucket()  # Save to Firebase Storage
-        blob = firebase.bucket.blob(filepath)
+        bucket = firebase.bucket()  # Save to Firebase Storage
+        blob = bucket.blob(filepath)
         blob.upload_from_string(
             file_stream.getvalue(),
             content_type=f"image/{file_extension}" if file_extension in ["jpg", "png"] else f"video/{file_extension}"
@@ -2939,8 +2939,8 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
         filename = f'buybot_message_header_{group_id}.{file_extension}'
         filepath = f'sypherbot/public/buybot_message_header/{filename}'
 
-        firebase.bucket = storage.firebase.bucket()  # Save to Firebase Storage
-        blob = firebase.bucket.blob(filepath)
+        bucket = firebase.bucket()  # Save to Firebase Storage
+        blob = bucket.blob(filepath)
         blob.upload_from_string(
             file_stream.getvalue(),
             content_type=f"image/{file_extension}" if file_extension in ["jpg", "png"] else f"video/{file_extension}"
