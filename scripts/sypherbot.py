@@ -3695,13 +3695,19 @@ last_seen_blocks = {} # Initialize a dictionary to store the last seen block for
 def start_monitoring_groups():
     premium_groups_by_chain = {}
 
-    groups_snapshot = firebase.db.collection('groups').get() # Consolidate premium groups by blockchain
+    # Group premium groups by blockchain
+    groups_snapshot = firebase.db.collection('groups').get()
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
         group_data['group_id'] = group_doc.id
+        
+        token_data = group_data.get('token') # Ensure token and chain exist in group data
+        if not token_data or 'chain' not in token_data:
+            print(f"Skipping group {group_data['group_id']} - Missing token or chain info.")
+            continue
 
         if group_data.get('premium', False):  # Only include premium groups
-            chain = group_data['token']['chain']
+            chain = token_data['chain']
             if chain not in premium_groups_by_chain:
                 premium_groups_by_chain[chain] = []
             premium_groups_by_chain[chain].append(group_data)
@@ -3725,6 +3731,7 @@ def start_monitoring_groups():
             print(f"Scheduled chain monitoring for chain {chain} with {len(premium_groups)} premium groups.")
         else:
             print(f"Web3 instance not connected for chain {chain}. Skipping monitoring.")
+
 #endregion Monitoring
 
 def monitor_chain(web3_instance, chain, premium_groups):
