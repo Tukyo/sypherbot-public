@@ -2829,7 +2829,7 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
     print("Requesting a welcome message header.")
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="Please send a jpg image for the welcome message header that is less than 700x250px.",
+        text="Please send a JPG, GIF or MP4 for the welcome message header that is less than 700x250px.",
         parse_mode='Markdown'
     )
     context.chat_data['expecting_welcome_message_header_image'] = True  # Flag to check in the image handler
@@ -2840,61 +2840,55 @@ def setup_welcome_message_header(update: Update, context: CallbackContext) -> No
         track_message(msg)
 
 def handle_welcome_message_image(update: Update, context: CallbackContext) -> None:
-    msg = None
     if context.chat_data.get('expecting_welcome_message_header_image'):
         group_id = update.effective_chat.id
-        result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+        result = fetch_group_info(update, context, return_both=True)  # Fetch both group_data and group_doc
         if not result:
             print("Failed to fetch group info. No action taken.")
             return
 
         group_data, group_doc = result  # Unpack the tuple
-        
-        photo = update.message.photo[-1]  # Get the highest resolution photo
-        file = context.bot.get_file(photo.file_id)
 
-        # Download the image to check file size
-        image_stream = BytesIO()
-        file.download(out=image_stream)
-        file_size = len(image_stream.getvalue())  # Get the size of the file in bytes
+        validation_result = validate_media(update)
 
-        if photo.width <= 700 and photo.height <= 250 and file_size <= 100000:  # File size less than 100 KB
-            filename = f'welcome_message_header_{group_id}.jpg'
-            filepath = f'sypherbot/public/welcome_message_header/{filename}'
-
-            # Save to Firebase Storage
-            firebase.bucket = storage.firebase.bucket()
-            blob = firebase.bucket.blob(filepath)
-            blob.upload_from_string(
-                image_stream.getvalue(),
-                content_type='image/jpeg'
-            )
-
-            if group_data is not None:
-                group_doc.update({
-                    'premium_features.welcome_header': True
-                })
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-
-            msg = context.bot.send_message(
+        if not validation_result['valid']:
+            msg = context.bot.send_message( # Send validation error to the user
                 chat_id=update.effective_chat.id,
-                text="Your welcome message header image has been successfully uploaded!",
+                text=validation_result['error'],
                 parse_mode='Markdown'
             )
-            context.chat_data['expecting_welcome_message_header_image'] = False  # Reset the flag
-            context.chat_data['setup_stage'] = None
-            store_message_id(context, msg.message_id)
-        else:
-            error_message = "Please ensure the image is less than 700x250 pixels"
-            if file_size > 100000:
-                error_message += " and smaller than 100 KB"
-            error_message += " and try again."
-            msg = context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=error_message,
-                parse_mode='Markdown'
-            )
-            store_message_id(context, msg.message_id)
+            if msg is not None:
+                track_message(msg)
+            return
+
+        file_stream = validation_result['file_stream']
+        file_extension = validation_result['file_extension']
+
+        filename = f'welcome_message_header_{group_id}.{file_extension}'
+        filepath = f'sypherbot/public/welcome_message_header/{filename}'
+
+        firebase.bucket = storage.firebase.bucket()  # Save to Firebase Storage
+        blob = firebase.bucket.blob(filepath)
+        blob.upload_from_string(
+            file_stream.getvalue(),
+            content_type=f"image/{file_extension}" if file_extension in ["jpg", "png"] else f"video/{file_extension}"
+        )
+
+        if group_data is not None:
+            group_doc.update({
+                'premium_features.welcome_header': True
+            })
+            clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Your welcome message header has been successfully uploaded!",
+            parse_mode='Markdown'
+        )
+        context.chat_data['expecting_welcome_message_header_image'] = False  # Reset the flag
+        context.chat_data['setup_stage'] = None
+        store_message_id(context, msg.message_id)
+
         if msg is not None:
             track_message(msg)
 
@@ -2907,7 +2901,7 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
 
     msg = context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="Please send a jpg image for the buybot message header that is less than 700x250px.",
+        text="Please send a JPG, GIF or MP4 for the buybot message header that is less than 700x250px.",
         parse_mode='Markdown'
     )
     context.chat_data['expecting_buybot_header_image'] = True  # Flag to check in the image handler
@@ -2918,66 +2912,106 @@ def setup_buybot_message_header(update: Update, context: CallbackContext) -> Non
         track_message(msg)
 
 def handle_buybot_message_image(update: Update, context: CallbackContext) -> None:
-    msg = None
     if context.chat_data.get('expecting_buybot_header_image'):
         group_id = update.effective_chat.id
-        result = fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+        result = fetch_group_info(update, context, return_both=True)  # Fetch both group_data and group_doc
         if not result:
             print("Failed to fetch group info. No action taken.")
             return
 
         group_data, group_doc = result  # Unpack the tuple
-        
-        photo = update.message.photo[-1]  # Get the highest resolution photo
-        file = context.bot.get_file(photo.file_id)
 
-        # Download the image to check file size
-        image_stream = BytesIO()
-        file.download(out=image_stream)
-        file_size = len(image_stream.getvalue())  # Get the size of the file in bytes
+        validation_result = validate_media(update)
 
-        # Check dimensions adn filesize
-        if photo.width <= 700 and photo.height <= 250 and file_size <= 100000:
-            filename = f'buybot_message_header_{group_id}.jpg'
-            filepath = f'sypherbot/public/buybot_message_header/{filename}'
-
-            # Save to Firebase Storage
-            firebase.bucket = storage.firebase.bucket()
-            blob = firebase.bucket.blob(filepath)
-            image_stream = BytesIO()
-            file.download(out=image_stream)
-            blob.upload_from_string(
-                image_stream.getvalue(),
-                content_type='image/jpeg'
-            )
-
-            if group_data is not None:
-                group_doc.update({
-                    'premium_features.buybot_header': True
-                })
-                clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-
-            msg = context.bot.send_message(
+        if not validation_result['valid']: 
+            msg = context.bot.send_message( # Send validation error to the user
                 chat_id=update.effective_chat.id,
-                text="Your buybot message header image has been successfully uploaded!",
+                text=validation_result['error'],
                 parse_mode='Markdown'
             )
-            context.chat_data['expecting_buybot_header_image'] = False  # Reset the flag
-            context.chat_data['setup_stage'] = None
-            store_message_id(context, msg.message_id)
-        else:
-            error_message = "Please ensure the image is less than 700x250 pixels"
-            if file_size > 100000:
-                error_message += " and smaller than 100 KB"
-            error_message += " and try again."
-            msg = context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=error_message,
-                parse_mode='Markdown'
-            )
-            store_message_id(context, msg.message_id)
+            if msg is not None:
+                track_message(msg)
+            return
+
+        file_stream = validation_result['file_stream']
+        file_extension = validation_result['file_extension']
+
+        filename = f'buybot_message_header_{group_id}.{file_extension}'
+        filepath = f'sypherbot/public/buybot_message_header/{filename}'
+
+        firebase.bucket = storage.firebase.bucket()  # Save to Firebase Storage
+        blob = firebase.bucket.blob(filepath)
+        blob.upload_from_string(
+            file_stream.getvalue(),
+            content_type=f"image/{file_extension}" if file_extension in ["jpg", "png"] else f"video/{file_extension}"
+        )
+
+        if group_data is not None:
+            group_doc.update({
+                'premium_features.buybot_header': True
+            })
+            clear_group_cache(str(update.effective_chat.id))  # Clear the cache on all database updates
+
+        msg = context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Your buybot message header has been successfully uploaded!",
+            parse_mode='Markdown'
+        )
+        context.chat_data['expecting_buybot_header_image'] = False  # Reset the flag
+        context.chat_data['setup_stage'] = None
+        store_message_id(context, msg.message_id)
+
         if msg is not None:
             track_message(msg)
+
+def validate_media(update, max_width=700, max_height=250, max_size=100000):
+    media = None
+    file_extension = None
+
+    if update.message.photo: # Handle photos (PNG, JPG)
+        media = update.message.photo[-1]
+        file_extension = "jpg"  # Assume JPG for Telegram photos
+    elif update.message.animation: # Handle GIFs
+        media = update.message.animation
+        file_extension = "gif"
+    elif update.message.video: # Handle MP4 videos
+        media = update.message.video
+        file_extension = "mp4"
+    else:
+        return {
+            'valid': False,
+            'media': None,
+            'file_extension': None,
+            'file_stream': None,
+            'error': "Unsupported file type. Please upload a PNG, JPG, GIF, or MP4 file."
+        }
+
+    file = update.message.bot.get_file(media.file_id) # Download the file
+    file_stream = BytesIO()
+    file.download(out=file_stream)
+    file_size = len(file_stream.getvalue())  # File size in bytes
+
+    if media.width <= max_width and media.height <= max_height and file_size <= max_size: # Validate dimensions and size
+        return {
+            'valid': True,
+            'media': media,
+            'file_extension': file_extension,
+            'file_stream': file_stream,
+            'error': None
+        }
+
+    error_message = "Please ensure the media is less than {}x{} pixels".format(max_width, max_height) # If validation fails, return an error
+    if file_size > max_size:
+        error_message += " and smaller than {} KB".format(max_size // 1000)
+    error_message += " and try again."
+
+    return {
+        'valid': False,
+        'media': media,
+        'file_extension': file_extension,
+        'file_stream': None,
+        'error': error_message
+    }
 #endregion Customization Setup
 ##
 #
@@ -3470,15 +3504,25 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
 
             if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
                 blob = firebase.bucket.blob(f'sypherbot/public/welcome_message_header/welcome_message_header_{group_id}.jpg')
-                welcome_image_url = blob.generate_signed_url(expiration=timedelta(minutes=firebase.BLOB_EXPIRATION))
+                welcome_media_url = blob.generate_signed_url(expiration=timedelta(minutes=firebase.BLOB_EXPIRATION))
 
-                print(f"Group {group_id} has premium features enabled, and has a header uploaded... Sending welcome message with image.")
+                print(f"Group {group_id} has premium features enabled, and has a header uploaded... Determining media type.")
 
-                msg = update.message.reply_photo(
-                    photo=welcome_image_url,
-                    caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
-                    reply_markup=reply_markup
-                )
+                # Determine the correct method to send media
+                if welcome_media_url.endswith('.gif') or welcome_media_url.endswith('.mp4'):
+                    msg = update.message.reply_animation(
+                        animation=welcome_media_url,
+                        caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
+                        reply_markup=reply_markup
+                    )
+                    print(f"Sending welcome message as animation for group {group_id}.")
+                else:
+                    msg = update.message.reply_photo(
+                        photo=welcome_media_url,
+                        caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
+                        reply_markup=reply_markup
+                    )
+                    print(f"Sending welcome message as photo for group {group_id}.")
             else:
                 msg = update.message.reply_text(
                     f"Welcome to {group_name}! Please press the button below to authenticate.",
@@ -3981,11 +4025,42 @@ def categorize_buyer(usd_value, small_buy, medium_buy):
     
 def send_buy_message(text, group_id, reply_markup=None):
     bot = telegram.Bot(token=config.TELEGRAM_TOKEN)
+    group_data = fetch_group_info(None, None, group_id)
+    
     if rate_limit_check():
         try:
-            msg = bot.send_message(chat_id=group_id, text=text, parse_mode='Markdown', reply_markup=reply_markup)
-            if msg is not None:
-                track_message(msg)
+            if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('buybot_header'): # Check if the group is premium and has a buybot header
+                blob = firebase.bucket.blob(f'sypherbot/public/buybot_message_header/buybot_message_header_{group_id}.jpg') # Generate the URL for the buybot header
+                buybot_media_url = blob.generate_signed_url(expiration=timedelta(minutes=firebase.BLOB_EXPIRATION))
+
+                print(f"Group {group_id} has premium features enabled, and has a buybot header uploaded... Determining media type.")
+                
+                if buybot_media_url.endswith('.gif') or buybot_media_url.endswith('.mp4'):
+                    msg = bot.send_animation(
+                        chat_id=group_id,
+                        animation=buybot_media_url,
+                        caption=text,
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
+                    print(f"Sending buybot message as animation for group {group_id}.")
+                else:
+                    msg = bot.send_photo(
+                        chat_id=group_id,
+                        photo=buybot_media_url,
+                        caption=text,
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
+                    print(f"Sending buybot message as photo for group {group_id}.")
+            else: # Default behavior: send as text-only message
+                print(f"Group {group_id} does not have premium features or buybot header enabled. Sending message without media.")
+                msg = bot.send_message(
+                    chat_id=group_id,
+                    text=text,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
         except Exception as e:
             print(f"Error sending message: {e}")
     else:
@@ -3993,6 +4068,9 @@ def send_buy_message(text, group_id, reply_markup=None):
             bot.send_message(chat_id=group_id, text="Bot rate limit exceeded. Please try again later.")
         except Exception as e:
             print(f"Error sending rate limit message: {e}")
+
+    if msg is not None:
+        track_message(msg)
 #endregion Buybot
 #
 #region Price Fetching
