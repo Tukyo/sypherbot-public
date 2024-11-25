@@ -148,6 +148,41 @@ class AntiRaid:
         return 0
 #endregion Classes
 
+
+def log_deleted_members(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    bot = context.bot
+
+    try:
+        # Notify that the logging process is starting
+        update.message.reply_text("Checking for deleted accounts...")
+
+        deleted_users = []
+
+        # Fetch all chat members (use a library or Telegram API directly)
+        for member in bot.get_chat_members(chat_id):
+            user = member.user
+
+            # Check if the account is deleted
+            if user.is_deleted:
+                deleted_users.append(f"Deleted account: {user.id}")
+
+        # Log all deleted accounts or notify if none found
+        if deleted_users:
+            update.message.reply_text(f"Found {len(deleted_users)} deleted accounts.")
+            for user in deleted_users:
+                update.message.reply_text(user)
+        else:
+            update.message.reply_text("No deleted accounts found.")
+
+    except Exception as e:
+        update.message.reply_text(f"An error occurred: {e}")
+
+
+
+
+
+
 ANTI_SPAM_RATE_LIMIT = 5
 ANTI_SPAM_TIME_WINDOW = 10
 ANTI_SPAM_MUTE_DURATION = 60
@@ -711,6 +746,7 @@ def delete_service_messages(update, context):
         except Exception as e:
             print(f"Failed to delete service message: {str(e)}")
 #endregion Message Handling
+##
 #
 ##
 #endregion Bot Logic
@@ -5382,6 +5418,8 @@ def main() -> None:
     #endregion Admin Slash Command Handlers
     #
     #endregion Slash Command Handlers
+
+    dispatcher.add_handler(CommandHandler("deleted", log_deleted_members))
 
     #region Callbacks
     #
