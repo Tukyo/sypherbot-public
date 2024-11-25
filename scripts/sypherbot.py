@@ -35,6 +35,10 @@ from scripts import config
 from scripts import utils
 from scripts import firebase
 
+import nest_asyncio
+nest_asyncio.apply()
+
+
 #
 ## This is the public version of the bot that was developed by Tukyo for the Sypher project.
 ## This bot has a customizable commands feature and admin controls, along with full charting, price, and buybot functionality.
@@ -5494,5 +5498,8 @@ async def main() -> None:
 
 if __name__ == '__main__':
     import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    from telegram.ext import ApplicationBuilder
+
+    # Ensure the running event loop is reused
+    asyncio.get_event_loop().create_task(main())
+    asyncio.get_event_loop().run_forever()
