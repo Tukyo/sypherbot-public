@@ -7,8 +7,6 @@ import json
 import random
 import inspect
 import requests
-import telegram
-import subprocess
 import pandas as pd
 from web3 import Web3
 from io import BytesIO
@@ -19,9 +17,19 @@ from collections import deque, defaultdict
 from firebase_admin import firestore
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
+
+## Import the needed modules from the telegram library
+import telegram
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
-
+##
+#
+## Import Telethon for expanded telegram API functionality
+from telethon.sync import TelegramClient
+from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.types import ChannelParticipantsSearch
+##
+#
 ## Import the needed modules from the config folder
 # {config.py} - Environment variables and global variables used in the bot
 # {firebase.py} - Firebase configuration and database initialization
@@ -4587,28 +4595,13 @@ def cleargames(update: Update, context: CallbackContext) -> None:
 
 def check_deleted_users(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.effective_chat.id)
-    telethon_script = os.path.join(os.path.dirname(__file__), "teleworker.py")
     print(f"Checking for deleted users in chat {chat_id}...")
 
-    try:  # Call the Telethon worker process
-        result = subprocess.check_output(['python', telethon_script, chat_id])
-        print(f"Raw subprocess result:\n{result.decode('utf-8')}")
+    deleted_users = return_deleted_users(chat_id)
+    print(f"Deleted users: {deleted_users}")
 
-        # Process the result as an array of user IDs
-        deleted_users = [int(user_id) for user_id in result.decode('utf-8').strip().splitlines()]
-        print(f"Deleted users: {deleted_users}")
-
-        clear_deleted_users(update, context, deleted_users)
-    except subprocess.CalledProcessError as e:
-        print(f"Error running Telethon worker: {e}")
-        update.message.reply_text("An error occurred while processing deleted users.")
-
-def clear_deleted_users(update: Update, context: CallbackContext, deleted_users: list) -> None:
-    context.chat_data["deleted_users"] = deleted_users  # Store deleted users in chat_data for later use
-
-    if not deleted_users:  # Check if the list is empty
+    if not deleted_users:
         update.message.reply_text("No deleted users found in your group!")
-        print(f"No deleted users found in chat {update.effective_chat.id}.")
     else:
         keyboard = [
             [
@@ -4618,11 +4611,44 @@ def clear_deleted_users(update: Update, context: CallbackContext, deleted_users:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
+        context.chat_data["deleted_users"] = deleted_users
+
         update.message.reply_text(
             f"Found {len(deleted_users)} deleted users in your group. Do you want to clear them?",
             reply_markup=reply_markup,
         )
-        print(f"Found {len(deleted_users)} deleted users in chat {update.effective_chat.id}.")
+
+def return_deleted_users(chat_id):
+    client = TelegramClient("bot", config.API_ID, config.API_HASH)  # Create the client instance
+    deleted_users = []
+
+    try:
+        client.start(bot_token=config.TELEGRAM_TOKEN)  # Start the client explicitly with the bot token
+        group_entity = client.get_entity(int(chat_id))
+        offset = 0
+        limit = 100
+
+        while True:
+            participants = client(GetParticipantsRequest(
+                group_entity,
+                ChannelParticipantsSearch(""),
+                offset,
+                limit,
+                hash=0
+            ))
+            if not participants.users:
+                break
+
+            for user in participants.users:
+                if user.deleted:
+                    deleted_users.append(user.id)
+
+                offset += len(participants.users)
+
+    finally:
+        client.disconnect()  # Ensure the client disconnects after use
+
+    return deleted_users
 
 def handle_clear_deleted_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
