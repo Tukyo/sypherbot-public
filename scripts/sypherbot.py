@@ -19,12 +19,7 @@ from firebase_admin import firestore
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot
-from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, filters, CallbackQueryHandler
-from telegram.ext.filters import StatusUpdate
-
-from telethon.sync import TelegramClient
-from telethon.tl.functions.channels import GetParticipantsRequest
-from telethon.tl.types import ChannelParticipantsSearch
+from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
 
 ## Import the needed modules from the config folder
 # {config.py} - Environment variables and global variables used in the bot
@@ -155,45 +150,47 @@ class AntiRaid:
 
 
 
+# from telethon.sync import TelegramClient
+# from telethon.tl.functions.channels import GetParticipantsRequest
+# from telethon.tl.types import ChannelParticipantsSearch
+# async def log_deleted(update: Update, context: CallbackContext) -> None:
+#     chat_id = update.effective_chat.id  # Dynamically get group_id from the command context
+#     async with TelegramClient('bot', config.API_ID, config.API_HASH).start(bot_token=config.TELEGRAM_TOKEN) as client:
+#         try:
+#             group_entity = await client.get_entity(chat_id)  # Dynamically fetch the group entity
+#             offset = 0
+#             limit = 100
+#             deleted_users = []
 
-async def log_deleted(update: Update, context: CallbackContext) -> None:
-    chat_id = update.effective_chat.id  # Dynamically get group_id from the command context
-    async with TelegramClient('bot', config.API_ID, config.API_HASH).start(bot_token=config.TELEGRAM_TOKEN) as client:
-        try:
-            group_entity = await client.get_entity(chat_id)  # Dynamically fetch the group entity
-            offset = 0
-            limit = 100
-            deleted_users = []
+#             while True:
+#                 participants = await client(
+#                     GetParticipantsRequest(
+#                         group_entity,
+#                         ChannelParticipantsSearch(''),
+#                         offset,
+#                         limit
+#                     )
+#                 )
+#                 if not participants.users:
+#                     break
 
-            while True:
-                participants = await client(
-                    GetParticipantsRequest(
-                        group_entity,
-                        ChannelParticipantsSearch(''),
-                        offset,
-                        limit
-                    )
-                )
-                if not participants.users:
-                    break
+#                 for user in participants.users:
+#                     if user.deleted:
+#                         deleted_users.append(f"Deleted account found: {user.id}")
 
-                for user in participants.users:
-                    if user.deleted:
-                        deleted_users.append(f"Deleted account found: {user.id}")
+#                 offset += len(participants.users)
 
-                offset += len(participants.users)
+#             # Log results to the console
+#             print(f"Found {len(deleted_users)} deleted accounts in {chat_id}:")
+#             for deleted in deleted_users:
+#                 print(deleted)
 
-            # Log results to the console
-            print(f"Found {len(deleted_users)} deleted accounts in {chat_id}:")
-            for deleted in deleted_users:
-                print(deleted)
+#             # Optionally send feedback to the admin (you can remove this if not needed)
+#             update.message.reply_text(f"Logged {len(deleted_users)} deleted accounts. Check the console for details.")
 
-            # Optionally send feedback to the admin (you can remove this if not needed)
-            update.message.reply_text(f"Logged {len(deleted_users)} deleted accounts. Check the console for details.")
-
-        except Exception as e:
-            print(f"Error while logging deleted users: {e}")
-            update.message.reply_text(f"Error: {e}")
+#         except Exception as e:
+#             print(f"Error while logging deleted users: {e}")
+#             update.message.reply_text(f"Error: {e}")
 
 
 
@@ -5403,18 +5400,18 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("endgame", end_game))
     dispatcher.add_handler(CommandHandler(['contract', 'ca'], contract))
     dispatcher.add_handler(CommandHandler(['buy', 'purchase'], buy))
-    dispatcher.add_handler(CommandHandler("price", get_token_price))
+    dispatcher.add_handler(CommandHandler("price", get_token_price, pass_args=True))
     dispatcher.add_handler(CommandHandler("chart", chart))
     dispatcher.add_handler(CommandHandler(['liquidity', 'lp'], liquidity))
     dispatcher.add_handler(CommandHandler("volume", volume))
     dispatcher.add_handler(CommandHandler("website", website))
     dispatcher.add_handler(CommandHandler("report", report))
     dispatcher.add_handler(CommandHandler("save", save))
-    dispatcher.add_handler(CommandHandler('rick', send_rick_video))
+    dispatcher.add_handler(CommandHandler('rick', send_rick_video, pass_args=True))
     #endregion User Slash Command Handlers
     ##
     #region Admin Slash Command Handlers
-    dispatcher.add_handler(CommandHandler('setup', setup))
+    dispatcher.add_handler(CommandHandler('setup', setup, pass_args=True))
     dispatcher.add_handler(CommandHandler(['admincommands', 'adminhelp'], admin_commands))
     dispatcher.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
     dispatcher.add_handler(CommandHandler("clearcache", clear_cache))
@@ -5458,11 +5455,11 @@ def main() -> None:
     #endregion Callbacks
     
     #region Message Handlers
-    dispatcher.add_handler(MessageHandler(StatusUpdate.NEW_CHAT_MEMBERS, handle_new_user))
-    dispatcher.add_handler(MessageHandler(StatusUpdate.LEFT_CHAT_MEMBER, bot_removed_from_group))
-    dispatcher.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND), handle_message))
-    dispatcher.add_handler(MessageHandler(filters.Document, handle_document))
-    dispatcher.add_handler(MessageHandler(filters.PHOTO, handle_image))
+    dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
+    dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
+    dispatcher.add_handler(MessageHandler((Filters.text) & (~Filters.command), handle_message))
+    dispatcher.add_handler(MessageHandler(Filters.document, handle_document))
+    dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
     #endregion Message Handlers
 
     #region Setup Callbacks
