@@ -5433,7 +5433,7 @@ def main() -> None:
     #
     #endregion Slash Command Handlers
 
-    dispatcher.add_handler(CommandHandler("deleted", log_deleted))
+    # dispatcher.add_handler(CommandHandler("deleted", log_deleted))
 
     #region Callbacks
     #
