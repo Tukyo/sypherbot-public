@@ -5490,7 +5490,7 @@ async def main() -> None:
     #endregion Setup Callbacks
 
     start_monitoring_groups() # Start monitoring premium groups
-    await application.run_polling(arbitrary_callback=True)
+    await application.run_polling()
 
 if __name__ == '__main__':
     asyncio.run(main())
