@@ -5,6 +5,7 @@ import time
 import pytz
 import json
 import random
+import asyncio
 import inspect
 import requests
 import pandas as pd
@@ -4619,17 +4620,20 @@ def check_deleted_users(update: Update, context: CallbackContext) -> None:
         )
 
 def return_deleted_users(chat_id):
+    return asyncio.run(fetch_deleted_users(chat_id))  # Run the async Telethon logic in its own loop
+
+async def fetch_deleted_users(chat_id):
     client = TelegramClient("bot", config.API_ID, config.API_HASH)  # Create the client instance
     deleted_users = []
 
-    try:
-        client.start(bot_token=config.TELEGRAM_TOKEN)  # Start the client explicitly with the bot token
-        group_entity = client.get_entity(int(chat_id))
+    async with client:  # Properly initialize and close the client
+        await client.start(bot_token=config.TELEGRAM_TOKEN)  # Start the client explicitly with the bot token
+        group_entity = await client.get_entity(int(chat_id))
         offset = 0
         limit = 100
 
         while True:
-            participants = client(GetParticipantsRequest(
+            participants = await client(GetParticipantsRequest(
                 group_entity,
                 ChannelParticipantsSearch(""),
                 offset,
@@ -4643,12 +4647,9 @@ def return_deleted_users(chat_id):
                 if user.deleted:
                     deleted_users.append(user.id)
 
-                offset += len(participants.users)
+            offset += len(participants.users)
 
-    finally:
-        client.disconnect()  # Ensure the client disconnects after use
-
-    return deleted_users
+    return deleted_users  # Return the list of deleted user IDs
 
 def handle_clear_deleted_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
