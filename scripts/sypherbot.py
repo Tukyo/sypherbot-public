@@ -4590,28 +4590,20 @@ def check_deleted_users(update: Update, context: CallbackContext) -> None:
     telethon_script = os.path.join(os.path.dirname(__file__), "teleworker.py")
     print(f"Checking for deleted users in chat {chat_id}...")
 
-    try: # Call the Telethon worker process
+    try:  # Call the Telethon worker process
         result = subprocess.check_output(['python', telethon_script, chat_id])
-        print(f"Telethon worker result: {result}")
-        clear_deleted_users(update, context, result)
+        deleted_users = json.loads(result.decode('utf-8'))  # Parse the JSON array
+        print(f"Deleted users: {deleted_users}")
+        clear_deleted_users(update, context, deleted_users)
     except subprocess.CalledProcessError as e:
         print(f"Error running Telethon worker: {e}")
         update.message.reply_text("An error occurred while processing deleted users.")
+    except json.JSONDecodeError:
+        print("Error decoding JSON from Telethon worker.")
+        update.message.reply_text("An error occurred while decoding results.")
 
-def clear_deleted_users(update: Update, context: CallbackContext, result: bytes) -> None:
-    decoded_result = result.decode('utf-8').strip()  # Decode the result from subprocess
-    deleted_users = []
-
-    print(f"Decoded result: {decoded_result}")
-
-    for line in decoded_result.splitlines(): # Extract deleted user IDs from the result
-        if "Deleted account found:" in line:
-            user_id = int(line.split(":")[1].strip())
-            deleted_users.append(user_id)
-
-    context.chat_data["deleted_users"] = deleted_users # Store the deleted users in chat_data for later use
-
-    print(f"Deleted users: {deleted_users}")
+def clear_deleted_users(update: Update, context: CallbackContext, deleted_users: list) -> None:
+    context.chat_data["deleted_users"] = deleted_users  # Store deleted users in chat_data for later use
 
     if not deleted_users:  # Check if the list is empty
         update.message.reply_text("No deleted users found in your group!")
