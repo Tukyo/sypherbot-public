@@ -8,6 +8,7 @@ import random
 import inspect
 import requests
 import telegram
+import subprocess
 import pandas as pd
 from web3 import Web3
 from io import BytesIO
@@ -149,6 +150,19 @@ class AntiRaid:
 #endregion Classes
 
 
+
+def log_deleted(update: Update, context: CallbackContext) -> None:
+    chat_id = str(update.effective_chat.id)
+    telethon_script = os.path.join(os.path.dirname(__file__), "telethon.py")
+
+    try: # Call the Telethon worker process
+        result = subprocess.check_output(['python', telethon_script, chat_id])
+        update.message.reply_text(result.decode('utf-8'))
+    except subprocess.CalledProcessError as e:
+        print(f"Error running Telethon worker: {e}")
+        update.message.reply_text("An error occurred while processing deleted users.")
+
+        
 
 # from telethon.sync import TelegramClient
 # from telethon.tl.functions.channels import GetParticipantsRequest
@@ -5433,7 +5447,7 @@ def main() -> None:
     #
     #endregion Slash Command Handlers
 
-    # dispatcher.add_handler(CommandHandler("deleted", log_deleted))
+    dispatcher.add_handler(CommandHandler("deleted", log_deleted))
 
     #region Callbacks
     #
