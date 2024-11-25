@@ -3685,11 +3685,7 @@ def plot_candlestick_chart(data_frame, group_id):
 #endregion Chart
 #
 #region Buybot
-##
-#
-##
-#region Monitoring
-MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
+MONITOR_INTERVAL = 20 # Interval for monitoring jobs (seconds)
 scheduler = BackgroundScheduler()
 def start_monitoring_groups():
     groups_snapshot = firebase.db.collection('groups').get()
@@ -3732,7 +3728,6 @@ def schedule_group_monitoring(group_data):
             print(f"Web3 instance not connected for group {group_id} on chain {chain}")
     else:
         print(f"No token info found for group {group_id} - Not scheduling monitoring.")
-#endregion Monitoring
 
 def monitor_transfers(web3_instance, liquidity_address, group_data):
     base_dir = os.path.dirname(os.path.dirname(__file__))
