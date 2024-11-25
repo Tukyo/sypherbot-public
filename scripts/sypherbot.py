@@ -5402,18 +5402,18 @@ async def main() -> None:
     application.add_handler(CommandHandler("endgame", end_game))
     application.add_handler(CommandHandler(['contract', 'ca'], contract))
     application.add_handler(CommandHandler(['buy', 'purchase'], buy))
-    application.add_handler(CommandHandler("price", get_token_price, pass_args=True))
+    application.add_handler(CommandHandler("price", get_token_price))
     application.add_handler(CommandHandler("chart", chart))
     application.add_handler(CommandHandler(['liquidity', 'lp'], liquidity))
     application.add_handler(CommandHandler("volume", volume))
     application.add_handler(CommandHandler("website", website))
     application.add_handler(CommandHandler("report", report))
     application.add_handler(CommandHandler("save", save))
-    application.add_handler(CommandHandler('rick', send_rick_video, pass_args=True))
+    application.add_handler(CommandHandler('rick', send_rick_video))
     #endregion User Slash Command Handlers
     ##
     #region Admin Slash Command Handlers
-    application.add_handler(CommandHandler('setup', setup, pass_args=True))
+    application.add_handler(CommandHandler('setup', setup))
     application.add_handler(CommandHandler(['admincommands', 'adminhelp'], admin_commands))
     application.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
     application.add_handler(CommandHandler("clearcache", clear_cache))
