@@ -6,3 +6,4 @@ pandas
 mplfinance
 firebase-admin
 apscheduler
+telethon==1.29.1

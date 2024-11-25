@@ -21,6 +21,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
 
+from telethon.sync import TelegramClient
+from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.types import ChannelParticipantsSearch
+
 ## Import the needed modules from the config folder
 # {config.py} - Environment variables and global variables used in the bot
 # {firebase.py} - Firebase configuration and database initialization
@@ -149,34 +153,46 @@ class AntiRaid:
 #endregion Classes
 
 
-def log_deleted_members(update: Update, context: CallbackContext):
-    chat_id = update.effective_chat.id
-    bot = context.bot
 
-    try:
-        # Notify that the logging process is starting
-        update.message.reply_text("Checking for deleted accounts...")
 
-        deleted_users = []
+async def log_deleted(update: Update):
+    chat_id = update.effective_chat.id  # Dynamically get group_id from the command context
+    async with TelegramClient('bot', config.API_ID, config.API_HASH).start(bot_token=config.TELEGRAM_TOKEN) as client:
+        try:
+            group_entity = await client.get_entity(chat_id)  # Dynamically fetch the group entity
+            offset = 0
+            limit = 100
+            deleted_users = []
 
-        # Fetch all chat members (use a library or Telegram API directly)
-        for member in bot.get_chat_members(chat_id):
-            user = member.user
+            while True:
+                participants = await client(
+                    GetParticipantsRequest(
+                        group_entity,
+                        ChannelParticipantsSearch(''),
+                        offset,
+                        limit
+                    )
+                )
+                if not participants.users:
+                    break
 
-            # Check if the account is deleted
-            if user.is_deleted:
-                deleted_users.append(f"Deleted account: {user.id}")
+                for user in participants.users:
+                    if user.deleted:
+                        deleted_users.append(f"Deleted account found: {user.id}")
 
-        # Log all deleted accounts or notify if none found
-        if deleted_users:
-            update.message.reply_text(f"Found {len(deleted_users)} deleted accounts.")
-            for user in deleted_users:
-                update.message.reply_text(user)
-        else:
-            update.message.reply_text("No deleted accounts found.")
+                offset += len(participants.users)
 
-    except Exception as e:
-        update.message.reply_text(f"An error occurred: {e}")
+            # Log results to the console
+            print(f"Found {len(deleted_users)} deleted accounts in {chat_id}:")
+            for deleted in deleted_users:
+                print(deleted)
+
+            # Optionally send feedback to the admin (you can remove this if not needed)
+            update.message.reply_text(f"Logged {len(deleted_users)} deleted accounts. Check the console for details.")
+
+        except Exception as e:
+            print(f"Error while logging deleted users: {e}")
+            update.message.reply_text(f"Error: {e}")
 
 
 
@@ -5419,7 +5435,7 @@ def main() -> None:
     #
     #endregion Slash Command Handlers
 
-    dispatcher.add_handler(CommandHandler("deleted", log_deleted_members))
+    dispatcher.add_handler(CommandHandler("deleted", log_deleted))
 
     #region Callbacks
     #

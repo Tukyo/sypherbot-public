@@ -6,6 +6,9 @@ from web3 import Web3
 #region Global Variables
 TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 
+API_ID = os.getenv('API_ID')
+API_HASH = os.getenv('API_HASH')
+
 BOT_USERNAME = "sypher_robot"
 
 MATH_0 = int(os.getenv("MATH_0"))
