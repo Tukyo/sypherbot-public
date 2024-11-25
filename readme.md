@@ -107,7 +107,7 @@ Sypherbot offers a plethora of features to manage and control your group. The bo
 **Example:** `/price USD`
 
 - `/start` - Start the bot
-- `/setup` - Set up the bot for your group
+- `/setup` - Set up the bot for your group **Modifiers:**: `home` | `admin` | `commands` | `auth/authentication` | `crypto` | `premium`
 - `/commands | /help` - Get a list of commands
 - `/play | /endgame` - Start a mini-game of deSypher within Telegram & end any ongoing games
 - `/buy | /purchase` - Buy the group token

@@ -341,7 +341,51 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
         group_counter = group_counter.update({'count': firestore.Increment(1)}) # Get the current removed groups count and increment by 1
         group_doc.delete()  # Directly delete the group document
         utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-    
+
+def start(update: Update, context: CallbackContext) -> None:
+    msg = None
+    args = update.message.text.split() if update.message.text else []  # Split by space first
+    command_args = args[1].split('_') if len(args) > 1 else []  # Handle parameters after "/start"
+    user_id = update.effective_user.id
+    chat_type = update.effective_chat.type
+    print(f"Received args: {command_args} - User ID: {user_id} - Chat Type: {chat_type}")
+
+    if chat_type == "private":
+        if len(command_args) == 3 and command_args[0] == 'authenticate':
+            group_id = command_args[1]
+            user_id_from_link = command_args[2]
+            print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
+
+            group_doc = firebase.db.collection('groups').document(group_id)
+            group_data = group_doc.get()
+            if group_data.exists:
+                unverified_users = group_data.to_dict().get('unverified_users', {})
+                print(f"Unverified users list: {unverified_users}")
+                if str(user_id_from_link) in unverified_users:
+
+                    keyboard = [[InlineKeyboardButton("Authenticate", callback_data=f'authenticate_{group_id}_{user_id_from_link}')]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    msg = update.message.reply_text('Press the button below to start authentication.', reply_markup=reply_markup)
+
+                else:
+                    msg = update.message.reply_text('You are already verified or not a member.')
+            else:
+                msg = update.message.reply_text('No such group exists.')
+        else:
+            keyboard = [ # General start command handling when not triggered via deep link
+                [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/{config.BOT_USERNAME}?startgroup=0")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            msg = update.message.reply_text(
+                'Hello! I am Sypherbot. Please add me to your group to get started.',
+                reply_markup=reply_markup
+            )
+    else:
+        setup(update, context)
+
+    if msg is not None:
+        utils.track_message(msg)
+
 #region Message Handling
 def handle_message(update: Update, context: CallbackContext) -> None:
     if not update.message or not update.message.from_user:
@@ -750,55 +794,47 @@ def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> 
         print(f"Received medium buy amount in group {update.effective_chat.id}")
         handle_medium_buy(update, context)
 
-def start(update: Update, context: CallbackContext) -> None:
+def setup(update: Update, context: CallbackContext) -> None:
     msg = None
-    args = update.message.text.split() if update.message.text else []  # Split by space first
-    command_args = args[1].split('_') if len(args) > 1 else []  # Handle parameters after "/start"
     user_id = update.effective_user.id
     chat_type = update.effective_chat.type
-    print(f"Received args: {command_args} - User ID: {user_id} - Chat Type: {chat_type}")
+    args = context.args
 
     if chat_type == "private":
-        if len(command_args) == 3 and command_args[0] == 'authenticate':
-            group_id = command_args[1]
-            user_id_from_link = command_args[2]
-            print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
+        msg = update.message.reply_text("Please add me to a group to begin setup.")
+        utils.track_message(msg)
+        return
 
-            group_doc = firebase.db.collection('groups').document(group_id)
-            group_data = group_doc.get()
-            if group_data.exists:
-                unverified_users = group_data.to_dict().get('unverified_users', {})
-                print(f"Unverified users list: {unverified_users}")
-                if str(user_id_from_link) in unverified_users:
+    if not utils.is_user_owner(update, context, user_id):
+        msg = update.message.reply_text("You are not the owner of this group.")
+        if msg is not None:
+            utils.track_message(msg)
+        return
 
-                    keyboard = [[InlineKeyboardButton("Authenticate", callback_data=f'authenticate_{group_id}_{user_id_from_link}')]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    msg = update.message.reply_text('Press the button below to start authentication.', reply_markup=reply_markup)
-
-                else:
-                    msg = update.message.reply_text('You are already verified or not a member.')
-            else:
-                msg = update.message.reply_text('No such group exists.')
+    if not args: # Default setup when no arguments are passed
+        setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
+        setup_markup = InlineKeyboardMarkup(setup_keyboard)
+        msg = update.message.reply_text(
+            "Click 'Setup' to manage your group.",
+            reply_markup=setup_markup
+        )
+        store_setup_message(context, msg.message_id)
+    else: # Handle each argument case
+        arg = args[0].lower()  # Convert argument to lowercase for easier matching
+        if arg == "home":
+            setup_home(update, context)
+        elif arg == "crypto":
+            setup_crypto(update, context)
+        elif arg == "commands":
+            setup_commands(update, context)
+        elif arg == "admin":
+            setup_admin(update, context)
+        elif arg == "auth" or arg == "authentication":
+            setup_authentication(update, context)
+        elif arg == "premium":
+            setup_premium(update, context)
         else:
-            keyboard = [ # General start command handling when not triggered via deep link
-                [InlineKeyboardButton("Add me to your group!", url=f"https://t.me/{config.BOT_USERNAME}?startgroup=0")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            msg = update.message.reply_text(
-                'Hello! I am Sypherbot. Please add me to your group to get started.',
-                reply_markup=reply_markup
-            )
-    else:
-        if utils.is_user_owner(update, context, user_id):
-            setup_keyboard = [[InlineKeyboardButton("Setup", callback_data='setup_home')]]
-            setup_markup = InlineKeyboardMarkup(setup_keyboard)
-            msg = update.message.reply_text(
-                "Click 'Setup' to manage your group.",
-                reply_markup=setup_markup
-            )
-            store_setup_message(context, msg.message_id)
-        else:
-            msg = update.message.reply_text("You are not the owner of this group.")
+            msg = update.message.reply_text(f"Unknown setup option: {arg}")
 
     if msg is not None:
         utils.track_message(msg)
@@ -830,7 +866,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
         if query.data == 'setup_home':
             setup_home(update, context, user_id)
 
-def setup_home(update: Update, context: CallbackContext, user_id) -> None:
+def setup_home(update: Update, context: CallbackContext) -> None:
     msg = None
     group_id = update.effective_chat.id
     group_doc = utils.fetch_group_info(update, context, return_doc=True)
@@ -5308,6 +5344,7 @@ def main() -> None:
     #region Slash Command Handlers
     #
     #region User Slash Command Handlers
+    dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CommandHandler(['commands', 'help'], commands))
     dispatcher.add_handler(CommandHandler("play", play))
     dispatcher.add_handler(CommandHandler("endgame", end_game))
@@ -5324,7 +5361,7 @@ def main() -> None:
     #endregion User Slash Command Handlers
     ##
     #region Admin Slash Command Handlers
-    dispatcher.add_handler(CommandHandler(['start', 'setup'], start))
+    dispatcher.add_handler(CommandHandler('setup', setup, pass_args=True))
     dispatcher.add_handler(CommandHandler(['admincommands', 'adminhelp'], admin_commands))
     dispatcher.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
     dispatcher.add_handler(CommandHandler("clearcache", clear_cache))
