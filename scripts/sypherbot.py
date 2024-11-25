@@ -2403,10 +2403,10 @@ def complete_token_setup(group_id: str, context: CallbackContext):
     
     print(f"Added token name {token_name}, symbol {token_symbol}, and total supply {total_supply} to group {group_id}")
 
-    # if group_data.get('premium', False):  # Check if premium is True
-    #     schedule_group_monitoring(group_data) # Instantly start monitoring the group
-    # else:
-    #     print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
+    if group_data.get('premium', False):  # Check if premium is True
+        schedule_group_monitoring(group_data) # Instantly start monitoring the group
+    else:
+        print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
 
     msg = context.bot.send_message(
         chat_id=group_id,
@@ -3689,94 +3689,90 @@ def plot_candlestick_chart(data_frame, group_id):
 #
 ##
 #region Monitoring
-MONITOR_INTERVAL = 20 # Interval for monitoring jobs (seconds)
+MONITOR_INTERVAL = 5 # Interval for monitoring jobs (seconds)
 scheduler = BackgroundScheduler()
-last_seen_blocks = {} # Initialize a dictionary to store the last seen block for each chain
 def start_monitoring_groups():
-    premium_groups_by_chain = {}
-
-    groups_snapshot = firebase.db.collection('groups').get() # Group premium groups by blockchain
+    groups_snapshot = firebase.db.collection('groups').get()
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
         group_data['group_id'] = group_doc.id
-        
-        token_data = group_data.get('token') # Ensure token and chain exist in group data
-        if not token_data or 'chain' not in token_data:
-            print(f"Skipping group {group_data['group_id']} - Missing token or chain info.")
-            continue
 
-        if group_data.get('premium', False):  # Only include premium groups
-            chain = token_data['chain']
-            if chain not in premium_groups_by_chain:
-                premium_groups_by_chain[chain] = []
-            premium_groups_by_chain[chain].append(group_data)
+        if group_data.get('premium', False):  # Check if premium is True
+            schedule_group_monitoring(group_data)
+        else:
+            print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
 
-    for chain, premium_groups in premium_groups_by_chain.items(): # Schedule one monitoring job per blockchain
+    scheduler.start()
+
+def schedule_group_monitoring(group_data):
+    group_id = str(group_data['group_id'])
+    job_id = f"monitoring_{group_id}"
+    token_info = group_data.get('token')
+
+    if token_info:
+        chain = token_info.get('chain')
+        liquidity_address = token_info.get('liquidity_address')
         web3_instance = config.WEB3_INSTANCES.get(chain)
+
         if web3_instance and web3_instance.is_connected():
-            job_id = f"monitoring_chain_{chain}"
-            existing_job = scheduler.get_job(job_id)
+            existing_job = scheduler.get_job(job_id)  # Check for existing job with ID
             if existing_job:
-                existing_job.remove()
+                existing_job.remove()  # Remove existing job to update with new information
 
             scheduler.add_job(
-                monitor_chain,
+                monitor_transfers,
                 'interval',
                 seconds=MONITOR_INTERVAL,
-                args=[web3_instance, chain, premium_groups],
-                id=job_id,
-                timezone=pytz.utc
+                args=[web3_instance, liquidity_address, group_data],
+                id=job_id,  # Unique ID for the job
+                timezone=pytz.utc  # Use the UTC timezone from the pytz library
             )
-            print(f"Scheduled chain monitoring for chain {chain} with {len(premium_groups)} premium groups.")
+            print(f"Scheduled monitoring for premium group {group_id}")
         else:
-            print(f"Web3 instance not connected for chain {chain}. Skipping monitoring.")
+            print(f"Web3 instance not connected for group {group_id} on chain {chain}")
+    else:
+        print(f"No token info found for group {group_id} - Not scheduling monitoring.")
+#endregion Monitoring
+
+def monitor_transfers(web3_instance, liquidity_address, group_data):
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    abi_path = os.path.join(base_dir, 'config', 'erc20.abi.json')
+
+    with open(abi_path, 'r') as abi_file:
+        abi = json.load(abi_file)
     
-    scheduler.start()
-    print("Scheduler started.")
+    contract_address = group_data['token']['contract_address']
+    
+    contract = web3_instance.eth.contract(address=contract_address, abi=abi)
 
-def monitor_chain(web3_instance, chain, premium_groups):
-    global last_seen_blocks
+    # Initialize static tracking of the last seen block
+    if not hasattr(monitor_transfers, "last_seen_block"):
+        lookback_range = 100 # Check the last block on boot
+        monitor_transfers.last_seen_block = web3_instance.eth.block_number - lookback_range
 
-    if chain not in last_seen_blocks: # Initialize last seen block for the chain
-        lookback_range = 100  # Check the last 100 blocks on boot
-        last_seen_blocks[chain] = web3_instance.eth.block_number - lookback_range
-
-    last_seen_block = last_seen_blocks[chain]
+    last_seen_block = monitor_transfers.last_seen_block
     latest_block = web3_instance.eth.block_number
 
     if last_seen_block >= latest_block:
-        print(f"No new blocks to process for chain {chain}.")
-        return
+        print(f"No new blocks to process for group {group_data['group_id']}.")
+        return  # Exit if no new blocks
 
-    print(f"Processing blocks {last_seen_block + 1} to {latest_block} for chain {chain}.")
-
-    contract_addresses = [group['token']['contract_address'] for group in premium_groups]
+    print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
 
     try:
-        logs = web3_instance.eth.filter({
-            'fromBlock': last_seen_block + 1,
-            'toBlock': latest_block,
-            'address': contract_addresses
-        }).get_all_entries()
+        logs = contract.events.Transfer().get_logs( # Fetch Transfer events in the specified block range
+            from_block=last_seen_block + 1,
+            to_block=latest_block,
+            argument_filters={'from': liquidity_address}
+        )
 
-        print(f"Fetched {len(logs)} logs for chain {chain}")
-        for log in logs:
-            for group in premium_groups:
-                if log['address'] == group['token']['contract_address']:
-                    print(f"Dispatching event to group {group['group_id']}")
-                    handle_transfer_event(log, group)
+        for log in logs: # Process each log
+            handle_transfer_event(log, group_data)  # Pass the decoded log to your handler
 
-        last_seen_blocks[chain] = latest_block  # Update last seen block
+        monitor_transfers.last_seen_block = latest_block # Update static last_seen_block
 
-    except ValueError as e:
-        error_data = e.args[0]
-        if isinstance(error_data, dict) and error_data.get('code') == -32000:
-            print(f"Invalid block range for chain {chain}. Error: {error_data['message']}")
-            last_seen_blocks[chain] = web3_instance.eth.block_number  # Reset to the latest block
-        else:
-            print(f"Unexpected error during monitoring for chain {chain}: {e}", exc_info=True)
-            raise
-#endregion Monitoring
+    except Exception as e:
+        print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
 
 def handle_transfer_event(event, group_data):
     fetched_data, group_doc = utils.fetch_group_info(
@@ -5313,7 +5309,7 @@ def website(update: Update, context: CallbackContext) -> None:
 def main() -> None:
     updater = Updater(config.TELEGRAM_TOKEN, use_context=True) # Create the Updater and pass it the bot's token
     dispatcher = updater.dispatcher # Get the dispatcher to register handlers
-
+    
     #region Slash Command Handlers
     #
     #region User Slash Command Handlers
