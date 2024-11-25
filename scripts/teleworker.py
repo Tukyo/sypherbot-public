@@ -1,4 +1,3 @@
-import json
 from telethon.sync import TelegramClient
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
@@ -31,8 +30,8 @@ def log_deleted(chat_id):
 
             offset += len(participants.users)
 
-        # Output the array of deleted user IDs as JSON
-        print(json.dumps(deleted_users))
-
     finally:
         client.disconnect()  # Ensure the client disconnects after use
+
+    for user_id in deleted_users:
+        print(user_id)

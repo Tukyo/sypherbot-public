@@ -4592,15 +4592,16 @@ def check_deleted_users(update: Update, context: CallbackContext) -> None:
 
     try:  # Call the Telethon worker process
         result = subprocess.check_output(['python', telethon_script, chat_id])
-        deleted_users = json.loads(result.decode('utf-8'))  # Parse the JSON array
+        print(f"Raw subprocess result:\n{result.decode('utf-8')}")
+
+        # Process the result as an array of user IDs
+        deleted_users = [int(user_id) for user_id in result.decode('utf-8').strip().splitlines()]
         print(f"Deleted users: {deleted_users}")
+
         clear_deleted_users(update, context, deleted_users)
     except subprocess.CalledProcessError as e:
         print(f"Error running Telethon worker: {e}")
         update.message.reply_text("An error occurred while processing deleted users.")
-    except json.JSONDecodeError:
-        print("Error decoding JSON from Telethon worker.")
-        update.message.reply_text("An error occurred while decoding results.")
 
 def clear_deleted_users(update: Update, context: CallbackContext, deleted_users: list) -> None:
     context.chat_data["deleted_users"] = deleted_users  # Store deleted users in chat_data for later use
