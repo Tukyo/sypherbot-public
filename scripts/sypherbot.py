@@ -5,6 +5,7 @@ import time
 import pytz
 import json
 import random
+import asyncio
 import inspect
 import requests
 import telegram
@@ -19,7 +20,7 @@ from firebase_admin import firestore
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot
-from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
 
 from telethon.sync import TelegramClient
 from telethon.tl.functions.channels import GetParticipantsRequest
@@ -155,7 +156,7 @@ class AntiRaid:
 
 
 
-async def log_deleted(update: Update):
+async def log_deleted(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id  # Dynamically get group_id from the command context
     async with TelegramClient('bot', config.API_ID, config.API_HASH).start(bot_token=config.TELEGRAM_TOKEN) as client:
         try:
@@ -5389,108 +5390,106 @@ def website(update: Update, context: CallbackContext) -> None:
         utils.track_message(msg)
 #endregion User Controls
 
-def main() -> None:
-    updater = Updater(config.TELEGRAM_TOKEN, use_context=True) # Create the Updater and pass it the bot's token
-    dispatcher = updater.dispatcher # Get the dispatcher to register handlers
+async def main() -> None:
+    application = ApplicationBuilder().token(config.TELEGRAM_TOKEN).build()
     
     #region Slash Command Handlers
     #
     #region User Slash Command Handlers
-    dispatcher.add_handler(CommandHandler('start', start))
-    dispatcher.add_handler(CommandHandler(['commands', 'help'], commands))
-    dispatcher.add_handler(CommandHandler("play", play))
-    dispatcher.add_handler(CommandHandler("endgame", end_game))
-    dispatcher.add_handler(CommandHandler(['contract', 'ca'], contract))
-    dispatcher.add_handler(CommandHandler(['buy', 'purchase'], buy))
-    dispatcher.add_handler(CommandHandler("price", get_token_price, pass_args=True))
-    dispatcher.add_handler(CommandHandler("chart", chart))
-    dispatcher.add_handler(CommandHandler(['liquidity', 'lp'], liquidity))
-    dispatcher.add_handler(CommandHandler("volume", volume))
-    dispatcher.add_handler(CommandHandler("website", website))
-    dispatcher.add_handler(CommandHandler("report", report))
-    dispatcher.add_handler(CommandHandler("save", save))
-    dispatcher.add_handler(CommandHandler('rick', send_rick_video, pass_args=True))
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler(['commands', 'help'], commands))
+    application.add_handler(CommandHandler("play", play))
+    application.add_handler(CommandHandler("endgame", end_game))
+    application.add_handler(CommandHandler(['contract', 'ca'], contract))
+    application.add_handler(CommandHandler(['buy', 'purchase'], buy))
+    application.add_handler(CommandHandler("price", get_token_price, pass_args=True))
+    application.add_handler(CommandHandler("chart", chart))
+    application.add_handler(CommandHandler(['liquidity', 'lp'], liquidity))
+    application.add_handler(CommandHandler("volume", volume))
+    application.add_handler(CommandHandler("website", website))
+    application.add_handler(CommandHandler("report", report))
+    application.add_handler(CommandHandler("save", save))
+    application.add_handler(CommandHandler('rick', send_rick_video, pass_args=True))
     #endregion User Slash Command Handlers
     ##
     #region Admin Slash Command Handlers
-    dispatcher.add_handler(CommandHandler('setup', setup, pass_args=True))
-    dispatcher.add_handler(CommandHandler(['admincommands', 'adminhelp'], admin_commands))
-    dispatcher.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
-    dispatcher.add_handler(CommandHandler("clearcache", clear_cache))
-    dispatcher.add_handler(CommandHandler('cleargames', cleargames))
-    dispatcher.add_handler(CommandHandler(['kick', 'ban'], kick))
-    dispatcher.add_handler(CommandHandler("block", block))
-    dispatcher.add_handler(CommandHandler(['removeblock', 'unblock'], remove_block))
-    dispatcher.add_handler(CommandHandler("blocklist", blocklist))
-    dispatcher.add_handler(CommandHandler("allow", allow))
-    dispatcher.add_handler(CommandHandler("allowlist", allowlist))
-    dispatcher.add_handler(CommandHandler(['mute', 'stfu'], mute))
-    dispatcher.add_handler(CommandHandler("unmute", unmute))
-    dispatcher.add_handler(CommandHandler("mutelist", check_mute_list))
-    dispatcher.add_handler(CommandHandler("warn", warn))
-    dispatcher.add_handler(CommandHandler("warnlist", check_warn_list))
-    dispatcher.add_handler(CommandHandler('clearwarns', clear_warns_for_user))
-    dispatcher.add_handler(CommandHandler("warnings", check_warnings))
+    application.add_handler(CommandHandler('setup', setup, pass_args=True))
+    application.add_handler(CommandHandler(['admincommands', 'adminhelp'], admin_commands))
+    application.add_handler(CommandHandler(['cleanbot', 'clean', 'cleanupbot', 'cleanup'], cleanbot))
+    application.add_handler(CommandHandler("clearcache", clear_cache))
+    application.add_handler(CommandHandler('cleargames', cleargames))
+    application.add_handler(CommandHandler(['kick', 'ban'], kick))
+    application.add_handler(CommandHandler("block", block))
+    application.add_handler(CommandHandler(['removeblock', 'unblock'], remove_block))
+    application.add_handler(CommandHandler("blocklist", blocklist))
+    application.add_handler(CommandHandler("allow", allow))
+    application.add_handler(CommandHandler("allowlist", allowlist))
+    application.add_handler(CommandHandler(['mute', 'stfu'], mute))
+    application.add_handler(CommandHandler("unmute", unmute))
+    application.add_handler(CommandHandler("mutelist", check_mute_list))
+    application.add_handler(CommandHandler("warn", warn))
+    application.add_handler(CommandHandler("warnlist", check_warn_list))
+    application.add_handler(CommandHandler('clearwarns', clear_warns_for_user))
+    application.add_handler(CommandHandler("warnings", check_warnings))
     #endregion Admin Slash Command Handlers
     #
     #endregion Slash Command Handlers
 
-    dispatcher.add_handler(CommandHandler("deleted", log_deleted))
+    application.add_handler(CommandHandler("deleted", log_deleted))
 
     #region Callbacks
     #
     #region General Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
-    dispatcher.add_handler(CallbackQueryHandler(command_buttons, pattern='^commands_'))    
+    application.add_handler(CallbackQueryHandler(handle_start_game, pattern='^startGame$'))
+    application.add_handler(CallbackQueryHandler(command_buttons, pattern='^commands_'))    
     #endregion General Callbacks
     ##
     #region Authentication Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
-    dispatcher.add_handler(CallbackQueryHandler(callback_math_response, pattern='^mauth_'))
-    dispatcher.add_handler(CallbackQueryHandler(callback_word_response, pattern='^wauth_'))
+    application.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
+    application.add_handler(CallbackQueryHandler(callback_math_response, pattern='^mauth_'))
+    application.add_handler(CallbackQueryHandler(callback_word_response, pattern='^wauth_'))
     #endregion Authentication Callbacks
     ##
     #region Buybot Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(setup_minimum_buy_callback, pattern='^setup_minimum_buy'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_small_buy_callback, pattern='^setup_small_buy'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_medium_buy_callback, pattern='^setup_medium_buy'))
+    application.add_handler(CallbackQueryHandler(setup_minimum_buy_callback, pattern='^setup_minimum_buy'))
+    application.add_handler(CallbackQueryHandler(setup_small_buy_callback, pattern='^setup_small_buy'))
+    application.add_handler(CallbackQueryHandler(setup_medium_buy_callback, pattern='^setup_medium_buy'))
     #endregion Callbacks
     
     #region Message Handlers
-    dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
-    dispatcher.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
-    dispatcher.add_handler(MessageHandler((Filters.text) & (~Filters.command), handle_message))
-    dispatcher.add_handler(MessageHandler(Filters.document, handle_document))
-    dispatcher.add_handler(MessageHandler(Filters.photo, handle_image))
+    application.add_handler(MessageHandler(Filters.status_update.new_chat_members, handle_new_user))
+    application.add_handler(MessageHandler(Filters.status_update.left_chat_member, bot_removed_from_group))
+    application.add_handler(MessageHandler((Filters.text) & (~Filters.command), handle_message))
+    application.add_handler(MessageHandler(Filters.document, handle_document))
+    application.add_handler(MessageHandler(Filters.photo, handle_image))
     #endregion Message Handlers
 
     #region Setup Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_setup_callbacks, pattern='^(' + '|'.join(SETUP_CALLBACK_DATA) + ')$'))
+    application.add_handler(CallbackQueryHandler(setup_home_callback, pattern='^setup_home$'))
+    application.add_handler(CallbackQueryHandler(handle_setup_callbacks, pattern='^(' + '|'.join(SETUP_CALLBACK_DATA) + ')$'))
     ##
     #region Command Setup Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(toggle_command_status, pattern=r'^toggle_(play|website|contract|price|buy|chart|liquidity|volume)$'))
+    application.add_handler(CallbackQueryHandler(toggle_command_status, pattern=r'^toggle_(play|website|contract|price|buy|chart|liquidity|volume)$'))
     #endregion Command Setup Callbacks
     ##
     #region Crypto Setup Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(check_token_details_callback, pattern='^check_token_details$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
-    dispatcher.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
-    dispatcher.add_handler(CallbackQueryHandler(exit_callback, pattern='^exit_setup$'))
-    dispatcher.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance)$'))
+    application.add_handler(CallbackQueryHandler(check_token_details_callback, pattern='^check_token_details$'))
+    application.add_handler(CallbackQueryHandler(setup_contract, pattern='^setup_contract$'))
+    application.add_handler(CallbackQueryHandler(setup_liquidity, pattern='^setup_liquidity$'))
+    application.add_handler(CallbackQueryHandler(setup_chain, pattern='^setup_chain$'))
+    application.add_handler(CallbackQueryHandler(exit_callback, pattern='^exit_setup$'))
+    application.add_handler(CallbackQueryHandler(handle_chain, pattern='^(ethereum|arbitrum|polygon|base|optimism|fantom|avalanche|binance)$'))
     #endregion Crypto Setup Callbacks
     ##
     #region Authentication Setup Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(handle_timeout_callback, pattern='^auth_timeout_'))
+    application.add_handler(CallbackQueryHandler(handle_timeout_callback, pattern='^auth_timeout_'))
     #endregion Authentication Setup Callbacks
     ##
     #
     #endregion Setup Callbacks
 
-    updater.start_polling() # Start the Bot
     start_monitoring_groups() # Start monitoring premium groups
-    updater.idle() # Run the bot until stopped
+    await application.run_polling(arbitrary_callback=True)
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())

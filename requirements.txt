@@ -1,4 +1,4 @@
-python-telegram-bot==13.7
+python-telegram-bot==20.4
 python-dotenv==0.19.2
 urllib3==1.26.5
 web3
