@@ -153,7 +153,7 @@ class AntiRaid:
 
 def log_deleted(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.effective_chat.id)
-    telethon_script = os.path.join(os.path.dirname(__file__), "telethon.py")
+    telethon_script = os.path.join(os.path.dirname(__file__), "teleworker.py")
 
     try: # Call the Telethon worker process
         result = subprocess.check_output(['python', telethon_script, chat_id])

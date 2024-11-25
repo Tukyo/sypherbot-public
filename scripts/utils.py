@@ -226,7 +226,7 @@ last_check_time = time.time()
 command_count = 0
 def rate_limit_check(chat_id: str) -> bool: # Later TODO: Implement rate limiting PER GROUP
     print("Checking rate limit...")
-    global global_last_check_time, global_command_count
+    global last_check_time, command_count
     global group_rate_limits
 
     current_time = time.time()
