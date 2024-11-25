@@ -6,6 +6,7 @@ from scripts import config
 
 def log_deleted(chat_id):
     client = TelegramClient("bot", config.API_ID, config.API_HASH) # Create the client instance
+    print(f"Checking group {chat_id} for deleted accounts...")
 
     try:
         client.start(bot_token=config.TELEGRAM_TOKEN) # Start the client explicitly with the bot token

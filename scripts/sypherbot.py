@@ -4588,9 +4588,11 @@ def cleargames(update: Update, context: CallbackContext) -> None:
 def check_deleted_users(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.effective_chat.id)
     telethon_script = os.path.join(os.path.dirname(__file__), "teleworker.py")
+    print(f"Checking for deleted users in chat {chat_id}...")
 
     try: # Call the Telethon worker process
         result = subprocess.check_output(['python', telethon_script, chat_id])
+        print(f"Telethon worker result: {result}")
         clear_deleted_users(update, context, result)
     except subprocess.CalledProcessError as e:
         print(f"Error running Telethon worker: {e}")
@@ -4600,6 +4602,8 @@ def clear_deleted_users(update: Update, context: CallbackContext, result: bytes)
     decoded_result = result.decode('utf-8').strip()  # Decode the result from subprocess
     deleted_users = []
 
+    print(f"Decoded result: {decoded_result}")
+
     for line in decoded_result.splitlines(): # Extract deleted user IDs from the result
         if "Deleted account found:" in line:
             user_id = int(line.split(":")[1].strip())
@@ -4607,8 +4611,11 @@ def clear_deleted_users(update: Update, context: CallbackContext, result: bytes)
 
     context.chat_data["deleted_users"] = deleted_users # Store the deleted users in chat_data for later use
 
+    print(f"Deleted users: {deleted_users}")
+
     if not deleted_users:  # Check if the list is empty
         update.message.reply_text("No deleted users found in your group!")
+        print(f"No deleted users found in chat {update.effective_chat.id}.")
     else:
         keyboard = [
             [
@@ -4622,11 +4629,14 @@ def clear_deleted_users(update: Update, context: CallbackContext, result: bytes)
             f"Found {len(deleted_users)} deleted users in your group. Do you want to clear them?",
             reply_markup=reply_markup,
         )
+        print(f"Found {len(deleted_users)} deleted users in chat {update.effective_chat.id}.")
 
 def handle_clear_deleted_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     chat_id = update.effective_chat.id  # Get the chat ID
     deleted_users = context.chat_data.get("deleted_users", [])  # Retrieve deleted users from context
+
+    print(f"Callback triggered to clear deleted users, checking context...")
 
     if utils.is_user_owner(update, context):
         if query.data == "confirm_clear_deleted":
@@ -4640,6 +4650,7 @@ def handle_clear_deleted_callback(update: Update, context: CallbackContext) -> N
             query.edit_message_text("Deleted users cleared!")
         elif query.data == "cancel_clear_deleted":
             query.edit_message_text("Action canceled.") # Cancel the action
+            print(f"Clear deleted users action canceled.")
 
 def cleanbot(update: Update, context: CallbackContext):
     global bot_messages
