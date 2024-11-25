@@ -20,7 +20,8 @@ from firebase_admin import firestore
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext.filters import StatusUpdate
 
 from telethon.sync import TelegramClient
 from telethon.tl.functions.channels import GetParticipantsRequest
@@ -5457,11 +5458,11 @@ async def main() -> None:
     #endregion Callbacks
     
     #region Message Handlers
-    application.add_handler(MessageHandler(filters.status_update.new_chat_members, handle_new_user))
-    application.add_handler(MessageHandler(filters.status_update.left_chat_member, bot_removed_from_group))
-    application.add_handler(MessageHandler((filters.text) & (~filters.command), handle_message))
-    application.add_handler(MessageHandler(filters.document, handle_document))
-    application.add_handler(MessageHandler(filters.photo, handle_image))
+    application.add_handler(MessageHandler(StatusUpdate.NEW_CHAT_MEMBERS, handle_new_user))
+    application.add_handler(MessageHandler(StatusUpdate.LEFT_CHAT_MEMBER, bot_removed_from_group))
+    application.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND), handle_message))
+    application.add_handler(MessageHandler(filters.DOCUMENT, handle_document))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_image))
     #endregion Message Handlers
 
     #region Setup Callbacks
