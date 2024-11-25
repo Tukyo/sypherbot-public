@@ -5461,7 +5461,7 @@ async def main() -> None:
     application.add_handler(MessageHandler(StatusUpdate.NEW_CHAT_MEMBERS, handle_new_user))
     application.add_handler(MessageHandler(StatusUpdate.LEFT_CHAT_MEMBER, bot_removed_from_group))
     application.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND), handle_message))
-    application.add_handler(MessageHandler(filters.DOCUMENT, handle_document))
+    application.add_handler(MessageHandler(filters.Document, handle_document))
     application.add_handler(MessageHandler(filters.PHOTO, handle_image))
     #endregion Message Handlers
 
