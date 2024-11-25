@@ -151,60 +151,61 @@ class AntiRaid:
 
 
 
-def log_deleted(update: Update, context: CallbackContext) -> None:
+def check_deleted_users(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.effective_chat.id)
     telethon_script = os.path.join(os.path.dirname(__file__), "teleworker.py")
 
     try: # Call the Telethon worker process
         result = subprocess.check_output(['python', telethon_script, chat_id])
-        update.message.reply_text(result.decode('utf-8'))
+        clear_deleted_users(update, context, result)
     except subprocess.CalledProcessError as e:
         print(f"Error running Telethon worker: {e}")
         update.message.reply_text("An error occurred while processing deleted users.")
 
-        
+def clear_deleted_users(update: Update, context: CallbackContext, result: bytes) -> None:
+    decoded_result = result.decode('utf-8').strip()  # Decode the result from subprocess
+    deleted_users = []
 
-# from telethon.sync import TelegramClient
-# from telethon.tl.functions.channels import GetParticipantsRequest
-# from telethon.tl.types import ChannelParticipantsSearch
-# async def log_deleted(update: Update, context: CallbackContext) -> None:
-#     chat_id = update.effective_chat.id  # Dynamically get group_id from the command context
-#     async with TelegramClient('bot', config.API_ID, config.API_HASH).start(bot_token=config.TELEGRAM_TOKEN) as client:
-#         try:
-#             group_entity = await client.get_entity(chat_id)  # Dynamically fetch the group entity
-#             offset = 0
-#             limit = 100
-#             deleted_users = []
+    for line in decoded_result.splitlines(): # Extract deleted user IDs from the result
+        if "Deleted account found:" in line:
+            user_id = int(line.split(":")[1].strip())
+            deleted_users.append(user_id)
 
-#             while True:
-#                 participants = await client(
-#                     GetParticipantsRequest(
-#                         group_entity,
-#                         ChannelParticipantsSearch(''),
-#                         offset,
-#                         limit
-#                     )
-#                 )
-#                 if not participants.users:
-#                     break
+    context.chat_data["deleted_users"] = deleted_users # Store the deleted users in chat_data for later use
 
-#                 for user in participants.users:
-#                     if user.deleted:
-#                         deleted_users.append(f"Deleted account found: {user.id}")
+    if not deleted_users:  # Check if the list is empty
+        update.message.reply_text("No deleted users found in your group!")
+    else:
+        keyboard = [
+            [
+                InlineKeyboardButton("Confirm", callback_data="confirm_clear_deleted"),
+                InlineKeyboardButton("Cancel", callback_data="cancel_clear_deleted"),
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-#                 offset += len(participants.users)
+        update.message.reply_text(
+            f"Found {len(deleted_users)} deleted users in your group. Do you want to clear them?",
+            reply_markup=reply_markup,
+        )
 
-#             # Log results to the console
-#             print(f"Found {len(deleted_users)} deleted accounts in {chat_id}:")
-#             for deleted in deleted_users:
-#                 print(deleted)
+def handle_clear_deleted_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    chat_id = update.effective_chat.id  # Get the chat ID
+    deleted_users = context.chat_data.get("deleted_users", [])  # Retrieve deleted users from context
 
-#             # Optionally send feedback to the admin (you can remove this if not needed)
-#             update.message.reply_text(f"Logged {len(deleted_users)} deleted accounts. Check the console for details.")
+    if query.data == "confirm_clear_deleted":
+        for user_id in deleted_users: # Iterate through the list of deleted users and ban them
+            try:
+                context.bot.ban_chat_member(chat_id, user_id)  # Ban each deleted user
+                print(f"Banned deleted user: {user_id}")
+            except Exception as e:
+                print(f"Error banning user {user_id}: {e}")
 
-#         except Exception as e:
-#             print(f"Error while logging deleted users: {e}")
-#             update.message.reply_text(f"Error: {e}")
+        query.edit_message_text("Deleted users cleared!")
+    elif query.data == "cancel_clear_deleted":
+        query.edit_message_text("Action canceled.") # Cancel the action
+
 
 
 
@@ -5447,7 +5448,7 @@ def main() -> None:
     #
     #endregion Slash Command Handlers
 
-    dispatcher.add_handler(CommandHandler("deleted", log_deleted))
+    dispatcher.add_handler(CommandHandler("cleandeleted", check_deleted_users))
 
     #region Callbacks
     #

@@ -1,31 +1,26 @@
-import sys
-from telethon import TelegramClient
+from telethon.sync import TelegramClient
 from telethon.tl.functions.channels import GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsSearch
+
 from scripts import config
 
-if len(sys.argv) != 2:
-    print("Usage: python teleworker.py <chat_id>")
-    sys.exit(1)
-
-chat_id = sys.argv[1]
-
-async def log_deleted(chat_id):
-    # Initialize the client with the bot token directly
-    client = TelegramClient("bot", config.API_ID, config.API_HASH).start(bot_token=config.TELEGRAM_TOKEN)
+def log_deleted(chat_id):
+    client = TelegramClient("bot", config.API_ID, config.API_HASH) # Create the client instance
 
     try:
-        group_entity = await client.get_entity(int(chat_id))
+        client.start(bot_token=config.TELEGRAM_TOKEN) # Start the client explicitly with the bot token
+        group_entity = client.get_entity(int(chat_id))
         offset = 0
         limit = 100
         deleted_users = []
 
         while True:
-            participants = await client(GetParticipantsRequest(
+            participants = client(GetParticipantsRequest(
                 group_entity,
                 ChannelParticipantsSearch(""),
                 offset,
                 limit,
+                hash=0
             ))
             if not participants.users:
                 break
@@ -36,15 +31,9 @@ async def log_deleted(chat_id):
 
             offset += len(participants.users)
 
-        # Output results for subprocess
-        print(f"Found {len(deleted_users)} deleted accounts.")
+        print(f"Found {len(deleted_users)} deleted accounts in group {chat_id}") # Output results for subprocess
         for user in deleted_users:
             print(user)
 
     finally:
-        # Ensure the client disconnects after use
-        await client.disconnect()
-
-# Run the async function
-import asyncio
-asyncio.run(log_deleted(chat_id))
+        client.disconnect() # Ensure the client disconnects after use
