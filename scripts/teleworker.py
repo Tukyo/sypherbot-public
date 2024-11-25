@@ -11,10 +11,10 @@ if len(sys.argv) != 2:
 chat_id = sys.argv[1]
 
 async def log_deleted(chat_id):
-    async with TelegramClient("bot", config.API_ID, config.API_HASH) as client:
-        # Start the client explicitly
-        await client.start(bot_token=config.TELEGRAM_TOKEN)
+    # Initialize the client with the bot token directly
+    client = TelegramClient("bot", config.API_ID, config.API_HASH).start(bot_token=config.TELEGRAM_TOKEN)
 
+    try:
         group_entity = await client.get_entity(int(chat_id))
         offset = 0
         limit = 100
@@ -40,6 +40,10 @@ async def log_deleted(chat_id):
         print(f"Found {len(deleted_users)} deleted accounts.")
         for user in deleted_users:
             print(user)
+
+    finally:
+        # Ensure the client disconnects after use
+        await client.disconnect()
 
 # Run the async function
 import asyncio
