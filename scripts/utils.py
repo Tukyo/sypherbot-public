@@ -231,11 +231,11 @@ def rate_limit_check(chat_id: str) -> bool: # Later TODO: Implement rate limitin
 
     current_time = time.time()
 
-    if current_time - global_last_check_time > config.BOT_RATE_LIMIT_TIME_PERIOD: # Check and update bot-wide rate limit
-        global_command_count = 0
-        global_last_check_time = current_time
+    if current_time - last_check_time > config.BOT_RATE_LIMIT_TIME_PERIOD: # Check and update bot-wide rate limit
+        command_count = 0
+        last_check_time = current_time
 
-    if global_command_count >= config.BOT_RATE_LIMIT_MESSAGE_COUNT:
+    if command_count >= config.BOT_RATE_LIMIT_MESSAGE_COUNT:
         print("Bot-wide rate limit exceeded.")
         return False
 
@@ -256,7 +256,7 @@ def rate_limit_check(chat_id: str) -> bool: # Later TODO: Implement rate limitin
         return False
 
     # Increment counters if within limits
-    global_command_count += 1
+    command_count += 1
     group_data["command_count"] += 1
 
     return True

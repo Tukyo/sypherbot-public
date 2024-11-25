@@ -12,7 +12,7 @@ if len(sys.argv) != 2:
 chat_id = sys.argv[1]
 
 async def log_deleted(chat_id):
-    async with TelegramClient("bot", config.API_ID, config.API_HASH).start(bot_token=config.BOT_TOKEN) as client:
+    async with TelegramClient("bot", config.API_ID, config.API_HASH).start(bot_token=config.TELEGRAM_TOKEN) as client:
         group_entity = await client.get_entity(int(chat_id))
         offset = 0
         limit = 100
