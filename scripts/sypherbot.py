@@ -4628,17 +4628,18 @@ def handle_clear_deleted_callback(update: Update, context: CallbackContext) -> N
     chat_id = update.effective_chat.id  # Get the chat ID
     deleted_users = context.chat_data.get("deleted_users", [])  # Retrieve deleted users from context
 
-    if query.data == "confirm_clear_deleted":
-        for user_id in deleted_users: # Iterate through the list of deleted users and ban them
-            try:
-                context.bot.ban_chat_member(chat_id, user_id)  # Ban each deleted user
-                print(f"Banned deleted user: {user_id}")
-            except Exception as e:
-                print(f"Error banning user {user_id}: {e}")
+    if utils.is_user_owner(update, context):
+        if query.data == "confirm_clear_deleted":
+            for user_id in deleted_users: # Iterate through the list of deleted users and ban them
+                try:
+                    context.bot.ban_chat_member(chat_id, user_id)  # Ban each deleted user
+                    print(f"Banned deleted user: {user_id}")
+                except Exception as e:
+                    print(f"Error banning user {user_id}: {e}")
 
-        query.edit_message_text("Deleted users cleared!")
-    elif query.data == "cancel_clear_deleted":
-        query.edit_message_text("Action canceled.") # Cancel the action
+            query.edit_message_text("Deleted users cleared!")
+        elif query.data == "cancel_clear_deleted":
+            query.edit_message_text("Action canceled.") # Cancel the action
 
 def cleanbot(update: Update, context: CallbackContext):
     global bot_messages
