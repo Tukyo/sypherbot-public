@@ -149,69 +149,6 @@ class AntiRaid:
         return 0
 #endregion Classes
 
-
-
-def check_deleted_users(update: Update, context: CallbackContext) -> None:
-    chat_id = str(update.effective_chat.id)
-    telethon_script = os.path.join(os.path.dirname(__file__), "teleworker.py")
-
-    try: # Call the Telethon worker process
-        result = subprocess.check_output(['python', telethon_script, chat_id])
-        clear_deleted_users(update, context, result)
-    except subprocess.CalledProcessError as e:
-        print(f"Error running Telethon worker: {e}")
-        update.message.reply_text("An error occurred while processing deleted users.")
-
-def clear_deleted_users(update: Update, context: CallbackContext, result: bytes) -> None:
-    decoded_result = result.decode('utf-8').strip()  # Decode the result from subprocess
-    deleted_users = []
-
-    for line in decoded_result.splitlines(): # Extract deleted user IDs from the result
-        if "Deleted account found:" in line:
-            user_id = int(line.split(":")[1].strip())
-            deleted_users.append(user_id)
-
-    context.chat_data["deleted_users"] = deleted_users # Store the deleted users in chat_data for later use
-
-    if not deleted_users:  # Check if the list is empty
-        update.message.reply_text("No deleted users found in your group!")
-    else:
-        keyboard = [
-            [
-                InlineKeyboardButton("Confirm", callback_data="confirm_clear_deleted"),
-                InlineKeyboardButton("Cancel", callback_data="cancel_clear_deleted"),
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        update.message.reply_text(
-            f"Found {len(deleted_users)} deleted users in your group. Do you want to clear them?",
-            reply_markup=reply_markup,
-        )
-
-def handle_clear_deleted_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    chat_id = update.effective_chat.id  # Get the chat ID
-    deleted_users = context.chat_data.get("deleted_users", [])  # Retrieve deleted users from context
-
-    if query.data == "confirm_clear_deleted":
-        for user_id in deleted_users: # Iterate through the list of deleted users and ban them
-            try:
-                context.bot.ban_chat_member(chat_id, user_id)  # Ban each deleted user
-                print(f"Banned deleted user: {user_id}")
-            except Exception as e:
-                print(f"Error banning user {user_id}: {e}")
-
-        query.edit_message_text("Deleted users cleared!")
-    elif query.data == "cancel_clear_deleted":
-        query.edit_message_text("Action canceled.") # Cancel the action
-
-
-
-
-
-
-
 ANTI_SPAM_RATE_LIMIT = 5
 ANTI_SPAM_TIME_WINDOW = 10
 ANTI_SPAM_MUTE_DURATION = 60
@@ -4648,6 +4585,61 @@ def cleargames(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         utils.track_message(msg)
 
+def check_deleted_users(update: Update, context: CallbackContext) -> None:
+    chat_id = str(update.effective_chat.id)
+    telethon_script = os.path.join(os.path.dirname(__file__), "teleworker.py")
+
+    try: # Call the Telethon worker process
+        result = subprocess.check_output(['python', telethon_script, chat_id])
+        clear_deleted_users(update, context, result)
+    except subprocess.CalledProcessError as e:
+        print(f"Error running Telethon worker: {e}")
+        update.message.reply_text("An error occurred while processing deleted users.")
+
+def clear_deleted_users(update: Update, context: CallbackContext, result: bytes) -> None:
+    decoded_result = result.decode('utf-8').strip()  # Decode the result from subprocess
+    deleted_users = []
+
+    for line in decoded_result.splitlines(): # Extract deleted user IDs from the result
+        if "Deleted account found:" in line:
+            user_id = int(line.split(":")[1].strip())
+            deleted_users.append(user_id)
+
+    context.chat_data["deleted_users"] = deleted_users # Store the deleted users in chat_data for later use
+
+    if not deleted_users:  # Check if the list is empty
+        update.message.reply_text("No deleted users found in your group!")
+    else:
+        keyboard = [
+            [
+                InlineKeyboardButton("Confirm", callback_data="confirm_clear_deleted"),
+                InlineKeyboardButton("Cancel", callback_data="cancel_clear_deleted"),
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        update.message.reply_text(
+            f"Found {len(deleted_users)} deleted users in your group. Do you want to clear them?",
+            reply_markup=reply_markup,
+        )
+
+def handle_clear_deleted_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    chat_id = update.effective_chat.id  # Get the chat ID
+    deleted_users = context.chat_data.get("deleted_users", [])  # Retrieve deleted users from context
+
+    if query.data == "confirm_clear_deleted":
+        for user_id in deleted_users: # Iterate through the list of deleted users and ban them
+            try:
+                context.bot.ban_chat_member(chat_id, user_id)  # Ban each deleted user
+                print(f"Banned deleted user: {user_id}")
+            except Exception as e:
+                print(f"Error banning user {user_id}: {e}")
+
+        query.edit_message_text("Deleted users cleared!")
+    elif query.data == "cancel_clear_deleted":
+        query.edit_message_text("Action canceled.") # Cancel the action
+
 def cleanbot(update: Update, context: CallbackContext):
     global bot_messages
     if utils.is_user_admin(update, context):
@@ -5444,11 +5436,11 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("warnlist", check_warn_list))
     dispatcher.add_handler(CommandHandler('clearwarns', clear_warns_for_user))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
+    dispatcher.add_handler(CommandHandler(['cleandeleted', 'checkdeleted', 'cleardeleted'], check_deleted_users))
+    dispatcher.add_handler(CallbackQueryHandler(handle_clear_deleted_callback, pattern='^(confirm_clear_deleted|cancel_clear_deleted)$'))
     #endregion Admin Slash Command Handlers
     #
     #endregion Slash Command Handlers
-
-    dispatcher.add_handler(CommandHandler("cleandeleted", check_deleted_users))
 
     #region Callbacks
     #
