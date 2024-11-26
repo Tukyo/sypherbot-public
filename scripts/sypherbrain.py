@@ -15,7 +15,7 @@ sys.stdout = logger.StdoutWrapper()  # Redirect stdout
 sys.stderr = logger.StderrWrapper()  # Redirect stderr
 
 # Configuration variables for easy adjustment
-MAX_INTENT_TOKENS = 10  # Maximum tokens for intent classification
+MAX_INTENT_TOKENS = 20  # Maximum tokens for intent classification
 MAX_RESPONSE_TOKENS = 50  # Maximum tokens for OpenAI response
 TEMPERATURE = 0.7  # AI creativity level
 TRIGGER_PHRASES = ["hey sypher", "hey sypherbot"]  # Trigger phrases
@@ -45,6 +45,22 @@ ERROR_REPLIES = [
     "I'm a bit confused. Could you clarify your question?"
 ]
 
+GENERIC_REPLIES = [
+    "What's up?",
+    "Hey there!",
+    "Hello!",
+    "Hi!",
+    "Hey!",
+    "GM!",
+    "Wassup??",
+    "Yo!",
+    "Howdy!",
+    "How can I help?",
+    "What's on your mind?",
+    "What can I do for you?",
+    "What's good?"
+]
+
 def initialize_openai():
     openai.api_key = config.OPENAI_API_KEY
     print("OpenAI API initialized.")
@@ -56,15 +72,19 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if not match:
         return
     
-    dictionary = utils.fetch_group_dictionary(update, context)
+    if not utils.is_user_admin(update, context): # If admin triggered the bot, get the entire group dictionary
+        dictionary = utils.fetch_group_dictionary(update, context)
+    else:
+        dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
 
     if not dictionary: # You'll always find a dictionary with default values, so if not found, error occurred
         print(f"No dictionary found for chat {update.message.chat_id}. Proceeding without group-specific context.")
         return
     
     query = match.group(2).strip()  # Extract the query (everything after the trigger phrase)
-    if not query:
-        update.message.reply_text("What's up?")
+    if not query: # If there is no query just provide a generic response
+        generic_greeting = random.choice(GENERIC_REPLIES)
+        update.message.reply_text(generic_greeting)
         return
     
     print(f"Received 'hey sypher' with a query from a user in chat {update.message.chat_id}")
@@ -78,7 +98,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
             "Use the provided group context and intent to understand and respond accurately to user queries."
             "Your users mostly consist of degen crypto traders"
             "Provide concise, contextually relevant responses. Keep responses under 40 words unless more detail is explicitly requested."
-            "Avoid unnecessary detail unless specifically requested. Be engaging and professional, and use humor sparingly when discussing memes."
+            "Avoid extra detail unless specifically requested. Be engaging and professional, and use humor sparingly when discussing memes."
             "Ensure your response is never cut off mid-thought."
         )},
         {"role": "user", "content": f"Context: {dictionary}\n\nQuery: {query}\n\nIntent: {intent}"}
