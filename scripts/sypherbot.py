@@ -5,7 +5,6 @@ import time
 import pytz
 import json
 import random
-import asyncio
 import inspect
 import requests
 import pandas as pd
@@ -13,7 +12,6 @@ from web3 import Web3
 from io import BytesIO
 import mplfinance as mpf
 from decimal import Decimal
-from threading import Timer
 from collections import deque, defaultdict
 from firebase_admin import firestore
 from datetime import datetime, timedelta, timezone
@@ -21,14 +19,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 ## Import the needed modules from the telegram library
 import telegram
-from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
-##
-#
-## Import Telethon for expanded telegram API functionality
-from telethon.sync import TelegramClient
-from telethon.tl.functions.channels import GetParticipantsRequest
-from telethon.tl.types import ChannelParticipantsSearch
 ##
 #
 ## Import the needed modules from the config folder
@@ -38,6 +30,7 @@ from telethon.tl.types import ChannelParticipantsSearch
 from scripts import config
 from scripts import utils
 from scripts import firebase
+from scripts import logger
 
 #
 ## This is the public version of the bot that was developed by Tukyo for the Sypher project.
@@ -168,77 +161,8 @@ ANTI_RAID_LOCKDOWN_TIME = 180
 anti_spam = AntiSpam(rate_limit=ANTI_SPAM_RATE_LIMIT, time_window=ANTI_SPAM_TIME_WINDOW, mute_duration=ANTI_SPAM_MUTE_DURATION)
 anti_raid = AntiRaid(user_amount=ANTI_RAID_USER_AMOUNT, time_out=ANTI_RAID_TIME_OUT, anti_raid_time=ANTI_RAID_LOCKDOWN_TIME)
 
-#region LOGGING
-bot = Bot(token=config.TELEGRAM_TOKEN)
-LOG_CHAT = "-1002087245760"
-LOGGING_TIMEZONE = "America/Los_Angeles"
-MAX_TELEGRAM_MESSAGE_LENGTH = 4096
-LOG_INTERVAL = 30
-class TelegramLogger: # Batch all logs and send to the logging channel for debugging in telegram
-    def __init__(self):
-        self.original_stdout = sys.stdout  # Keep a reference to the original stdout
-        self.original_stderr = sys.stderr # Keep a reference to the original stderr
-        self.log_buffer = []  # Buffer to store logs
-        self.flush_interval = LOG_INTERVAL  # Send logs every interval
-        self.timer = Timer(self.flush_interval, self.flush_logs)  # Timer for batching
-        self.timer.start()
-
-    def write(self, message, from_stderr=False):
-        if message.strip():  # Avoid sending empty lines
-            pst_timezone = pytz.timezone(LOGGING_TIMEZONE)
-            timestamp = datetime.now(pst_timezone).strftime("%Y-%m-%d %I:%M:%S %p PST")
-            formatted_message = f"{timestamp} - {message.strip()}"
-            if from_stderr: # Only append @Tukyowave for stderr messages
-                formatted_message += " @Tukyowave"
-            self.log_buffer.append(formatted_message)
-        
-        if from_stderr: # Write to the original stream
-            self.original_stderr.write(message)
-        else:
-            self.original_stdout.write(message)
-
-    def flush(self):
-        if self.original_stdout:
-            self.original_stdout.flush()
-        if self.original_stderr:
-            self.original_stderr.flush()
-
-    def flush_logs(self):
-        if self.log_buffer:
-            combined_message = "\n\n".join(self.log_buffer)
-            while combined_message:
-                chunk = combined_message[:MAX_TELEGRAM_MESSAGE_LENGTH]
-                bot.send_message(chat_id=LOG_CHAT, text=chunk)
-                combined_message = combined_message[MAX_TELEGRAM_MESSAGE_LENGTH:]
-            self.log_buffer = []
-
-        self.timer = Timer(self.flush_interval, self.flush_logs) # Restart the timer
-        self.timer.start()
-
-    def stop(self):
-        if self.timer:
-            self.timer.cancel()
-            self.timer = None
-
-logger = TelegramLogger()
-
-class StdoutWrapper:
-    def write(self, message):
-        logger.write(message, from_stderr=False)
-
-    def flush(self):
-        logger.flush()
-
-class StderrWrapper:
-    def write(self, message):
-        logger.write(message, from_stderr=True)
-
-    def flush(self):
-        logger.flush()
-
-sys.stdout = StdoutWrapper()  # Redirect stdout
-sys.stderr = StderrWrapper()  # Redirect stderr
-#endregion LOGGING
+sys.stdout = logger.StdoutWrapper()  # Redirect stdout
+sys.stderr = logger.StderrWrapper()  # Redirect stderr
 
 #region Bot Logic
 def bot_added_to_group(update: Update, context: CallbackContext) -> None:

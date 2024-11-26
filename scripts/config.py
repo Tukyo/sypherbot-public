@@ -11,6 +11,8 @@ API_HASH = os.getenv('API_HASH')
 
 BOT_USERNAME = "sypher_robot"
 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 MATH_0 = int(os.getenv("MATH_0"))
 MATH_1 = int(os.getenv("MATH_1"))
 MATH_2 = int(os.getenv("MATH_2"))
