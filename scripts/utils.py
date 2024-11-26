@@ -154,67 +154,81 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         return None  # Error fetching group data
 
 def fetch_group_dictionary(update: Update, context: CallbackContext, general: bool = False):
-    '''
-    Fetches and processes group data for a specific group ID. If no group ID is provided, the group ID is fetched from the update.
-    > If {general} is "True", the function will only return general group information instead of the full dictionary.
-    '''
+    """
+    Fetches and processes group data for a specific group ID. 
+    Returns a modular dictionary structure with improved clarity and relevance.
+    If `general` is True, returns only general group information.
+    """
     group_data = fetch_group_info(update, context)
     if not group_data:
         print("No group data found. Returning default values.")
         return None
 
     if general:
-        general_slots = { # Fetch general dictionary if general is True
-            "group_username": group_data.get("group_info", {}).get("group_username", "N/A"),
-            "group_website_url": group_data.get("group_info", {}).get("website_url", "N/A"),
-            "group_link": group_data.get("group_info", {}).get("group_link", "N/A"),
-            "owner_username": group_data.get("owner_username", "N/A"),
-            "commands": {cmd: enabled for cmd, enabled in group_data.get("commands", {}).items()},
+        general_info = { # General group data structure
+            "group_info": {
+                "username": group_data.get("group_info", {}).get("group_username", "N/A"),
+                "website": group_data.get("group_info", {}).get("website_url", "N/A"),
+                "link": group_data.get("group_info", {}).get("group_link", "N/A"),
+                "owner_username": group_data.get("owner_username", "N/A")
+            },
             "premium": group_data.get("premium", False),
-            "token_liquidity_address": group_data.get("token", {}).get("liquidity_address", "N/A"),
-            "token_contract_address": group_data.get("token", {}).get("contract_address", "N/A"),
-            "token_symbol": group_data.get("token", {}).get("symbol", "N/A"),
-            "token_chain": group_data.get("token", {}).get("chain", "N/A"),
-            "token_decimals": group_data.get("token", {}).get("decimals", "N/A"),
-            "token_name": group_data.get("token", {}).get("name", "Unknown Token"),
+            "commands": {cmd: enabled for cmd, enabled in group_data.get("commands", {}).items()},
+            "token_info": {
+                "name": group_data.get("token", {}).get("name", "Unknown Token"),
+                "symbol": group_data.get("token", {}).get("symbol", "N/A"),
+                "chain": group_data.get("token", {}).get("chain", "N/A"),
+                "liquidity_address": group_data.get("token", {}).get("liquidity_address", "N/A"),
+                "contract_address": group_data.get("token", {}).get("contract_address", "N/A"),
+                "decimals": group_data.get("token", {}).get("decimals", "N/A"),
+            },
         }
 
-        print(f"Fetched and processed general dictionary for group {group_data.get('group_id', 'Unknown Group ID')}: {general_slots}")
-        return general_slots
+        print(f"Fetched and processed general dictionary for group {group_data.get('group_id', 'Unknown Group ID')}: {general_info}")
+        return general_info
 
-    detailed_dictionary = { # Fetch detailed dictionary if general is False
-        "group_id": group_data.get("group_id", "Unknown Group ID"),
-        "group_username": group_data.get("group_info", {}).get("group_username", "N/A"),
-        "group_website_url": group_data.get("group_info", {}).get("website_url", "N/A"),
-        "group_link": group_data.get("group_info", {}).get("group_link", "N/A"),
-        "owner_id": group_data.get("owner_id", "Unknown Owner"),
-        "owner_username": group_data.get("owner_username", "N/A"),
-        "commands": {cmd: enabled for cmd, enabled in group_data.get("commands", {}).items()},
-        "premium": group_data.get("premium", False),
-        "welcome_header_url": group_data.get("premium_features", {}).get("welcome_header_url", None),
-        "buybot_settings": group_data.get("premium_features", {}).get("buybot", {}),
-        "sypher_trust": group_data.get("premium_features", {}).get("sypher_trust", False),
-        "sypher_trust_preferences": group_data.get("premium_features", {}).get("sypher_trust_preferences", "default"),
-        "verification_type": group_data.get("verification_info", {}).get("verification_type", "N/A"),
-        "verification_timeout": group_data.get("verification_info", {}).get("verification_timeout", 0),
-        "max_warns": group_data.get("admin", {}).get("max_warns", 0),
-        "admin_allowlist": group_data.get("admin", {}).get("allowlist", False),
-        "admin_blocklist": group_data.get("admin", {}).get("blocklist", False),
-        "token_liquidity_address": group_data.get("token", {}).get("liquidity_address", "N/A"),
-        "token_contract_address": group_data.get("token", {}).get("contract_address", "N/A"),
-        "token_symbol": group_data.get("token", {}).get("symbol", "N/A"),
-        "token_chain": group_data.get("token", {}).get("chain", "N/A"),
-        "token_decimals": group_data.get("token", {}).get("decimals", "N/A"),
-        "token_setup_complete": group_data.get("token", {}).get("setup_complete", False),
-        "token_total_supply": group_data.get("token", {}).get("total_supply", 0),
-        "token_name": group_data.get("token", {}).get("name", "Unknown Token"),
+    detailed_info = { # Detailed group data structure
+        "group_info": {
+            "id": group_data.get("group_id", "Unknown Group ID"),
+            "username": group_data.get("group_info", {}).get("group_username", "N/A"),
+            "website": group_data.get("group_info", {}).get("website_url", "N/A"),
+            "link": group_data.get("group_info", {}).get("group_link", "N/A"),
+            "owner_id": group_data.get("owner_id", "Unknown Owner"),
+            "owner_username": group_data.get("owner_username", "N/A"),
+        },
+        "premium_features": {
+            "enabled": group_data.get("premium", False),
+            "welcome_header_url": group_data.get("premium_features", {}).get("welcome_header_url", None),
+            "buybot_settings": group_data.get("premium_features", {}).get("buybot", {}),
+            "sypher_trust": group_data.get("premium_features", {}).get("sypher_trust", False),
+            "sypher_trust_preferences": group_data.get("premium_features", {}).get("sypher_trust_preferences", "default"),
+        },
+        "verification": {
+            "type": group_data.get("verification_info", {}).get("verification_type", "N/A"),
+            "timeout": group_data.get("verification_info", {}).get("verification_timeout", 0),
+        },
+        "admin_settings": {
+            "max_warns": group_data.get("admin", {}).get("max_warns", 0),
+            "allowlist_enabled": group_data.get("admin", {}).get("allowlist", False),
+            "blocklist_enabled": group_data.get("admin", {}).get("blocklist", False),
+        },
+        "token_info": {
+            "name": group_data.get("token", {}).get("name", "Unknown Token"),
+            "symbol": group_data.get("token", {}).get("symbol", "N/A"),
+            "chain": group_data.get("token", {}).get("chain", "N/A"),
+            "liquidity_address": group_data.get("token", {}).get("liquidity_address", "N/A"),
+            "contract_address": group_data.get("token", {}).get("contract_address", "N/A"),
+            "decimals": group_data.get("token", {}).get("decimals", "N/A"),
+            "setup_complete": group_data.get("token", {}).get("setup_complete", False),
+            "total_supply": group_data.get("token", {}).get("total_supply", 0),
+        },
         "untrusted_users": group_data.get("untrusted_users", {}),
         "unverified_users": group_data.get("unverified_users", {}),
         "warnings": group_data.get("warnings", {}),
     }
 
-    print(f"Fetched and processed detailed dictionary for group {group_data.get('group_id', 'Unknown Group ID')}: {detailed_dictionary}")
-    return detailed_dictionary
+    print(f"Fetched and processed detailed dictionary for group {group_data.get('group_id', 'Unknown Group ID')}: {detailed_info}")
+    return detailed_info
 
 def fetch_group_token(group_data: dict, update: Update, context: CallbackContext): # Fetches all token-related data from a pre-fetched group_data object.
     token_data = group_data.get('token')

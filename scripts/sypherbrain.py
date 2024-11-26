@@ -92,10 +92,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     
     print(f"Received 'hey sypher' with a query from a user in chat {update.message.chat_id}")
     
-    if not utils.is_user_admin(update, context): # If admin triggered the bot, get the entire group dictionary
-        dictionary = utils.fetch_group_dictionary(update, context)
-    else:
-        dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
+    dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
 
     if not dictionary: # You'll always find a dictionary with default values, so if not found, error occurred
         print(f"No dictionary found for chat {update.message.chat_id}. Proceeding without group-specific context.")
@@ -115,10 +112,10 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 
     messages = [
         {"role": "system", "content": (
-            "You are SypherBot, a smart and engaging assistant for Telegram groups."
-            "Your users are mostly degens and crypto traders."
-            "Answer accurately using group context and intent. Keep responses concise and under 40 words unless more detail is requested."
-            "Be professional, engaging, and use humor sparingly, especially with memes."
+            "You are SypherBot, a smart and engaging assistant for Telegram groups. "
+            "Your users are mostly degens and crypto traders. "
+            "Answer accurately using group context and intent. Keep responses concise and under 40 words unless more detail is requested. "
+            "Be professional, engaging, and use humor sparingly, especially with memes. "
             "Never cut off responses mid-thought."
         )},
         {"role": "user", "content": context_info}
@@ -168,6 +165,7 @@ def determine_intent(query: str, group_dictionary: dict) -> str | None:
     except Exception as e:
         print(f"Error determining intent: {e}")
         return "unknown"
+##
 #endregion Prompt & Intention
 ##   
 #
