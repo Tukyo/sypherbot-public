@@ -83,7 +83,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         print("No ongoing conversation and no trigger phrase provided...")
         return
     
-    query = match.group(2).strip()  # Extract the query (everything after the trigger phrase)
+    query = match.group(2).strip() if match else message_text.strip()  # Extract the query (everything after the trigger phrase)
     if not query: # If there is no query just provide a generic response
         generic_greeting = random.choice(GENERIC_REPLIES)
         update.message.reply_text(generic_greeting)
@@ -91,6 +91,13 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         return
     
     print(f"Received 'hey sypher' with a query from a user in chat {update.message.chat_id}")
+
+    # Admin dictionary MIGHT be too big for processing correctly with 10 tokens...
+    # LATER TODO: Implement a way to split the dictionary into smaller chunks for processing
+    # if not utils.is_user_admin(update, context): # If admin triggered the bot, get the entire group dictionary
+    #     dictionary = utils.fetch_group_dictionary(update, context)
+    # else:
+    #     dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
     
     dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
 
