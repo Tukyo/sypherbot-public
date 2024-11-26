@@ -218,7 +218,7 @@ def fetch_group_dictionary(update: Update, context: CallbackContext):
         "group_link": group_link,
         "owner_id": owner_id,
         "owner_username": owner_username,
-        "commands": commands_enabled,
+        "commands": commands_enabled, # TODO Make sure this can work to call commands later
         "premium": premium,
         "welcome_header_url": welcome_header_url,
         "buybot_settings": buybot_settings,

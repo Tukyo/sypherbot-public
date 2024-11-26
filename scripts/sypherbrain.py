@@ -48,7 +48,7 @@ ERROR_REPLIES = [
 INTENT_MAP = {
     "group_name": {
         "classification": "group_name",
-        "response_template": "This group's name is '{group_username}'."
+        "response_template": "This group's name is {group_username}."
     },
     "website": {
         "classification": "website",
@@ -64,19 +64,19 @@ INTENT_MAP = {
     },
     "group_token": {
         "classification": "group_token",
-        "response_template": "This group's token is '{token_symbol}' on the '{token_chain}' blockchain."
+        "response_template": "This group's token is {token_symbol} on the {token_chain} blockchain."
     },
     "contract_address": {
         "classification": "contract_address",
-        "response_template": "The contract address for '{token_name}' is {token_contract_address}."
+        "response_template": "The contract address for {token_name} is {token_contract_address}."
     },
     "total_supply": {
         "classification": "total_supply",
-        "response_template": "The total supply of '{token_name}' is {token_total_supply}."
+        "response_template": "The total supply of {token_name} is {token_total_supply}."
     },
     "buy": {
         "classification": "buy",
-        "response_template": "You can buy '{token_name}' here: https://app.uniswap.org/swap?outputCurrency={contract_address}"
+        "response_template": "You can buy {token_name} here: https://app.uniswap.org/swap?outputCurrency={contract_address}"
     }
 }
 
@@ -116,8 +116,10 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 
     messages = [
         {"role": "system", "content": (
-            "You are SypherBot, an intelligent and friendly assistant. "
-            "Answer questions clearly and concisely. Ensure responses are complete but never exceed the token limit. "
+            "You are SypherBot, an intelligent assistant."
+            "You live in telegram, the messaging app."
+            "Your users mostly consist of degen crypto traders"
+            "Provide short, complete answers to all queries. Keep responses under 40 words unless explicitly asked for detail."
             "Avoid unnecessary detail unless specifically requested. Be engaging and professional, and use humor sparingly when discussing memes."
             "Ensure your response is never cut off mid-thought."
         )},
@@ -145,9 +147,14 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         update.message.reply_text(error_reply)
 
 def determine_generic_intent(query: str) -> str | None:
+    valid_intents = list(INTENT_MAP.keys())
+
     classifications = ", ".join(f"'{intent}'" for intent in INTENT_MAP.keys())
     classification_prompt = (
-        f"Classify the following query into one of these intents: {classifications}, or 'unknown'. "
+        f"Classify the following query into one of these intents: {classifications} "
+        "Use the context of the query to select the most relevant option. "
+        "For example, if the query asks about the group's token, select 'group_token'. "
+        "If no option fits, select 'unknown'. Only return the intent name as the result. "
         "Return only the intent name. Here is the query:\n\n"
         f"{query}"
     )
@@ -161,10 +168,7 @@ def determine_generic_intent(query: str) -> str | None:
             temperature=0.0  # Deterministic response
         )
         intent = intent_response.choices[0].message.content.strip().lower()
-        return intent if intent in [
-            "group_token", "contract_address", "group_name", 
-            "website", "group_link", "total_supply", "owner"
-        ] else None
+        return intent if intent in valid_intents else None
     except Exception as e:
         print(f"Error classifying intent: {e}")
         return None
