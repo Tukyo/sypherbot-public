@@ -85,13 +85,16 @@ NATIVE_TOKENS = {
     # "FANTOM": "0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83", # TODO: Determine if WFTM works as WETH
     # "MANTLE": "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8", # TODO: Determine if WMNT works as WETH
 }
+
+WEB3_INSTANCES = {}
+WEB3_WEBSOCKETS = {}
+
+CHAINLINK_CONTRACT = None
 #endregion Global Variables
 ##
 #
 ##
 #region Web3 Initialization
-WEB3_INSTANCES = {}
-WEB3_WEBSOCKETS = {}
 def initialize_web3():
     global WEB3_INSTANCES, WEB3_WEBSOCKETS
 
@@ -115,7 +118,6 @@ def initialize_web3():
 #
 ##
 #region Chainlink
-CHAINLINK_CONTRACT = None
 def initialize_chainlink():
     global CHAINLINK_CONTRACT
 

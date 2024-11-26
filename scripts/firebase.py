@@ -17,6 +17,9 @@ FIREBASE_STORAGE_BUCKET = os.getenv('FIREBASE_STORAGE_BUCKET')
 
 BLOB_EXPIRATION = 15 # Expiration time for uploaded files (minutes)
 
+DATABASE = None
+BUCKET = None
+
 cred = credentials.Certificate({
     "type": FIREBASE_TYPE,
     "project_id": FIREBASE_PROJECT_ID,
@@ -32,8 +35,6 @@ cred = credentials.Certificate({
 
 firebase_admin.initialize_app(cred, { 'storageBucket': FIREBASE_STORAGE_BUCKET })
 
-DATABASE = None
-BUCKET = None
 def initialize_firebase():
     global DATABASE, BUCKET
 
