@@ -44,6 +44,12 @@ ERROR_REPLIES = [
     "I'm a bit confused. Could you clarify your question?"
 ]
 
+messages = [
+        {"role": "system", "content": 'You answer question about Web  services.'
+        },
+        {"role": "user", "content": 'the user message'},
+    ]
+
 def initialize_openai():
     openai.api_key = config.OPENAI_API_KEY
     print("OpenAI API initialized.")
@@ -65,21 +71,18 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     try:  # Call OpenAI API with the new `ChatCompletion.create` syntax
         openai_response = openai.chat.completions.create(
             model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},  # Define the assistant's behavior
-                {"role": "user", "content": query}  # Include the user's query
-            ],
+            messages=messages,
             max_tokens=MAX_TOKENS,
             temperature=TEMPERATURE,
         )
-        response_text = openai_response['choices'][0]['message']['content'].strip()  # Extract the response text
+        response_message = openai_response.choices[0].message.content.strip()  # Extract the response text
     except Exception as e:
         update.message.reply_text("Sorry, I couldn't process your request. Try again later.")
         print(f"OpenAI API error: {e}")
         return
 
-    if response_text:  # Send the response back to the user
-        update.message.reply_text(response_text)
+    if response_message:  # Send the response back to the user
+        update.message.reply_text(response_message)
     else:
         error_reply = random.choice(ERROR_REPLIES)
         update.message.reply_text(error_reply)
