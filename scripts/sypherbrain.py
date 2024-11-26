@@ -151,11 +151,10 @@ def determine_generic_intent(query: str) -> str | None:
 
     classifications = ", ".join(f"'{intent}'" for intent in INTENT_MAP.keys())
     classification_prompt = (
-        f"Classify the following query into one of these intents: {classifications} "
-        "Use the context of the query to select the most relevant option. "
-        "For example, if the query asks about the group's token, select 'group_token'. "
-        "If no option fits, select 'unknown'. Only return the intent name as the result. "
-        "Return only the intent name. Here is the query:\n\n"
+        f"Classify the following query into one of these intents: {classifications}. "
+        "Analyze the query carefully and match it with the most relevant intent. "
+        "If the query does not align with any provided intents, return 'unknown'. "
+        "Here is the query:\n\n"
         f"{query}"
     )
     
@@ -174,6 +173,8 @@ def determine_generic_intent(query: str) -> str | None:
         return None
 
 def fetch_generic_response(intent: str, dictionary: dict) -> str | None:
+    if intent == "unknown":
+        return None
     if intent in INTENT_MAP:
         template = INTENT_MAP[intent]["response_template"]
         try:
