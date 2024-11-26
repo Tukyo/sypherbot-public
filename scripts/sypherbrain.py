@@ -24,7 +24,7 @@ class RegexFilter(BaseFilter):
     def __init__(self, pattern):
         self.pattern = pattern
 
-    def filter(self, message): # Check if the message text matches the regex pattern
+    def __call__(self, message): # Check if the message text matches the regex pattern
         return bool(re.match(self.pattern, message.text.strip(), re.IGNORECASE))
 
 ERROR_REPLIES = [
