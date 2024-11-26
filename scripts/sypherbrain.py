@@ -63,7 +63,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     print(f"Received 'hey sypher' from a user in chat {update.message.chat_id}")
 
     try:  # Call OpenAI API with the new `ChatCompletion.create` syntax
-        openai_response = openai.ChatCompletion.create(
+        openai_response = openai.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},  # Define the assistant's behavior
