@@ -90,7 +90,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         print(f"Received 'hey sypher' with no query from a user in chat {update.message.chat_id}")
         return generic_greeting
     
-    print(f"Received 'hey sypher' with a query from a user in chat {update.message.chat_id}")
+    print(f"Processing 'hey sypher' query from user {user_id} in chat {group_id}: {query}")
 
     # Admin dictionary MIGHT be too big for processing correctly with 10 tokens...
     # LATER TODO: Implement a way to split the dictionary into smaller chunks for processing
@@ -100,21 +100,19 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     #     dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
     
     dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
-
     if not dictionary: # You'll always find a dictionary with default values, so if not found, error occurred
         print(f"No dictionary found for chat {update.message.chat_id}. Proceeding without group-specific context.")
         return None
 
-    intent = determine_intent(query, dictionary)
+    last_response = get_conversation_context(user_id, group_id) # Get the last response for the user in the group
+    intent = determine_intent(query, dictionary, last_response) # Determine the user's intent based on the query and group context
     print(f"Determined intent: {intent}")
-
-    last_response = get_conversation_context(user_id, group_id)
+    
     context_info = f"Context: {dictionary}\n"
-    if last_response:
-        context_info += f"Previous Response: {last_response}\n"
-        print("Previous response found in conversation context.")
+    if intent == "continue_conversation":
+        context_info += f"Previous Response: {last_response}\nQuery: {query}\n"
     else:
-        context_info += f"Query: {query}\nIntent: {intent}"
+        context_info += f"Query: {query}\nIntent: {intent}\n"
         print("No previous response found in conversation context.")
 
     messages = [
@@ -154,7 +152,11 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 # The following function is used to classify the user's intent based on the query and group context
 # The AI is prompted with the query and group context to determine the user's intent
 ##
-def determine_intent(query: str, group_dictionary: dict) -> str | None:
+def determine_intent(query: str, group_dictionary: dict, last_response: str = None) -> str:
+    if last_response:  # Prioritize conversation continuation
+        print("Intent Classification: continue_conversation")
+        return "continue_conversation"
+    
     classification_prompt = (
         "Analyze the following query and classify it based on the context provided below. "
         "Use the context to understand the user's intent and generate a response if necessary. "
@@ -171,6 +173,7 @@ def determine_intent(query: str, group_dictionary: dict) -> str | None:
             temperature=0.0  # Deterministic response
         )
         intent = intent_response.choices[0].message.content.strip().lower()
+        print(f"Intent classification: {intent}")
         return intent
     except Exception as e:
         print(f"Error determining intent: {e}")

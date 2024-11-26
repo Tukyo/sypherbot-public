@@ -418,16 +418,16 @@ def handle_AI_prompt(update: Update, context: CallbackContext) -> None:
 
     if re.match(sypherbrain.PROMPT_PATTERN, msg, re.IGNORECASE):
         print(f"Detected AI prompt from user {user_id}: {msg}")
-        last_response = sypherbrain.prompt_handler(update, context)
-
-        sypherbrain.start_conversation(user_id, group_id, last_response) # Start or reset the conversation state
+        last_response = sypherbrain.prompt_handler(update, context)  # Capture the response
+        if last_response:  # Ensure a valid response exists
+            sypherbrain.start_conversation(user_id, group_id, last_response)
     else:
-        conversation = sypherbrain.get_conversation(user_id, group_id) # Check if the user is in an active conversation
+        conversation = sypherbrain.get_conversation(user_id, group_id)
         if conversation:
             print(f"Continuing conversation with user {user_id} in group {group_id}: {msg}")
-            last_response = sypherbrain.prompt_handler(update, context)
-
-            sypherbrain.start_conversation(user_id, group_id, last_response) # Reset the conversation state with the new response
+            last_response = sypherbrain.prompt_handler(update, context)  # Capture the follow-up response
+            if last_response:  # Ensure a valid response exists
+                sypherbrain.start_conversation(user_id, group_id, last_response)
         else:
             print(f"Message ignored from user {user_id} in group {group_id}: {msg}")
 
