@@ -90,19 +90,24 @@ NATIVE_TOKENS = {
 #
 ##
 #region Web3 Initialization
-WEB3_INSTANCES = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in ENDPOINTS.items()}
-for network, web3_instance in WEB3_INSTANCES.items():
-    if web3_instance.is_connected():
-        print(f"Successfully connected to {network}")
-    else:
-        print(f"Failed to connect to {network}")
+WEB3_INSTANCES = {}
+WEB3_WEBSOCKETS = {}
+def initialize_web3():
+    global WEB3_INSTANCES, WEB3_WEBSOCKETS
 
-WEB3_WEBSOCKETS = {network: Web3(Web3.LegacyWebSocketProvider(endpoint)) for network, endpoint in WEBSOCKETS.items()}
-for network, web3_instance in WEB3_WEBSOCKETS.items():
-    if web3_instance.is_connected():
-        print(f"Successfully connected to {network} via WebSocket")
-    else:
-        print(f"Failed to connect to {network} via WebSocket")
+    WEB3_INSTANCES = {network: Web3(Web3.HTTPProvider(endpoint)) for network, endpoint in ENDPOINTS.items()}
+    for network, web3_instance in WEB3_INSTANCES.items():
+        if web3_instance.is_connected():
+            print(f"Successfully connected to {network}")
+        else:
+            print(f"Failed to connect to {network}")
+
+    WEB3_WEBSOCKETS = {network: Web3(Web3.LegacyWebSocketProvider(endpoint)) for network, endpoint in WEBSOCKETS.items()}
+    for network, web3_instance in WEB3_WEBSOCKETS.items():
+        if web3_instance.is_connected():
+            print(f"Successfully connected to {network} via WebSocket")
+        else:
+            print(f"Failed to connect to {network} via WebSocket")
 #endregion Web3 Initialization
 ##
 #

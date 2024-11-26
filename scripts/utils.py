@@ -120,7 +120,7 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         print(f"Returning cached data for group {group_id}")
         return cached_info["group_data"]
 
-    group_doc = firebase.db.collection('groups').document(str(group_id))
+    group_doc = firebase.DATABASE.collection('groups').document(str(group_id))
 
     if return_doc:
         print(f"Fetching group_doc for group {group_id}")

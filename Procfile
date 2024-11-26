@@ -1,2 +1,2 @@
 worker: python scripts/sypherbot.py
-thinker: python scripts/sypherbrain.py
+thinker: sh -c "sleep 5 && python scripts/sypherbrain.py"

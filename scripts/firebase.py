@@ -32,10 +32,15 @@ cred = credentials.Certificate({
 
 firebase_admin.initialize_app(cred, { 'storageBucket': FIREBASE_STORAGE_BUCKET })
 
-db = firestore.client()
-bucket = storage.bucket()
+DATABASE = None
+BUCKET = None
+def initialize_firebase():
+    global DATABASE, BUCKET
 
-print("Database: ", db)
-print("Bucket: ", bucket)
-print("Firebase initialized.")
+    DATABASE = firestore.client()
+    BUCKET = storage.bucket()
+
+    print("Database: ", DATABASE)
+    print("Bucket: ", BUCKET)
+    print("Firebase initialized.")
 #endregion Firebase

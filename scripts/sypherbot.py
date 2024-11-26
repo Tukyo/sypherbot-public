@@ -195,7 +195,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
         owner_username = inviter.username
         print(f"Adding group {group_id} to database with owner {owner_id} ({owner_username})")
         chat_id = update.effective_chat.id
-        group_doc = firebase.db.collection('groups').document(str(chat_id))
+        group_doc = firebase.DATABASE.collection('groups').document(str(chat_id))
         group_doc.set({
             'group_id': group_id,
             'owner_id': owner_id,
@@ -229,7 +229,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
 
         print(f"Group {group_id} added to database.")
 
-        group_counter = firebase.db.collection('stats').document('addedgroups')
+        group_counter = firebase.DATABASE.collection('stats').document('addedgroups')
         group_counter.update({'count': firestore.Increment(1)}) # Get the current added groups count and increment by 1
 
         bot_member = context.bot.get_chat_member(group_id, context.bot.id)  # Get bot's member info
@@ -271,7 +271,7 @@ def bot_removed_from_group(update: Update, context: CallbackContext) -> None:
 
     if left_member.id == context.bot.id: # Bot left. not user
         print(f"Removing group {update.effective_chat.id} from database.")
-        group_counter = firebase.db.collection('stats').document('removedgroups')
+        group_counter = firebase.DATABASE.collection('stats').document('removedgroups')
         group_counter = group_counter.update({'count': firestore.Increment(1)}) # Get the current removed groups count and increment by 1
         group_doc.delete()  # Directly delete the group document
         utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
@@ -290,7 +290,7 @@ def start(update: Update, context: CallbackContext) -> None:
             user_id_from_link = command_args[2]
             print(f"Attempting to authenticate user {user_id_from_link} for group {group_id}")
 
-            group_doc = firebase.db.collection('groups').document(group_id)
+            group_doc = firebase.DATABASE.collection('groups').document(group_id)
             group_data = group_doc.get()
             if group_data.exists:
                 unverified_users = group_data.to_dict().get('unverified_users', {})
@@ -1766,7 +1766,7 @@ def toggle_command_status(update: Update, context: CallbackContext) -> None:
                 print(f"Group {chat_id} is not premium. Cannot toggle 'play' command.")
                 return
 
-        group_doc = firebase.db.collection('groups').document(str(chat_id))
+        group_doc = firebase.DATABASE.collection('groups').document(str(chat_id))
         group_data = group_doc.get().to_dict()
 
         if not group_data:
@@ -2024,7 +2024,7 @@ def handle_timeout_callback(update: Update, context: CallbackContext) -> None:
 
 def set_authentication_timeout(group_id: int, timeout_seconds: int) -> None: # Sets the verification timeout for a specific group in the Firestore database.
     try:
-        group_ref = firebase.db.collection('groups').document(str(group_id))
+        group_ref = firebase.DATABASE.collection('groups').document(str(group_id))
 
         group_ref.update({
             'verification_info.verification_timeout': timeout_seconds
@@ -2318,7 +2318,7 @@ def handle_chain(update: Update, context: CallbackContext) -> None:
 
 def complete_token_setup(group_id: str, context: CallbackContext):
     msg = None
-    group_doc = firebase.db.collection('groups').document(str(group_id))
+    group_doc = firebase.DATABASE.collection('groups').document(str(group_id))
     group_data = group_doc.get().to_dict()
 
     token_data = group_data.get('token')
@@ -2577,7 +2577,7 @@ def handle_welcome_message_image(update: Update, context: CallbackContext) -> No
         filename = f'welcome_message_header_{group_id}.{file_extension}'
         filepath = f'sypherbot/public/welcome_message_header/{filename}'
 
-        bucket = firebase.bucket  # Save to Firebase Storage
+        bucket = firebase.BUCKET  # Save to Firebase Storage
         blob = bucket.blob(filepath)
         # Determine the correct MIME type explicitly
         if file_extension == "gif":
@@ -2667,7 +2667,7 @@ def handle_buybot_message_image(update: Update, context: CallbackContext) -> Non
         filename = f'buybot_message_header_{group_id}.{file_extension}'
         filepath = f'sypherbot/public/buybot_message_header/{filename}'
 
-        bucket = firebase.bucket  # Save to Firebase Storage
+        bucket = firebase.BUCKET  # Save to Firebase Storage
         blob = bucket.blob(filepath)
 
         # Determine the correct MIME type explicitly
@@ -2971,7 +2971,7 @@ def check_if_trusted(update: Update, context: CallbackContext) -> None:
 
     if time_elapsed >= trust_duration: # Check if sufficient time has passed
         print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Removing from untrusted_users.")
-        firebase.db.collection('groups').document(group_id).update({f'untrusted_users.{user_id}': firestore.DELETE_FIELD})
+        firebase.DATABASE.collection('groups').document(group_id).update({f'untrusted_users.{user_id}': firestore.DELETE_FIELD})
         utils.clear_group_cache(group_id) # Clear the cache on all database updates
         return True
     else:
@@ -3054,7 +3054,7 @@ def handle_minimum_buy(update: Update, context: CallbackContext) -> None:
             group_id = update.effective_chat.id
             group_data = utils.fetch_group_info(update, context)
             if group_data is not None:
-                group_doc = firebase.db.collection('groups').document(str(group_id))
+                group_doc = firebase.DATABASE.collection('groups').document(str(group_id))
                 group_doc.update({
                     'premium_features.buybot.minimumbuy': int(update.message.text)
                 })
@@ -3103,7 +3103,7 @@ def handle_small_buy(update: Update, context: CallbackContext) -> None:
             group_id = update.effective_chat.id
             group_data = utils.fetch_group_info(update, context)
             if group_data is not None:
-                group_doc = firebase.db.collection('groups').document(str(group_id))
+                group_doc = firebase.DATABASE.collection('groups').document(str(group_id))
                 try:
                     group_doc.update({
                         'premium_features.buybot.smallbuy': int(update.message.text)
@@ -3156,7 +3156,7 @@ def handle_medium_buy(update: Update, context: CallbackContext) -> None:
             group_id = update.effective_chat.id
             group_data = utils.fetch_group_info(update, context)
             if group_data is not None:
-                group_doc = firebase.db.collection('groups').document(str(group_id))
+                group_doc = firebase.DATABASE.collection('groups').document(str(group_id))
                 try:
                     group_doc.update({
                         'premium_features.buybot.mediumbuy': int(update.message.text)
@@ -3307,7 +3307,7 @@ def authentication_callback(update: Update, context: CallbackContext) -> None:
 
     print(f"Authenticating user {user_id} for group {group_id}")
 
-    group_doc = firebase.db.collection('groups').document(group_id)
+    group_doc = firebase.DATABASE.collection('groups').document(group_id)
     group_data = group_doc.get().to_dict()
 
     if group_data:
@@ -3341,7 +3341,7 @@ def authentication_challenge(update: Update, context: CallbackContext, authentic
         index = random.randint(0, 4)
         math_challenge = challenges[index]
 
-        blob = firebase.bucket.blob(f'sypherbot/private/auth/math_{index}.jpg')
+        blob = firebase.BUCKET.blob(f'sypherbot/private/auth/math_{index}.jpg')
         image_url = blob.generate_signed_url(expiration=timedelta(minutes=firebase.BLOB_EXPIRATION))
 
         response = requests.get(image_url)
@@ -3392,7 +3392,7 @@ def authentication_challenge(update: Update, context: CallbackContext, authentic
         word_challenge = challenges[0]  # The word challenge is the first word in the shuffled list
         index = original_challenges.index(word_challenge)  # Get the index of the word challenge in the original list
 
-        blob = firebase.bucket.blob(f'sypherbot/private/auth/word_{index}.jpg')
+        blob = firebase.BUCKET.blob(f'sypherbot/private/auth/word_{index}.jpg')
         image_url = blob.generate_signed_url(expiration=timedelta(minutes=15), version="v4")
     
         keyboard = []
@@ -3438,7 +3438,7 @@ def callback_word_response(update: Update, context: CallbackContext):
 
     print(f"User ID: {user_id} - Group ID: {group_id} - Response: {response}")
 
-    group_doc = firebase.db.collection('groups').document(group_id)
+    group_doc = firebase.DATABASE.collection('groups').document(group_id)
     group_data = group_doc.get()
 
     if group_data.exists:
@@ -3477,7 +3477,7 @@ def callback_math_response(update: Update, context: CallbackContext):
 
     print(f"User ID: {user_id} - Group ID: {group_id} - Response: {response}")
 
-    group_doc = firebase.db.collection('groups').document(group_id)
+    group_doc = firebase.DATABASE.collection('groups').document(group_id)
     group_data = group_doc.get()
 
     if group_data.exists:
@@ -3505,7 +3505,7 @@ def callback_math_response(update: Update, context: CallbackContext):
 def authenticate_user(context, group_id, user_id):
     # Always check the database when authenticating the user
     # This is to avoid using stale cached data
-    group_doc = firebase.db.collection('groups').document(group_id)
+    group_doc = firebase.DATABASE.collection('groups').document(group_id)
     group_data = group_doc.get().to_dict()
 
     print(f"Authenticating user {user_id} in group {group_id}")
@@ -3659,7 +3659,7 @@ def plot_candlestick_chart(data_frame, group_id):
 MONITOR_INTERVAL = 20 # Interval for monitoring jobs (seconds)
 scheduler = BackgroundScheduler()
 def start_monitoring_groups():
-    groups_snapshot = firebase.db.collection('groups').get()
+    groups_snapshot = firebase.DATABASE.collection('groups').get()
     for group_doc in groups_snapshot:
         group_data = group_doc.to_dict()
         group_data['group_id'] = group_doc.id
@@ -4110,7 +4110,7 @@ def mute(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
 
     if utils.is_user_admin(update, context):
-        group_doc = firebase.db.collection('groups').document(str(chat_id))
+        group_doc = firebase.DATABASE.collection('groups').document(str(chat_id))
         group_data = group_doc.get().to_dict()
 
         if group_data is None or not group_data.get('admin', {}).get('mute', False):
@@ -4148,7 +4148,7 @@ def unmute(update: Update, context: CallbackContext) -> None:
     msg = None
     chat_id = update.effective_chat.id
 
-    group_doc = firebase.db.collection('groups').document(str(chat_id))
+    group_doc = firebase.DATABASE.collection('groups').document(str(chat_id))
     group_data = group_doc.get().to_dict()
 
     if group_data is None or not group_data.get('admin', {}).get('mute', False):
@@ -4192,7 +4192,7 @@ def warn(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
 
     if utils.is_user_admin(update, context):
-        group_doc = firebase.db.collection('groups').document(str(chat_id))
+        group_doc = firebase.DATABASE.collection('groups').document(str(chat_id))
         group_data = group_doc.get().to_dict()
 
         if group_data is None or not group_data.get('admin', {}).get('warn', False): # Check if warns enabled
@@ -4242,7 +4242,7 @@ def warn(update: Update, context: CallbackContext):
 def clear_warns_for_user(update: Update, context: CallbackContext):
     msg = None
     chat_id = update.effective_chat.id
-    group_doc = firebase.db.collection('groups').document(str(chat_id))
+    group_doc = firebase.DATABASE.collection('groups').document(str(chat_id))
     group_data = group_doc.get().to_dict()
 
     if utils.is_user_admin(update, context):
@@ -5275,6 +5275,9 @@ def website(update: Update, context: CallbackContext) -> None:
 def main() -> None:
     updater = Updater(config.TELEGRAM_TOKEN, use_context=True) # Create the Updater and pass it the bot's token
     dispatcher = updater.dispatcher # Get the dispatcher to register handlers
+
+    config.initialize_web3()
+    firebase.initialize_firebase()
     
     #region Slash Command Handlers
     #
