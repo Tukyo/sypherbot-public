@@ -3,7 +3,7 @@ import sys
 import openai
 import random
 from telegram import Update
-from telegram.ext import CallbackContext, Updater, MessageHandler, Filters, BaseFilter
+from telegram.ext import CallbackContext
 
 ## Import the needed modules from the config folder
 # {config.py} - Environment variables and global variables used in the bot
@@ -20,12 +20,6 @@ TEMPERATURE = 0.5  # AI creativity level
 TRIGGER_PHRASES = ["hey sypher", "hey sypherbot"]  # Trigger phrases
 OPENAI_MODEL = "gpt-3.5-turbo-instruct"  # OpenAI model to use
 PROMPT_PATTERN = r"^(hey sypher(?:bot)?)\s*(.*)$"  # Matches "hey sypher" or "hey sypherbot" at the start
-class RegexFilter(BaseFilter):
-    def __init__(self, pattern):
-        self.pattern = pattern
-
-    def __call__(self, message): # Check if the message text matches the regex pattern
-        return bool(re.match(self.pattern, message.text.strip(), re.IGNORECASE))
 
 ERROR_REPLIES = [
     "Sorry, I didn't understand that. Please try rephrasing.",
@@ -86,9 +80,6 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     else:
         error_reply = random.choice(ERROR_REPLIES)
         update.message.reply_text(error_reply)
-
-PROMPT_REGEX_FILTER = RegexFilter(PROMPT_PATTERN)
-SYPHERBRAIN_PROMPT_HANDLER = MessageHandler(PROMPT_REGEX_FILTER, prompt_handler)
 
 def main():
     initialize_openai()

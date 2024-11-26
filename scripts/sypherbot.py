@@ -331,13 +331,14 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         print("No message text found.")
         return
 
+    if update.effective_chat.type == 'private':
+        handle_guess(update, context) # Allow anything including gameplay in private chat, but no AI prompts
+        return
+    
     if utils.is_user_admin(update, context):
         handle_setup_inputs_from_admin(update, context)
         handle_guess(update, context)
-        return
-    
-    if update.effective_chat.type == 'private':
-        handle_guess(update, context)
+        handle_AI_prompt(update, context)
         return
 
     if anti_spam.is_spam(user_id, chat_id):
@@ -404,6 +405,19 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     delete_blocked_phrases(update, context)
     delete_blocked_links(update, context)
     handle_guess(update, context)
+    handle_AI_prompt(update, context)
+
+def handle_AI_prompt(update: Update, context: CallbackContext) -> None:
+    if not update.message or not update.message.from_user:
+        print("Received a message with missing update or user information.")
+        return
+    
+    user_id = update.message.from_user.id
+    msg = update.message.text
+
+    if re.match(sypherbrain.PROMPT_PATTERN, msg, re.IGNORECASE):
+        print(f"Detected AI prompt from user {user_id}: {msg}")
+        sypherbrain.prompt_handler(update, context)
 
 def handle_image(update: Update, context: CallbackContext) -> None:
     if not update.message or not update.message.from_user:
@@ -4818,6 +4832,9 @@ def handle_guess(update: Update, context: CallbackContext) -> None:
     key = f"{chat_id}_{user_id}"
     msg = None
 
+    if re.match(sypherbrain.PROMPT_PATTERN, msg, re.IGNORECASE): # Don't allow guesses and AI prompts
+        return
+
     if key not in context.chat_data:
         return
     
@@ -5367,8 +5384,6 @@ def main() -> None:
     ##
     #
     #endregion Setup Callbacks
-
-    dispatcher.add_handler(sypherbrain.SYPHERBRAIN_PROMPT_HANDLER)
 
     updater.start_polling() # Start the Bot
     start_monitoring_groups() # Start monitoring premium groups
