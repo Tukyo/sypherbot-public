@@ -153,6 +153,98 @@ def fetch_group_info(update: Update, context: CallbackContext, return_doc: bool 
         print(f"Failed to fetch group info: {e}")
         return None  # Error fetching group data
 
+def fetch_group_dictionary(update: Update, context: CallbackContext):
+    group_data = fetch_group_info(update, context)
+    if not group_data:
+        print("No group data found. Returning default values.")
+        return None
+
+    # Token Information
+    token_info = group_data.get("token", {})
+    token_liquidity_address = token_info.get("liquidity_address", "N/A")
+    token_contract_address = token_info.get("contract_address", "N/A")
+    token_symbol = token_info.get("symbol", "N/A")
+    token_chain = token_info.get("chain", "N/A")
+    token_decimals = token_info.get("decimals", "N/A")
+    token_setup_complete = token_info.get("setup_complete", False)
+    token_total_supply = token_info.get("total_supply", 0)
+    token_name = token_info.get("name", "Unknown Token")
+
+    # Group Info
+    group_id = group_data.get("group_id", "Unknown Group ID")
+    group_username = group_data.get("group_info", {}).get("group_username", "N/A")
+    group_website_url = group_data.get("group_info", {}).get("website_url", "N/A")
+    group_link = group_data.get("group_info", {}).get("group_link", "N/A")
+
+    # Owner Info
+    owner_id = group_data.get("owner_id", "Unknown Owner")
+    owner_username = group_data.get("owner_username", "N/A")
+
+    # Commands
+    commands = group_data.get("commands", {})
+    commands_enabled = {cmd: enabled for cmd, enabled in commands.items()}
+
+    # Premium Features
+    premium = group_data.get("premium", False)
+    premium_features = group_data.get("premium_features", {})
+    welcome_header_url = premium_features.get("welcome_header_url", None)
+    buybot_settings = premium_features.get("buybot", {})
+    sypher_trust = premium_features.get("sypher_trust", False)
+    sypher_trust_preferences = premium_features.get("sypher_trust_preferences", "default")
+
+    # Verification Info
+    verification_info = group_data.get("verification_info", {})
+    verification_type = verification_info.get("verification_type", "N/A")
+    verification_timeout = verification_info.get("verification_timeout", 0)
+
+    # Admin Settings
+    admin_settings = group_data.get("admin", {})
+    max_warns = admin_settings.get("max_warns", 0)
+    admin_allowlist = admin_settings.get("allowlist", False)
+    admin_blocklist = admin_settings.get("blocklist", False)
+
+    # Untrusted and Unverified Users
+    untrusted_users = group_data.get("untrusted_users", {})
+    unverified_users = group_data.get("unverified_users", {})
+
+    # Warnings
+    warnings = group_data.get("warnings", {})
+
+    # Organize into a dictionary for easy access
+    slots = {
+        "group_id": group_id,
+        "group_username": group_username,
+        "group_website_url": group_website_url,
+        "group_link": group_link,
+        "owner_id": owner_id,
+        "owner_username": owner_username,
+        "commands": commands_enabled,
+        "premium": premium,
+        "welcome_header_url": welcome_header_url,
+        "buybot_settings": buybot_settings,
+        "sypher_trust": sypher_trust,
+        "sypher_trust_preferences": sypher_trust_preferences,
+        "verification_type": verification_type,
+        "verification_timeout": verification_timeout,
+        "max_warns": max_warns,
+        "admin_allowlist": admin_allowlist,
+        "admin_blocklist": admin_blocklist,
+        "token_liquidity_address": token_liquidity_address,
+        "token_contract_address": token_contract_address,
+        "token_symbol": token_symbol,
+        "token_chain": token_chain,
+        "token_decimals": token_decimals,
+        "token_setup_complete": token_setup_complete,
+        "token_total_supply": token_total_supply,
+        "token_name": token_name,
+        "untrusted_users": untrusted_users,
+        "unverified_users": unverified_users,
+        "warnings": warnings,
+    }
+
+    print(f"Fetched and processed slots for group {group_id}: {slots}")
+    return slots
+
 def fetch_group_token(group_data: dict, update: Update, context: CallbackContext): # Fetches all token-related data from a pre-fetched group_data object.
     token_data = group_data.get('token')
     if not token_data:
