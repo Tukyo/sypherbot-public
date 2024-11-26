@@ -27,7 +27,7 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 # {config.py} - Environment variables and global variables used in the bot
 # {firebase.py} - Firebase configuration and database initialization
 # {utils.py} - Utility functions and variables used in the bot
-from scripts import config, utils, firebase, logger
+from scripts import sypherbrain, config, utils, firebase, logger
 #
 ## This is the public version of the bot that was developed by Tukyo for the Sypher project.
 ## This bot has a customizable commands feature and admin controls, along with full charting, price, and buybot functionality.
@@ -5367,6 +5367,8 @@ def main() -> None:
     ##
     #
     #endregion Setup Callbacks
+
+    dispatcher.add_handler(sypherbrain.SYPHERBRAIN_PROMPT_HANDLER)
 
     updater.start_polling() # Start the Bot
     start_monitoring_groups() # Start monitoring premium groups

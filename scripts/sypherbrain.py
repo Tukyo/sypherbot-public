@@ -87,17 +87,11 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         error_reply = random.choice(ERROR_REPLIES)
         update.message.reply_text(error_reply)
 
+PROMPT_REGEX_FILTER = RegexFilter(PROMPT_PATTERN)
+SYPHERBRAIN_PROMPT_HANDLER = MessageHandler(PROMPT_REGEX_FILTER, prompt_handler)
+
 def main():
-    updater = Updater(config.TELEGRAM_TOKEN, use_context=True) # Create the Updater and pass it the bot's token
-    dispatcher = updater.dispatcher # Get the dispatcher to register handlers
-
     initialize_openai()
-
-    regex_filter = RegexFilter(PROMPT_PATTERN)
-    dispatcher.add_handler(MessageHandler(regex_filter, prompt_handler))
-
-    updater.start_polling() # Start the Bot
-    updater.idle() # Run the bot until you send a signal to stop it
 
 if __name__ == "__main__":
     main()
