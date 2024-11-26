@@ -18,7 +18,7 @@ sys.stderr = logger.StderrWrapper()  # Redirect stderr
 MAX_TOKENS = 100  # Maximum tokens for OpenAI response
 TEMPERATURE = 0.5  # AI creativity level
 TRIGGER_PHRASES = ["hey sypher", "hey sypherbot"]  # Trigger phrases
-OPENAI_MODEL = "gpt-3.5-turbo-instruct"  # OpenAI model to use
+OPENAI_MODEL = "gpt-3.5-turbo"  # OpenAI model to use
 PROMPT_PATTERN = r"^(hey sypher(?:bot)?)\s*(.*)$"  # Matches "hey sypher" or "hey sypherbot" at the start
 
 ERROR_REPLIES = [
@@ -55,27 +55,30 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if not match:
         return
     
-    query = match.group(2).strip() # Extract the query (everything after the trigger phrase)
+    query = match.group(2).strip()  # Extract the query (everything after the trigger phrase)
     if not query:
         update.message.reply_text("Please provide a query after 'hey sypher' or 'hey sypherbot'.")
         return
     
     print(f"Received 'hey sypher' from a user in chat {update.message.chat_id}")
 
-    try: # Call OpenAI API
-        openai_response = openai.Completion.create(
+    try:  # Call OpenAI API with the new `ChatCompletion.create` syntax
+        openai_response = openai.ChatCompletion.create(
             model=OPENAI_MODEL,
-            prompt=query,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},  # Define the assistant's behavior
+                {"role": "user", "content": query}  # Include the user's query
+            ],
             max_tokens=MAX_TOKENS,
             temperature=TEMPERATURE,
         )
-        response_text = openai_response.choices[0].text.strip()
+        response_text = openai_response['choices'][0]['message']['content'].strip()  # Extract the response text
     except Exception as e:
         update.message.reply_text("Sorry, I couldn't process your request. Try again later.")
         print(f"OpenAI API error: {e}")
         return
 
-    if response_text: # Send the response back to the user
+    if response_text:  # Send the response back to the user
         update.message.reply_text(response_text)
     else:
         error_reply = random.choice(ERROR_REPLIES)
