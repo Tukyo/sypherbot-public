@@ -45,41 +45,6 @@ ERROR_REPLIES = [
     "I'm a bit confused. Could you clarify your question?"
 ]
 
-INTENT_MAP = {
-    "group_name": {
-        "classification": "group_name",
-        "response_template": "This group's name is {group_username}."
-    },
-    "website": {
-        "classification": "website",
-        "response_template": "This group's website is: {group_website_url}."
-    },
-    "group_link": {
-        "classification": "group_link",
-        "response_template": "You can join this group using the link: {group_link}."
-    },
-    "owner": {
-        "classification": "owner",
-        "response_template": "The owner of this group is {owner_username}."
-    },
-    "group_token": {
-        "classification": "group_token",
-        "response_template": "This group's token is {token_symbol} on the {token_chain} blockchain."
-    },
-    "contract_address": {
-        "classification": "contract_address",
-        "response_template": "The contract address for {token_name} is {token_contract_address}."
-    },
-    "total_supply": {
-        "classification": "total_supply",
-        "response_template": "The total supply of {token_name} is {token_total_supply}."
-    },
-    "buy": {
-        "classification": "buy",
-        "response_template": "You can buy {token_name} here: https://app.uniswap.org/swap?outputCurrency={contract_address}"
-    }
-}
-
 def initialize_openai():
     openai.api_key = config.OPENAI_API_KEY
     print("OpenAI API initialized.")
@@ -104,26 +69,19 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     
     print(f"Received 'hey sypher' with a query from a user in chat {update.message.chat_id}")
 
-    generic_intent = determine_generic_intent(query) # Use the LLM to classify the intent
-    if generic_intent:  # If intent is classified, fetch the corresponding generic response
-        response = fetch_generic_response(generic_intent, dictionary)
-        if response:
-            update.message.reply_text(response)
-            print(f"Generic response sent for intent '{generic_intent}' in chat {update.message.chat_id}: {response}")
-            return
-    
-    # No generic response found, proceed with AI response
+    intent = determine_intent(query, dictionary)
+    print(f"Determined intent: {intent}")
 
     messages = [
         {"role": "system", "content": (
-            "You are SypherBot, an intelligent assistant."
-            "You live in telegram, the messaging app."
+            "You are SypherBot, an intelligent assistant for Telegram groups."
+            "Use the provided group context and intent to understand and respond accurately to user queries."
             "Your users mostly consist of degen crypto traders"
-            "Provide short, complete answers to all queries. Keep responses under 40 words unless explicitly asked for detail."
+            "Provide concise, contextually relevant responses. Keep responses under 40 words unless more detail is explicitly requested."
             "Avoid unnecessary detail unless specifically requested. Be engaging and professional, and use humor sparingly when discussing memes."
             "Ensure your response is never cut off mid-thought."
         )},
-        {"role": "user", "content": query}
+        {"role": "user", "content": f"Context: {dictionary}\n\nQuery: {query}\n\nIntent: {intent}"}
     ]
 
     try:  # Call OpenAI API with the new `ChatCompletion.create` syntax
@@ -146,43 +104,27 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         error_reply = random.choice(ERROR_REPLIES)
         update.message.reply_text(error_reply)
 
-def determine_generic_intent(query: str) -> str | None:
-    valid_intents = list(INTENT_MAP.keys())
-
-    classifications = ", ".join(f"'{intent}'" for intent in INTENT_MAP.keys())
+def determine_intent(query: str, group_dictionary: dict) -> str | None:
     classification_prompt = (
-        f"Classify the following query into one of these intents: {classifications}. "
-        "Analyze the query carefully and match it with the most relevant intent. "
-        "If the query does not align with any provided intents, return 'unknown'. "
-        "Here is the query:\n\n"
-        f"{query}"
+        "Analyze the following query and classify it based on the context provided below. "
+        "Use the context to understand the user's intent and generate a response if necessary. "
+        "If the query does not align with the context or is unclear, return 'unknown'. "
+        f"\n\nContext:\n{group_dictionary}\n\nQuery:\n{query}"
     )
-    
+
     try:
         intent_response = openai.chat.completions.create(
             model=OPENAI_MODEL,
-            messages=[{"role": "system", "content": "You are a classifier for intents based on user queries."},
+            messages=[{"role": "system", "content": "You are an intelligent assistant that classifies and responds to user queries."},
                       {"role": "user", "content": classification_prompt}],
-            max_tokens=MAX_INTENT_TOKENS,  # Very low token usage, since the response is short
+            max_tokens=MAX_INTENT_TOKENS,
             temperature=0.0  # Deterministic response
         )
         intent = intent_response.choices[0].message.content.strip().lower()
-        return intent if intent in valid_intents else None
+        return intent
     except Exception as e:
-        print(f"Error classifying intent: {e}")
-        return None
-
-def fetch_generic_response(intent: str, dictionary: dict) -> str | None:
-    if intent == "unknown":
-        return None
-    if intent in INTENT_MAP:
-        template = INTENT_MAP[intent]["response_template"]
-        try:
-            return template.format(**dictionary)
-        except KeyError as e:
-            print(f"Missing key in dictionary for intent '{intent}': {e}")
-            return None
-    return None
+        print(f"Error determining intent: {e}")
+        return "unknown"
 
 def main():
     initialize_openai()
