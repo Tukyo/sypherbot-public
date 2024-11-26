@@ -44,12 +44,6 @@ ERROR_REPLIES = [
     "I'm a bit confused. Could you clarify your question?"
 ]
 
-messages = [
-        {"role": "system", "content": 'You answer question about Web  services.'
-        },
-        {"role": "user", "content": 'the user message'},
-    ]
-
 def initialize_openai():
     openai.api_key = config.OPENAI_API_KEY
     print("OpenAI API initialized.")
@@ -68,6 +62,17 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     
     print(f"Received 'hey sypher' from a user in chat {update.message.chat_id}")
 
+    messages = [
+        {"role": "system", "content": (
+        "You are SypherBot, an intelligent and friendly group management assistant. "
+        "You are an expert in answering a wide range of questions, including general knowledge, "
+        "cryptocurrency trends, blockchain technology, and internet culture such as memes. "
+        "You also provide helpful insights into group management, Telegram tips, and user interactions. "
+        "Your tone is professional but conversational, and you occasionally add humor when answering questions about memes."
+        )},
+        {"role": "user", "content": f"The user asked: '{query}'. Please provide a helpful and detailed answer."}
+    ]
+
     try:  # Call OpenAI API with the new `ChatCompletion.create` syntax
         openai_response = openai.chat.completions.create(
             model=OPENAI_MODEL,
@@ -83,6 +88,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 
     if response_message:  # Send the response back to the user
         update.message.reply_text(response_message)
+        print(f"Response in chat {update.message.chat_id}: {response_message}")
     else:
         error_reply = random.choice(ERROR_REPLIES)
         update.message.reply_text(error_reply)
