@@ -108,19 +108,25 @@ def initialize_web3():
             print(f"Successfully connected to {network} via WebSocket")
         else:
             print(f"Failed to connect to {network} via WebSocket")
+    
+    initialize_chainlink()
 #endregion Web3 Initialization
 ##
 #
 ##
 #region Chainlink
-ETH_WEB3_INSTANCE = WEB3_INSTANCES['ETHEREUM']
-CHAINLINK_ETH_USD_ADDRESS = ETH_WEB3_INSTANCE.to_checksum_address('0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419')
+CHAINLINK_CONTRACT = None
+def initialize_chainlink():
+    global CHAINLINK_CONTRACT
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-CHAINLINK_ABI_PATH = os.path.join(BASE_DIR, "config", "chainlink.abi.json")
+    eth_web3_instance = WEB3_INSTANCES['ETHEREUM']
+    chainlink_eth_usd_address = eth_web3_instance.to_checksum_address('0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419')
 
-with open(CHAINLINK_ABI_PATH, "r") as abi_file:
-    CHAINLINK_ABI = json.load(abi_file)
-    
-CHAINLINK_CONTRACT = ETH_WEB3_INSTANCE.eth.contract(address=CHAINLINK_ETH_USD_ADDRESS, abi=CHAINLINK_ABI)
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    chainlink_abi_path = os.path.join(base_dir, "config", "chainlink.abi.json")
+
+    with open(chainlink_abi_path, "r") as abi_file:
+        chainlink_abi = json.load(abi_file)
+        
+    CHAINLINK_CONTRACT = eth_web3_instance.eth.contract(address=chainlink_eth_usd_address, abi=chainlink_abi)
 #endregion Chainlink
