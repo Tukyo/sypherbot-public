@@ -2,6 +2,7 @@ import re
 import sys
 import openai
 import random
+from threading import Timer
 from telegram import Update
 from telegram.ext import CallbackContext
 
@@ -16,11 +17,14 @@ sys.stderr = logger.StderrWrapper()  # Redirect stderr
 
 # Configuration variables for easy adjustment
 MAX_INTENT_TOKENS = 20  # Maximum tokens for intent classification
-MAX_RESPONSE_TOKENS = 50  # Maximum tokens for OpenAI response
+MAX_RESPONSE_TOKENS = 100  # Maximum tokens for OpenAI response
 TEMPERATURE = 0.7  # AI creativity level
 TRIGGER_PHRASES = ["hey sypher", "hey sypherbot"]  # Trigger phrases
 OPENAI_MODEL = "gpt-3.5-turbo"  # OpenAI model to use
 PROMPT_PATTERN = r"^(hey sypher(?:bot)?)\s*(.*)$"  # Matches "hey sypher" or "hey sypherbot" at the start
+
+ongoing_conversations = {} # Dictionary to store ongoing conversations
+prompt_timeout = 10  # Timeout for conversation prompts in seconds
 
 ERROR_REPLIES = [
     "Sorry, I didn't understand that. Please try rephrasing.",
@@ -65,12 +69,28 @@ def initialize_openai():
     openai.api_key = config.OPENAI_API_KEY
     print("OpenAI API initialized.")
 
+#region Prompt & Intention
+# The following function is used to handle incoming messages and prompt the AI for a response
+# The AI is prompted with the user's query and the group's context to generate a response
+##
 def prompt_handler(update: Update, context: CallbackContext) -> None:
     message_text = update.message.text.strip()
+    user_id = update.message.from_user.id
+    group_id = update.message.chat_id
+    
     match = re.match(PROMPT_PATTERN, message_text, re.IGNORECASE)
-
-    if not match:
+    if not match and not get_conversation(user_id, group_id):  # Skip if no "hey sypher" and no active conversation
+        print("No ongoing conversation and no trigger phrase provided...")
         return
+    
+    query = match.group(2).strip()  # Extract the query (everything after the trigger phrase)
+    if not query: # If there is no query just provide a generic response
+        generic_greeting = random.choice(GENERIC_REPLIES)
+        update.message.reply_text(generic_greeting)
+        print(f"Received 'hey sypher' with no query from a user in chat {update.message.chat_id}")
+        return
+    
+    print(f"Received 'hey sypher' with a query from a user in chat {update.message.chat_id}")
     
     if not utils.is_user_admin(update, context): # If admin triggered the bot, get the entire group dictionary
         dictionary = utils.fetch_group_dictionary(update, context)
@@ -80,28 +100,28 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if not dictionary: # You'll always find a dictionary with default values, so if not found, error occurred
         print(f"No dictionary found for chat {update.message.chat_id}. Proceeding without group-specific context.")
         return
-    
-    query = match.group(2).strip()  # Extract the query (everything after the trigger phrase)
-    if not query: # If there is no query just provide a generic response
-        generic_greeting = random.choice(GENERIC_REPLIES)
-        update.message.reply_text(generic_greeting)
-        return
-    
-    print(f"Received 'hey sypher' with a query from a user in chat {update.message.chat_id}")
 
     intent = determine_intent(query, dictionary)
     print(f"Determined intent: {intent}")
 
+    last_response = get_conversation_context(user_id, group_id)
+    context_info = f"Context: {dictionary}\n"
+    if last_response:
+        context_info += f"Previous Response: {last_response}\n"
+        print("Previous response found in conversation context.")
+    else:
+        context_info += f"Query: {query}\nIntent: {intent}"
+        print("No previous response found in conversation context.")
+
     messages = [
         {"role": "system", "content": (
-            "You are SypherBot, an intelligent assistant for Telegram groups."
-            "Use the provided group context and intent to understand and respond accurately to user queries."
-            "Your users mostly consist of degen crypto traders"
-            "Provide concise, contextually relevant responses. Keep responses under 40 words unless more detail is explicitly requested."
-            "Avoid extra detail unless specifically requested. Be engaging and professional, and use humor sparingly when discussing memes."
-            "Ensure your response is never cut off mid-thought."
+            "You are SypherBot, a smart and engaging assistant for Telegram groups."
+            "Your users are mostly degens and crypto traders."
+            "Answer accurately using group context and intent. Keep responses concise and under 40 words unless more detail is requested."
+            "Be professional, engaging, and use humor sparingly, especially with memes."
+            "Never cut off responses mid-thought."
         )},
-        {"role": "user", "content": f"Context: {dictionary}\n\nQuery: {query}\n\nIntent: {intent}"}
+        {"role": "user", "content": context_info}
     ]
 
     try:  # Call OpenAI API with the new `ChatCompletion.create` syntax
@@ -123,7 +143,10 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     else:
         error_reply = random.choice(ERROR_REPLIES)
         update.message.reply_text(error_reply)
-
+##
+# The following function is used to classify the user's intent based on the query and group context
+# The AI is prompted with the query and group context to determine the user's intent
+##
 def determine_intent(query: str, group_dictionary: dict) -> str | None:
     classification_prompt = (
         "Analyze the following query and classify it based on the context provided below. "
@@ -145,6 +168,47 @@ def determine_intent(query: str, group_dictionary: dict) -> str | None:
     except Exception as e:
         print(f"Error determining intent: {e}")
         return "unknown"
+#endregion Prompt & Intention
+##   
+#
+##
+#region Conversation Management
+# The following functions are used to manage ongoing conversations with users in groups
+# The conversation state is stored in the ongoing_conversations dictionary
+# Each conversation is associated with a user_id and group_id
+# The conversation state includes the last response from the bot and a timer to clear the conversation
+##
+def start_conversation(user_id, group_id, last_response): # Start or reset a conversation for a user in a group
+    key = (user_id, group_id)
+
+    if key in ongoing_conversations: # If the user is already in a conversation, cancel the existing timer
+        ongoing_conversations[key]['timer'].cancel()
+
+    timer = Timer(prompt_timeout, clear_conversation, [user_id, group_id]) # Clear the conversation after prompt_timeout
+    timer.start()
+
+    ongoing_conversations[key] = { # Store the conversation state
+        'timer': timer,
+        'last_response': last_response,
+    }
+    print(f"Started conversation for user {user_id} in group {group_id}.")
+
+def clear_conversation(user_id, group_id): # Clear the conversation state for a user in a group
+    key = (user_id, group_id)
+    if key in ongoing_conversations:
+        del ongoing_conversations[key]
+        print(f"Cleared conversation for user {user_id} in group {group_id}.")
+
+def get_conversation_context(user_id, group_id): # Get the conversation context for a user in a group, or None if not active
+    conversation = get_conversation(user_id, group_id)
+    if conversation:
+        return conversation['last_response']
+    return None
+
+def get_conversation(user_id, group_id): # Get the conversation state for a user in a group, or None if not active
+    return ongoing_conversations.get((user_id, group_id))
+##
+#endregion Conversation Management
 
 def main():
     initialize_openai()

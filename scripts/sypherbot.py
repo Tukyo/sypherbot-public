@@ -413,12 +413,23 @@ def handle_AI_prompt(update: Update, context: CallbackContext) -> None:
         return
     
     user_id = update.message.from_user.id
+    group_id = update.message.chat.id
     msg = update.message.text
 
     if re.match(sypherbrain.PROMPT_PATTERN, msg, re.IGNORECASE):
         print(f"Detected AI prompt from user {user_id}: {msg}")
-        sypherbrain.prompt_handler(update, context)
+        last_response = sypherbrain.prompt_handler(update, context)
 
+        sypherbrain.start_conversation(user_id, group_id, last_response) # Start or reset the conversation state
+    else:
+        conversation = sypherbrain.get_conversation(user_id, group_id) # Check if the user is in an active conversation
+        if conversation:
+            print(f"Continuing conversation with user {user_id} in group {group_id}: {msg}")
+            last_response = sypherbrain.prompt_handler(update, context)
+
+            sypherbrain.start_conversation(user_id, group_id, last_response) # Reset the conversation state with the new response
+        else:
+            print(f"Message ignored from user {user_id} in group {group_id}: {msg}")
 def handle_image(update: Update, context: CallbackContext) -> None:
     if not update.message or not update.message.from_user:
         print("Received a message with missing update or user information.")
