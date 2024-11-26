@@ -4594,84 +4594,6 @@ def cleargames(update: Update, context: CallbackContext) -> None:
     if msg is not None:
         utils.track_message(msg)
 
-def check_deleted_users(update: Update, context: CallbackContext) -> None:
-    chat_id = str(update.effective_chat.id)
-    print(f"Checking for deleted users in chat {chat_id}...")
-
-    deleted_users = return_deleted_users(chat_id)
-    print(f"Deleted users: {deleted_users}")
-
-    if not deleted_users:
-        update.message.reply_text("No deleted users found in your group!")
-    else:
-        keyboard = [
-            [
-                InlineKeyboardButton("Confirm", callback_data="confirm_clear_deleted"),
-                InlineKeyboardButton("Cancel", callback_data="cancel_clear_deleted"),
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        context.chat_data["deleted_users"] = deleted_users
-
-        update.message.reply_text(
-            f"Found {len(deleted_users)} deleted users in your group. Do you want to clear them?",
-            reply_markup=reply_markup,
-        )
-
-def return_deleted_users(chat_id):
-    return asyncio.run(fetch_deleted_users(chat_id))  # Run the async Telethon logic in its own loop
-
-async def fetch_deleted_users(chat_id):
-    client = TelegramClient("bot", config.API_ID, config.API_HASH)  # Create the client instance
-    deleted_users = []
-
-    async with client:  # Properly initialize and close the client
-        await client.start(bot_token=config.TELEGRAM_TOKEN)  # Start the client explicitly with the bot token
-        group_entity = await client.get_entity(int(chat_id))
-        offset = 0
-        limit = 100
-
-        while True:
-            participants = await client(GetParticipantsRequest(
-                group_entity,
-                ChannelParticipantsSearch(""),
-                offset,
-                limit,
-                hash=0
-            ))
-            if not participants.users:
-                break
-
-            for user in participants.users:
-                if user.deleted:
-                    deleted_users.append(user.id)
-
-            offset += len(participants.users)
-
-    return deleted_users  # Return the list of deleted user IDs
-
-def handle_clear_deleted_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    chat_id = update.effective_chat.id  # Get the chat ID
-    deleted_users = context.chat_data.get("deleted_users", [])  # Retrieve deleted users from context
-
-    print(f"Callback triggered to clear deleted users, checking context...")
-
-    if utils.is_user_owner(update, context):
-        if query.data == "confirm_clear_deleted":
-            for user_id in deleted_users: # Iterate through the list of deleted users and ban them
-                try:
-                    context.bot.ban_chat_member(chat_id, user_id)  # Ban each deleted user
-                    print(f"Banned deleted user: {user_id}")
-                except Exception as e:
-                    print(f"Error banning user {user_id}: {e}")
-
-            query.edit_message_text("Deleted users cleared!")
-        elif query.data == "cancel_clear_deleted":
-            query.edit_message_text("Action canceled.") # Cancel the action
-            print(f"Clear deleted users action canceled.")
-
 def cleanbot(update: Update, context: CallbackContext):
     global bot_messages
     if utils.is_user_admin(update, context):
@@ -5468,8 +5390,6 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("warnlist", check_warn_list))
     dispatcher.add_handler(CommandHandler('clearwarns', clear_warns_for_user))
     dispatcher.add_handler(CommandHandler("warnings", check_warnings))
-    dispatcher.add_handler(CommandHandler(['cleandeleted', 'checkdeleted', 'cleardeleted'], check_deleted_users))
-    dispatcher.add_handler(CallbackQueryHandler(handle_clear_deleted_callback, pattern='^(confirm_clear_deleted|cancel_clear_deleted)$'))
     #endregion Admin Slash Command Handlers
     #
     #endregion Slash Command Handlers
