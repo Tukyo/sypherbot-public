@@ -4832,8 +4832,8 @@ def handle_guess(update: Update, context: CallbackContext) -> None:
     key = f"{chat_id}_{user_id}"
     msg = None
 
-    if re.match(sypherbrain.PROMPT_PATTERN, msg, re.IGNORECASE): # Don't allow guesses and AI prompts
-        return
+    # if re.match(sypherbrain.PROMPT_PATTERN, msg, re.IGNORECASE): # Don't allow guesses and AI prompts
+    #     return # LATER TODO: Uncomment this to stop prompts during guessing msg = None causing nonetype
 
     if key not in context.chat_data:
         return
