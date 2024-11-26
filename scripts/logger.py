@@ -22,6 +22,8 @@ class TelegramLogger: # Batch all logs and send to the logging channel for debug
         self.timer.start()
 
     def write(self, message, from_stderr=False):
+        if "RuntimeError: cannot schedule new futures after shutdown" in message: # Later TODO: Fix this error
+            return
         if message.strip():  # Avoid sending empty lines
             pst_timezone = pytz.timezone(LOGGING_TIMEZONE)
             timestamp = datetime.now(pst_timezone).strftime("%Y-%m-%d %I:%M:%S %p PST")
