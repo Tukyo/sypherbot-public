@@ -81,14 +81,14 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     match = re.match(PROMPT_PATTERN, message_text, re.IGNORECASE)
     if not match and not get_conversation(user_id, group_id):  # Skip if no "hey sypher" and no active conversation
         print("No ongoing conversation and no trigger phrase provided...")
-        return
+        return None
     
     query = match.group(2).strip() if match else message_text.strip()  # Extract the query (everything after the trigger phrase)
     if not query: # If there is no query just provide a generic response
         generic_greeting = random.choice(GENERIC_REPLIES)
         update.message.reply_text(generic_greeting)
         print(f"Received 'hey sypher' with no query from a user in chat {update.message.chat_id}")
-        return
+        return generic_greeting
     
     print(f"Received 'hey sypher' with a query from a user in chat {update.message.chat_id}")
 
@@ -103,7 +103,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 
     if not dictionary: # You'll always find a dictionary with default values, so if not found, error occurred
         print(f"No dictionary found for chat {update.message.chat_id}. Proceeding without group-specific context.")
-        return
+        return None
 
     intent = determine_intent(query, dictionary)
     print(f"Determined intent: {intent}")
@@ -137,16 +137,19 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         )
         response_message = openai_response.choices[0].message.content.strip()  # Extract the response text
     except Exception as e:
-        update.message.reply_text("Sorry, I couldn't process your request. Try again later.")
+        error_reply = update.message.reply_text("Sorry, I couldn't process your request. Try again later.")
         print(f"OpenAI API error: {e}")
-        return
+        return error_reply
 
     if response_message:  # Send the response back to the user
         update.message.reply_text(response_message)
         print(f"Response in chat {update.message.chat_id}: {response_message}")
+        return response_message
     else:
         error_reply = random.choice(ERROR_REPLIES)
         update.message.reply_text(error_reply)
+        print("Error determining response, sending a random error reply")
+        return error_reply
 ##
 # The following function is used to classify the user's intent based on the query and group context
 # The AI is prompted with the query and group context to determine the user's intent
