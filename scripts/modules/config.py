@@ -4,7 +4,7 @@ import json
 from web3 import Web3
 
 #region Global Variables
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")) # Go up twice to reach the root directory
 SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
 MODULES_DIR = os.path.join(SCRIPTS_DIR, "modules")
 CONFIG_DIR = os.path.join(ROOT_DIR, "config")
