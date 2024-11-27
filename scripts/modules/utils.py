@@ -416,7 +416,7 @@ def rate_limit_check(chat_id: str) -> bool: # Later TODO: Implement rate limitin
 ## CONGECKO API
 coingecko_api = "https://api.coingecko.com/api/v3/"
 ### Rate limit using free tier of 30 calls/min and a monthly cap of 10,000 calls
-def fetch_trending_coins():
+def fetch_trending_coins(update, context):
     try:
         response = requests.get(f"{coingecko_api}search/trending")
         response.raise_for_status()
@@ -444,7 +444,7 @@ def fetch_token_price(token):
 ## ALTERNATIVE ME API
 alternative_me_api = "https://api.alternative.me/"
 ### Rate limit 60 requests per minute over a 10 minute window
-def fetch_fear_greed_index():
+def fetch_fear_greed_index(update, context):
     try:
         response = requests.get(f"{alternative_me_api}fng/")
         response.raise_for_status()
