@@ -10,7 +10,7 @@ from telegram.ext import CallbackContext
 # {config.py} - Environment variables and global variables used in the bot
 # {firebase.py} - Firebase configuration and database initialization
 # {utils.py} - Utility functions and variables used in the bot
-from scripts import config, logger, utils
+from modules import config, logger, utils
 
 sys.stdout = logger.StdoutWrapper()  # Redirect stdout
 sys.stderr = logger.StderrWrapper()  # Redirect stderr
@@ -19,7 +19,6 @@ sys.stderr = logger.StderrWrapper()  # Redirect stderr
 MAX_INTENT_TOKENS = 20  # Maximum tokens for intent classification
 MAX_RESPONSE_TOKENS = 100  # Maximum tokens for OpenAI response
 TEMPERATURE = 0.7  # AI creativity level
-TRIGGER_PHRASES = ["hey sypher", "hey sypherbot"]  # Trigger phrases
 OPENAI_MODEL = "gpt-3.5-turbo"  # OpenAI model to use
 PROMPT_PATTERN = r"^(hey sypher(?:bot)?)\s*(.*)$"  # Matches "hey sypher" or "hey sypherbot" at the start
 
@@ -77,20 +76,27 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     message_text = update.message.text.strip()
     user_id = update.message.from_user.id
     group_id = update.message.chat_id
+
+    replied_message = update.message.reply_to_message.text if update.message.reply_to_message else None # Check if the message is a reply to a bot message
+    if replied_message is not None:
+        last_response = replied_message
+        print(f"Received a reply to a bot message: '{replied_message}' from user {user_id} in chat {group_id}: '{message_text}'")
+
+    if last_response is not None and replied_message is None:
+        match = re.match(PROMPT_PATTERN, message_text, re.IGNORECASE)
+        if not match and not get_conversation(user_id, group_id):  # Skip if no "hey sypher" and no active conversation
+            print("No ongoing conversation and no trigger phrase provided...")
+            return None
     
-    match = re.match(PROMPT_PATTERN, message_text, re.IGNORECASE)
-    if not match and not get_conversation(user_id, group_id):  # Skip if no "hey sypher" and no active conversation
-        print("No ongoing conversation and no trigger phrase provided...")
-        return None
+    if replied_message is None:
+        query = match.group(2).strip() if match else message_text.strip()  # Extract the query (everything after the trigger phrase)
+        if not query: # If there is no query just provide a generic response
+            generic_greeting = random.choice(GENERIC_REPLIES)
+            update.message.reply_text(generic_greeting)
+            print(f"Received 'hey sypher' with no query from a user in chat {update.message.chat_id}")
+            return generic_greeting
     
-    query = match.group(2).strip() if match else message_text.strip()  # Extract the query (everything after the trigger phrase)
-    if not query: # If there is no query just provide a generic response
-        generic_greeting = random.choice(GENERIC_REPLIES)
-        update.message.reply_text(generic_greeting)
-        print(f"Received 'hey sypher' with no query from a user in chat {update.message.chat_id}")
-        return generic_greeting
-    
-    print(f"Processing 'hey sypher' query from user {user_id} in chat {group_id}: {query}")
+    print(f"Processing query from user {user_id} in chat {group_id}: {query}")
 
     # Admin dictionary MIGHT be too big for processing correctly with 10 tokens...
     # LATER TODO: Implement a way to split the dictionary into smaller chunks for processing
@@ -117,7 +123,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 
     messages = [
         {"role": "system", "content": (
-            "You are SypherBot, a smart and engaging assistant for Telegram groups. "
+            "You are SypherBot a smart telegram bot created by Tukyo. "
             "Your users are mostly degens and crypto traders. "
             "Answer accurately using group context and intent. Keep responses concise and under 40 words unless more detail is requested. "
             "Be professional, engaging, and use humor sparingly, especially with memes. "
@@ -220,9 +226,3 @@ def get_conversation(user_id, group_id): # Get the conversation state for a user
     return ongoing_conversations.get((user_id, group_id))
 ##
 #endregion Conversation Management
-
-def main():
-    initialize_openai()
-
-if __name__ == "__main__":
-    main()

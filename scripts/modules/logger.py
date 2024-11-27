@@ -4,7 +4,7 @@ from telegram import Bot
 from threading import Timer
 from datetime import datetime
 
-from scripts import config
+from modules import config
 
 #region LOGGING
 bot = Bot(token=config.TELEGRAM_TOKEN)

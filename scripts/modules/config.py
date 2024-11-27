@@ -4,6 +4,12 @@ import json
 from web3 import Web3
 
 #region Global Variables
+ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
+SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
+MODULES_DIR = os.path.join(SCRIPTS_DIR, "modules")
+CONFIG_DIR = os.path.join(ROOT_DIR, "config")
+ASSETS_DIR = os.path.join(ROOT_DIR, "assets")
+
 TELEGRAM_TOKEN = os.getenv('BOT_API_TOKEN')
 
 API_ID = os.getenv('API_ID')
@@ -124,8 +130,7 @@ def initialize_chainlink():
     eth_web3_instance = WEB3_INSTANCES['ETHEREUM']
     chainlink_eth_usd_address = eth_web3_instance.to_checksum_address('0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419')
 
-    base_dir = os.path.dirname(os.path.dirname(__file__))
-    chainlink_abi_path = os.path.join(base_dir, "config", "chainlink.abi.json")
+    chainlink_abi_path = os.path.join(CONFIG_DIR, "chainlink.abi.json")
 
     with open(chainlink_abi_path, "r") as abi_file:
         chainlink_abi = json.load(abi_file)

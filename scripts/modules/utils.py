@@ -1,11 +1,15 @@
 import sys
 import time
+import requests
 from telegram import Update
 from telegram.ext import CallbackContext
 from cachetools import TTLCache
 
-from scripts import firebase # Import the Firebase module from the scripts folder for fetching group info
-from scripts import config # Import the config module from the scripts folder for global variables
+from firebase_admin import firestore
+from datetime import datetime, timedelta, timezone
+
+# Import the necessary modules from the modules folder
+from modules import config, firebase
 
 #region Message Tracking
 bot_messages = []
@@ -85,6 +89,63 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
         print(f"User {user_id} is not the owner of group {chat_id}")
 
     return user_is_owner
+
+def is_user_trusted(update: Update, context: CallbackContext) -> None:
+    user_id = str(update.effective_user.id)
+    group_id = str(update.effective_chat.id)
+
+    group_data = fetch_group_info(update, context)
+    if not group_data:
+        print(f"No group data found for group {group_id}. Assuming Sypher Trust is not enabled.")
+        return False
+
+    sypher_trust_enabled = group_data.get('premium_features', {}).get('sypher_trust', False) # Verify if Sypher Trust is enabled
+    if not sypher_trust_enabled:
+        print(f"Sypher Trust is not enabled for group {group_id}. Allowing user {user_id}.")
+        return True
+
+    untrusted_users = group_data.get('untrusted_users', {}) # Check if the user is in untrusted_users
+    user_data = untrusted_users.get(user_id)
+    if not user_data:
+        print(f"User {user_id} is not in untrusted_users for group {group_id}. Assuming trusted.")
+        return True
+
+    try: # Try to get user's time
+        user_added_time = datetime.fromisoformat(user_data)
+    except ValueError:
+        print(f"Invalid timestamp format for user {user_id} in untrusted_users. Assuming untrusted.")
+        return False
+
+    current_time = datetime.now(timezone.utc)
+    time_elapsed = current_time - user_added_time
+
+    sypher_trust_preferences = group_data.get('premium_features', {}).get('sypher_trust_preferences', 'moderate') # Determine trust preferences, default to moderate
+    trust_durations = {
+        'relaxed': timedelta(days=config.RELAXED_TRUST),
+        'moderate': timedelta(days=config.MODERATE_TRUST),
+        'strict': timedelta(days=config.STRICT_TRUST),
+    }
+    trust_duration = trust_durations.get(sypher_trust_preferences)
+
+    if not trust_duration:
+        print(f"Invalid sypher trust preference: {sypher_trust_preferences}. Defaulting to untrusted.")
+        return False
+
+    if time_elapsed >= trust_duration: # Check if sufficient time has passed
+        print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Removing from untrusted_users.")
+        firebase.DATABASE.collection('groups').document(group_id).update({f'untrusted_users.{user_id}': firestore.DELETE_FIELD})
+        clear_group_cache(group_id) # Clear the cache on all database updates
+        return True
+    else:
+        print(f"User {user_id} has been in untrusted_users for {time_elapsed}. Still untrusted.")
+        return False
+
+def is_reply_to_bot(update: Update, context: CallbackContext) -> bool:
+    return ( # Check if the message is a reply to this bot
+        update.message.reply_to_message and
+        update.message.reply_to_message.from_user and
+        update.message.reply_to_message.from_user.id == context.bot.id
+    )
 #endregion User Permissions
 ##
 #
@@ -239,6 +300,16 @@ def fetch_group_token(group_data: dict, update: Update, context: CallbackContext
 
     print(f"All token data fetched: {token_data}")
     return token_data
+
+def fetch_command_status(update: Update, context: CallbackContext, command: str) -> bool:
+    group_data = fetch_group_info(update, context)
+
+    if not group_data:
+        print(f"No group data found for group {update.effective_chat.id}. Defaulting '{command}' to disabled.")
+        return False
+
+    commands = group_data.get('commands', {})
+    return commands.get(command, False)  # Default to False if the command is not explicitly set
 #endregion Group Data
 ##
 #
@@ -338,3 +409,43 @@ def rate_limit_check(chat_id: str) -> bool: # Later TODO: Implement rate limitin
 
     return True
 #endregion Rate Limiting
+##
+#
+##
+#region External APIs
+## CONGECKO API
+coingecko_api = "https://api.coingecko.com/api/v3/"
+### Rate limit using free tier of 30 calls/min and a monthly cap of 10,000 calls
+def fetch_trending_coins():
+    try:
+        response = requests.get(f"{coingecko_api}search/trending")
+        response.raise_for_status()
+        data = response.json()
+        trending_coins = [item['item']['name'] for item in data['coins']]
+        return trending_coins
+    except Exception as e:
+        print(f"Error fetching trending coins: {e}")
+        return None
+def fetch_token_price(token):
+    try:
+        response = requests.get(f"{coingecko_api}simple/price?ids={token}&vs_currencies=usd")
+        response.raise_for_status()
+        data = response.json()
+        token_price = data[token]['usd']
+        return token_price
+    except Exception as e:
+        print(f"Error fetching token price: {e}")
+## ALTERNATIVE ME API
+alternative_me_api = "https://api.alternative.me/"
+### Rate limit 60 requests per minute over a 10 minute window
+def fetch_fear_greed_index():
+    try:
+        response = requests.get(f"{alternative_me_api}fng/")
+        response.raise_for_status()
+        data = response.json()
+        fng_index = data['data'][0]['value']
+        return fng_index
+    except Exception as e:
+        print(f"Error fetching Fear & Greed Index: {e}")
+        return None
+#endregion External APIs
