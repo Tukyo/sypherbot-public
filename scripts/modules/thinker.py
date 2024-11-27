@@ -79,6 +79,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 
     replied_message = update.message.reply_to_message.text if update.message.reply_to_message else None # Check if the message is a reply to a bot message
     if replied_message is not None:
+        last_response = None
         query = message_text.strip()
         print(f"Received a reply to a bot message: '{replied_message}' from user {user_id} in chat {group_id}: '{message_text}'")
 
