@@ -79,7 +79,6 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 
     replied_message = update.message.reply_to_message.text if update.message.reply_to_message else None # Check if the message is a reply to a bot message
     if replied_message is not None:
-        last_response = replied_message
         query = message_text.strip()
         print(f"Received a reply to a bot message: '{replied_message}' from user {user_id} in chat {group_id}: '{message_text}'")
 
@@ -112,12 +111,18 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         return None
 
     last_response = get_conversation_context(user_id, group_id) # Get the last response for the user in the group
-    intent = determine_intent(query, dictionary, last_response) # Determine the user's intent based on the query and group context
-    print(f"Determined intent: {intent}")
+    if last_response is not None:
+        intent = determine_intent(query, dictionary, last_response) # Determine the user's intent based on the query and group context
+        print(f"Determined intent: {intent}")
+    elif replied_message is not None:
+        intent = determine_intent(query, dictionary, None, replied_message)
+        print(f"Determined intent: {intent}")
     
     context_info = f"Context: {dictionary}\n"
     if intent == "continue_conversation":
         context_info += f"Previous Response: {last_response}\nQuery: {query}\n"
+    elif intent == "reply_to_message":
+        context_info += f"Replied Message: {replied_message}\nQuery: {query}\n" 
     else:
         context_info += f"Query: {query}\nIntent: {intent}\n"
         print("No previous response found in conversation context.")
@@ -159,10 +164,14 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 # The following function is used to classify the user's intent based on the query and group context
 # The AI is prompted with the query and group context to determine the user's intent
 ##
-def determine_intent(query: str, group_dictionary: dict, last_response: str = None) -> str:
+def determine_intent(query: str, group_dictionary: dict, last_response: str = None, replied_msg: str = None) -> str:
     if last_response:  # Prioritize conversation continuation
         print("Intent Classification: continue_conversation")
         return "continue_conversation"
+
+    if replied_msg:
+        print("Intent Classification: reply_to_message")
+        return "reply_to_message"
     
     classification_prompt = (
         "Analyze the following query and classify it based on the context provided below. "
