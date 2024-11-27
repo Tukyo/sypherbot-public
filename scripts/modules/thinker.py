@@ -83,6 +83,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         query = message_text.strip()
         print(f"Received a reply to a bot message: '{replied_message}' from user {user_id} in chat {group_id}: '{message_text}'")
 
+    last_response = get_conversation_context(user_id, group_id) # Get the last response for the user in the group
     if last_response is not None and replied_message is None:
         match = re.match(PROMPT_PATTERN, message_text, re.IGNORECASE)
         if not match and not get_conversation(user_id, group_id):  # Skip if no "hey sypher" and no active conversation
@@ -110,8 +111,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if not dictionary: # You'll always find a dictionary with default values, so if not found, error occurred
         print(f"No dictionary found for chat {update.message.chat_id}. Proceeding without group-specific context.")
         return None
-
-    last_response = get_conversation_context(user_id, group_id) # Get the last response for the user in the group
+    
     if last_response is not None:
         intent = determine_intent(query, dictionary, last_response) # Determine the user's intent based on the query and group context
         print(f"Determined intent: {intent}")
