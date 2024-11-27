@@ -80,6 +80,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     replied_message = update.message.reply_to_message.text if update.message.reply_to_message else None # Check if the message is a reply to a bot message
     if replied_message is not None:
         last_response = replied_message
+        query = message_text.strip()
         print(f"Received a reply to a bot message: '{replied_message}' from user {user_id} in chat {group_id}: '{message_text}'")
 
     if last_response is not None and replied_message is None:
@@ -96,8 +97,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
             print(f"Received 'hey sypher' with no query from a user in chat {update.message.chat_id}")
             return generic_greeting
     
-    if query is not None:
-        print(f"Processing query from user {user_id} in chat {group_id}: {query}")
+    print(f"Processing query from user {user_id} in chat {group_id}: {query}")
 
     # Admin dictionary MIGHT be too big for processing correctly with 10 tokens...
     # LATER TODO: Implement a way to split the dictionary into smaller chunks for processing
