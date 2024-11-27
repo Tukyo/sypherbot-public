@@ -19,7 +19,7 @@ sys.stderr = logger.StderrWrapper()  # Redirect stderr
 MAX_INTENT_TOKENS = 20  # Maximum tokens for intent classification
 MAX_RESPONSE_TOKENS = 100  # Maximum tokens for OpenAI response
 TEMPERATURE = 0.7  # AI creativity level
-OPENAI_MODEL = "gpt-3.5-turbo"  # OpenAI model to use
+OPENAI_MODEL = "gpt-4"  # OpenAI model to use
 PROMPT_PATTERN = r"^(hey sypher(?:bot)?)\s*(.*)$"  # Matches "hey sypher" or "hey sypherbot" at the start
 
 ongoing_conversations = {} # Dictionary to store ongoing conversations
