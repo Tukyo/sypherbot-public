@@ -96,7 +96,8 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
             print(f"Received 'hey sypher' with no query from a user in chat {update.message.chat_id}")
             return generic_greeting
     
-    print(f"Processing query from user {user_id} in chat {group_id}: {query}")
+    if query is not None:
+        print(f"Processing query from user {user_id} in chat {group_id}: {query}")
 
     # Admin dictionary MIGHT be too big for processing correctly with 10 tokens...
     # LATER TODO: Implement a way to split the dictionary into smaller chunks for processing
