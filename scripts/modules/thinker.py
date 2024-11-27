@@ -327,12 +327,13 @@ FUNCTION_REGISTRY = {
         ]
     }
 }
-def match_function_by_keywords(query: str): # Fallback function if intent is not determined to match keywords in the message
-    query = query.lower() # Convert the query to lowercase for case-insensitive matching
-
-    for details in FUNCTION_REGISTRY.items():
+def match_function_by_keywords(query: str):
+    query = query.lower()
+    for _, details in FUNCTION_REGISTRY.items():
         for keyword in details["keywords"]:
-            if keyword.lower() in query.lower():
-                return details["function"]  # Return the matched function
+            if keyword.lower() in query:
+                print(f"Matched keyword: {keyword}, Function: {details['function'].__name__}")
+                return details["function"]
+    print("No matching keyword found.")
     return None
 #endregion Function Handling & Registry
