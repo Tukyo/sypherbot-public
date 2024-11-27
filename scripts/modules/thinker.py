@@ -112,7 +112,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         print(f"No dictionary found for chat {update.message.chat_id}. Proceeding without group-specific context.")
         return None
     
-    if last_response is not None:
+    if last_response is not None and replied_message is None:
         intent = determine_intent(query, dictionary, last_response) # Determine the user's intent based on the query and group context
         print(f"Determined intent: {intent}")
     elif replied_message is not None:
