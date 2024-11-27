@@ -114,13 +114,17 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         return None
     
     if last_response is not None and replied_message is None:
-        intent = determine_intent(query, dictionary, last_response) # Determine the user's intent based on the query and group context
+        filtered_dictionary = filter_dictionary(query, dictionary, None, last_response)
+        intent = determine_intent(query, filtered_dictionary, last_response) # Determine the user's intent based on the query and group context
         print(f"Determined intent: {intent}")
     elif replied_message is not None:
-        intent = determine_intent(query, dictionary, None, replied_message)
+        filtered_dictionary = filter_dictionary(query, dictionary, replied_message)
+        intent = determine_intent(query, filtered_dictionary, None, replied_message)
         print(f"Determined intent: {intent}")
+
+    filtered_dictionary = filter_dictionary(query, dictionary, None, None)
     
-    context_info = f"Context: {dictionary}\n"
+    context_info = f"Context: {filtered_dictionary}\n"
     if intent == "continue_conversation":
         context_info += f"Previous Response: {last_response}\nQuery: {query}\n"
     elif intent == "reply_to_message":
@@ -238,3 +242,21 @@ def get_conversation(user_id, group_id): # Get the conversation state for a user
     return ongoing_conversations.get((user_id, group_id))
 ##
 #endregion Conversation Management
+##
+#
+##
+#region Dictionary Filtering
+# Filters the dictionary to include only relevant entries based on the query, replied message, or last response.
+def filter_dictionary(query, dictionary, replied_message=None, last_response=None):
+    query = query.lower() # Convert the query to lowercase for case-insensitive matching
+
+    if replied_message: # Include entries related to the replied message
+        relevant_keys = [key for key in dictionary if key in replied_message.lower()]
+    elif last_response: # Include entries related to the last response
+        relevant_keys = [key for key in dictionary if key in last_response.lower()]
+    else: # Default to entries related to the query
+        relevant_keys = [key for key in dictionary if key in query.lower()]
+    
+    print(f"Filtered dictionary keys: {relevant_keys}")
+    return {key: dictionary[key] for key in relevant_keys} # Return a filtered dictionary with only relevant keys
+#endregion Dictionary Filtering
