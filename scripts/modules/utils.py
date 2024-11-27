@@ -422,19 +422,25 @@ def fetch_trending_coins():
         response.raise_for_status()
         data = response.json()
         trending_coins = [item['item']['name'] for item in data['coins']]
-        return trending_coins
-    except Exception as e:
+        return trending_coins if trending_coins else ["No trending coins found."]
+    except requests.exceptions.RequestException as e:
         print(f"Error fetching trending coins: {e}")
-        return None
+        return ["Error: Unable to fetch trending coins due to a network issue."]
+    except KeyError as e:
+        print(f"Unexpected response structure: {e}")
+        return ["Error: The API response format has changed, unable to process."]
 def fetch_token_price(token):
     try:
         response = requests.get(f"{coingecko_api}simple/price?ids={token}&vs_currencies=usd")
         response.raise_for_status()
         data = response.json()
-        token_price = data[token]['usd']
-        return token_price
-    except Exception as e:
-        print(f"Error fetching token price: {e}")
+        return data[token]['usd'] if token in data and 'usd' in data[token] else f"Token price for {token} not available."
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching token price for {token}: {e}")
+        return f"Error: Unable to fetch the price for {token} due to a network issue."
+    except KeyError as e:
+        print(f"Unexpected response structure for {token}: {e}")
+        return f"Error: Response structure changed, unable to fetch price for {token}."
 ## ALTERNATIVE ME API
 alternative_me_api = "https://api.alternative.me/"
 ### Rate limit 60 requests per minute over a 10 minute window
@@ -444,8 +450,11 @@ def fetch_fear_greed_index():
         response.raise_for_status()
         data = response.json()
         fng_index = data['data'][0]['value']
-        return fng_index
-    except Exception as e:
+        return f"Fear & Greed Index: {fng_index}" if fng_index else "Fear & Greed Index data is unavailable."
+    except requests.exceptions.RequestException as e:
         print(f"Error fetching Fear & Greed Index: {e}")
-        return None
+        return "Error: Unable to fetch Fear & Greed Index due to a network issue."
+    except KeyError as e:
+        print(f"Unexpected response structure: {e}")
+        return "Error: Response structure changed, unable to fetch Fear & Greed Index."
 #endregion External APIs

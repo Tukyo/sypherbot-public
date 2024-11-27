@@ -123,7 +123,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         print(f"Determined intent: {intent}")
 
     filtered_dictionary = filter_dictionary(query, dictionary, None, None)
-    
+
     context_info = f"Context: {filtered_dictionary}\n"
     if intent == "continue_conversation":
         context_info += f"Previous Response: {last_response}\nQuery: {query}\n"
@@ -133,12 +133,37 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         context_info += f"Query: {query}\nIntent: {intent}\n"
         print("No previous response found in conversation context.")
 
+    matched_function = ( # After determining the intent, check if a function should be called
+        FUNCTION_REGISTRY.get(intent, {}).get("function")  # Match by intent first
+        or match_function_by_keywords(query)  # Fallback to keyword-based matching
+    )
+
+    if matched_function:  # If a function is matched
+        try:
+            result = matched_function(update, context) 
+            if result:
+                if isinstance(result, list):  # For list outputs, like trending coins
+                    formatted_result = "Function Result:\n" + "\n".join(f"- {item}" for item in result)
+                elif isinstance(result, dict):  # For dictionary outputs
+                    formatted_result = "Function Result:\n" + "\n".join(f"{key}: {value}" for key, value in result.items())
+                else:  # For plain strings or numbers
+                    formatted_result = f"Function Result:\n{result}"
+
+                context_info += f"\n{formatted_result}\n"
+        except Exception as e:
+            print(f"Error executing function: {e}")
+            error_reply = random.choice(ERROR_REPLIES)
+            update.message.reply_text(error_reply)
+            return error_reply
+    
+    print(f"Context for prompt: {context_info}")
+
     messages = [
         {"role": "system", "content": (
-            "You are SypherBot a smart telegram bot created by Tukyo. "
+            "You are Sypherbot a smart telegram bot created by Tukyo. "
             "Your users are mostly degens and crypto traders. "
             "Answer accurately using group context and intent. Keep responses concise and under 40 words unless more detail is requested. "
-            "Be professional, engaging, and use humor sparingly, especially with memes. "
+            "Do not add generic offers for assistance or polite endings. "
             "Never cut off responses mid-thought."
         )},
         {"role": "user", "content": context_info}
@@ -260,3 +285,52 @@ def filter_dictionary(query, dictionary, replied_message=None, last_response=Non
     print(f"Filtered dictionary keys: {relevant_keys}")
     return {key: dictionary[key] for key in relevant_keys} # Return a filtered dictionary with only relevant keys
 #endregion Dictionary Filtering
+##
+#
+##
+#region Function Handling & Registry
+# The following functions are used to handle specific commands or queries from users
+# Each function is associated with a specific context and keywords for matching
+# The function registry stores the available functions and their metadata
+##
+FUNCTION_REGISTRY = {
+    "fetch_trending_coins": {
+        "function": utils.fetch_trending_coins,
+        "description": "Fetch trending cryptocurrency coins from CoinGecko.",
+        "context": "crypto",
+        "keywords": [
+            "trending", "trending coins", "crypto trends", "popular coins", "hot coins",
+            "top coins", "trending crypto", "top cryptocurrencies", "what's trending",
+            "crypto trending"
+        ]
+    },
+    "fetch_token_price": {
+        "function": utils.fetch_token_price,
+        "description": "Fetch the current price of a specific token from CoinGecko.",
+        "context": "crypto",
+        "keywords": [
+            "price", "token price", "crypto price", "current price", "how much is",
+            "usd value", "crypto value", "price of", "cost of", "price check",
+            "token value", "value in usd", "check price"
+        ]
+    },
+    "fetch_fear_greed_index": {
+        "function": utils.fetch_fear_greed_index,
+        "description": "Fetch the current Fear & Greed Index for cryptocurrency sentiment.",
+        "context": "sentiment",
+        "keywords": [
+            "fear", "greed", "fear and greed", "market sentiment", "crypto sentiment",
+            "sentiment index", "fng index", "market fear", "market greed", "market emotions",
+            "crypto fear", "crypto greed", "current sentiment"
+        ]
+    }
+}
+def match_function_by_keywords(query: str): # Fallback function if intent is not determined to match keywords in the message
+    query = query.lower() # Convert the query to lowercase for case-insensitive matching
+
+    for details in FUNCTION_REGISTRY.items():
+        for keyword in details["keywords"]:
+            if keyword.lower() in query.lower():
+                return details["function"]  # Return the matched function
+    return None
+#endregion Function Handling & Registry
