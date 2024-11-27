@@ -336,7 +336,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         return
     
     if utils.is_user_admin(update, context):
-        setup.setup.handle_setup_inputs_from_admin(update, context)
+        setup.handle_setup_inputs_from_admin(update, context) # LATER TODO: Add context to know when admin is in setup 
         handle_guess(update, context)
         handle_AI_prompt(update, context)
         return
