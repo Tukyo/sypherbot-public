@@ -436,7 +436,7 @@ def handle_AI_prompt(update: Update, context: CallbackContext) -> None:
             if last_response:  # Ensure a valid response exists
                 thinker.start_conversation(user_id, group_id, last_response)
         else:
-            print(f"Message ignored from user {user_id} in group {group_id}: {msg}")
+            print(f"Message ignored for AI handling from user {user_id} in group {group_id}: {msg}")
 
 def handle_image(update: Update, context: CallbackContext) -> None:
     if not update.message or not update.message.from_user:

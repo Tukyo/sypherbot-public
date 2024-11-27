@@ -77,6 +77,8 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     group_id = update.message.chat_id
 
+    match = re.match(PROMPT_PATTERN, message_text, re.IGNORECASE)  # Check if the message starts with the trigger phrase
+
     replied_message = update.message.reply_to_message.text if update.message.reply_to_message else None # Check if the message is a reply to a bot message
     if replied_message is not None:
         last_response = None
@@ -85,7 +87,6 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 
     last_response = get_conversation_context(user_id, group_id) # Get the last response for the user in the group
     if last_response is not None and replied_message is None:
-        match = re.match(PROMPT_PATTERN, message_text, re.IGNORECASE)
         if not match and not get_conversation(user_id, group_id):  # Skip if no "hey sypher" and no active conversation
             print("No ongoing conversation and no trigger phrase provided...")
             return None
