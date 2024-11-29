@@ -169,6 +169,7 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     inviter = update.message.from_user
 
     if any(member.id != context.bot.id for member in new_members):
+        delete_service_messages(update, context)
         return  # Bot wasn't added
 
     group_id = update.effective_chat.id
@@ -756,7 +757,7 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                     )
                 else:
                     print(f"Group {group_id} has premium features enabled, and a header uploaded... Determining media type.")
-                    
+
                 if welcome_media_url.endswith('.gif') or welcome_media_url.endswith('.mp4'): # Determine the correct method to send media
                     msg = update.message.reply_animation(
                         animation=welcome_media_url,
@@ -1048,8 +1049,8 @@ def authenticate_user(context, group_id, user_id):
 
 def authentication_failed(update: Update, context: CallbackContext, group_id, user_id):
     print(f"Authentication failed for user {user_id} in group {group_id}")
-    group_doc = utils.fetch_group_info(update, context, return_doc=True)
-    group_data = group_doc.get().to_dict() 
+    group_doc = utils.fetch_group_info(update, context, return_doc=True, group_id=group_id)
+    group_data = group_doc.get().to_dict()
 
     if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
         group_data['unverified_users'][user_id] = None
