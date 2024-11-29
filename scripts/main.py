@@ -327,7 +327,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
-    username = update.message.from_user.username or update.message.from_user.first_name    
+    username = utils.get_username(update)  
     msg = update.message.text
 
     if not msg:
@@ -448,7 +448,7 @@ def handle_image(update: Update, context: CallbackContext) -> None:
     
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
-    username = update.message.from_user.username or update.message.from_user.first_name
+    username = utils.get_username(update)
     msg = None
 
     if utils.is_user_admin(update, context):
@@ -481,7 +481,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
     user_id = update.message.from_user.id
     chat_id = update.message.chat.id
-    username = update.message.from_user.username or update.message.from_user.first_name
+    username = utils.get_username(update)
     msg = None
 
     if anti_spam.is_spam(user_id, chat_id):
@@ -756,9 +756,8 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                     )
                 else:
                     print(f"Group {group_id} has premium features enabled, and a header uploaded... Determining media type.")
-
-                # Determine the correct method to send media
-                if welcome_media_url.endswith('.gif') or welcome_media_url.endswith('.mp4'):
+                    
+                if welcome_media_url.endswith('.gif') or welcome_media_url.endswith('.mp4'): # Determine the correct method to send media
                     msg = update.message.reply_animation(
                         animation=welcome_media_url,
                         caption=f"Welcome to {group_name}! Please press the button below to authenticate.",

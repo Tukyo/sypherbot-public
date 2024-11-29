@@ -364,6 +364,12 @@ def get_query_info(update, get_user=True):
     else:
         print(f"Query data returned without user_id")
         return query  # Return only the query if get_user is False
+
+def get_username(update: Update) -> str:
+    username = update.message.from_user.username or update.message.from_user.first_name or "Unknown User"
+    print(f"Username fetched: {username}")
+
+    return username
 #endregion Querying
 ##
 #

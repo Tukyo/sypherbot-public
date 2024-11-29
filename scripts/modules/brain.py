@@ -14,16 +14,16 @@ from modules import config, utils
 # Configuration variables for easy adjustment
 MAX_INTENT_TOKENS = 20  # Maximum tokens for intent classification
 MAX_RESPONSE_TOKENS = 100  # Maximum tokens for OpenAI response
-TEMPERATURE = 0.6  # AI creativity level
+TEMPERATURE = 0.4  # AI creativity level
 FREQUENCY = 1  # AI repetition penalty
-PRESENCE = 0.5  # AI context awareness
+PRESENCE = 0.25  # AI context awareness
 OPENAI_MODEL = "gpt-4o-mini"  # OpenAI model to use
 PROMPT_PATTERN = r"^(hey sypher(?:bot)?)\s*(.*)$"  # Matches "hey sypher" or "hey sypherbot" at the start
 
 ongoing_conversations = {} # Dictionary to store ongoing conversations
-RESPONSE_CACHE_SIZE = 25  # Number of responses to cache
+RESPONSE_CACHE_SIZE = 10  # Number of responses to cache
 response_cache = {} # Cached response mapping per user for the AI to use (clears daily)
-prompt_timeout = 10  # Timeout for conversation prompts in seconds
+PROMPT_TIMEOUT = 10  # Timeout for conversation prompts in seconds
 
 ERROR_REPLIES = [
     "Sorry, I didn't understand that. Please try rephrasing.",
@@ -68,14 +68,15 @@ def initialize_openai():
     openai.api_key = config.OPENAI_API_KEY
     print("OpenAI API initialized.")
 
-#region Prompt & Intention
+#region Prompt Handling
+##
 # The following function is used to handle incoming messages and prompt the AI for a response
 # The AI is prompted with the user's query and the group's context to generate a response
-##
 def prompt_handler(update: Update, context: CallbackContext) -> None:
     message_text = update.message.text.strip()
     user_id = update.message.from_user.id
     group_id = update.message.chat_id
+    username = utils.get_username(update)
 
     match = re.match(PROMPT_PATTERN, message_text, re.IGNORECASE)  # Check if the message starts with the trigger phrase
 
@@ -116,58 +117,20 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if last_response is not None and replied_message is None: # Last response is found
         filtered_dictionary = filter_dictionary(query, dictionary, None, last_response)
         intent = determine_intent(query, filtered_dictionary, last_response, None) # Determine the user's intent based on the query and group context
-        print(f"Determined intent: {intent}")
+        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, last_response, None)
     elif replied_message is not None: # Replied message is found
         filtered_dictionary = filter_dictionary(query, dictionary, replied_message)
         intent = determine_intent(query, filtered_dictionary, None, replied_message)
-        print(f"Determined intent: {intent}")
+        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, None, replied_message)
     else: # Neither last response nor replied message is found, most likely a new "hey sypher" message
         filtered_dictionary = filter_dictionary(query, dictionary, None, None)
         intent = determine_intent(query, filtered_dictionary)
-        print(f"Determined intent: {intent}")
-
-    context_info = f"Context: {filtered_dictionary}\n"
-    if intent == "continue_conversation":
-        context_info += f"Previous Response: {last_response}\nQuery: {query}\n"
-    elif intent == "reply_to_message":
-        context_info += f"Replied Message: {replied_message}\nQuery: {query}\n" 
-    else:
-        context_info += f"Query: {query}\nIntent: {intent}\n"
-        print("No previous response found in conversation context.")
-
-    matched_function = ( # After determining the intent, check if a function should be called
-        FUNCTION_REGISTRY.get(intent, {}).get("function")  # Match by intent first
-        or match_function_by_keywords(query)  # Fallback to keyword-based matching
-    )
-
-    if matched_function:  # If a function is matched
-        try:
-            result = matched_function(update, context) 
-            if result:
-                if isinstance(result, list):  # For list outputs, like trending coins
-                    formatted_result = "Function Result:\n" + "\n".join(f"- {item}" for item in result)
-                elif isinstance(result, dict):  # For dictionary outputs
-                    formatted_result = "Function Result:\n" + "\n".join(f"{key}: {value}" for key, value in result.items())
-                else:  # For plain strings or numbers
-                    formatted_result = f"Function Result:\n{result}"
-
-                context_info += f"\n{formatted_result}\n"
-        except Exception as e:
-            print(f"Error executing function: {e}")
-            error_reply = random.choice(ERROR_REPLIES)
-            update.message.reply_text(error_reply)
-            return error_reply
-        
-    cached_interactions = get_interaction_cache(user_id)  # Get the recent responses for the user
-    if cached_interactions is not "No recent responses in cache for this user.":  # If there are cached responses, include them in the context
-        context_info += f"\n{cached_interactions}"
-    
-    print(f"Context for prompt: {context_info}")
+        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, None, None)
 
     messages = [
         {"role": "system", "content": (
             "You are Sypherbot a telegram bot created by Tukyo. "
-            "Your users are mostly degens and crypto traders who appreciate wit, humor, and sarcasm.. "
+            "Your users are mostly degens and crypto traders who sparingly appreciate sarcasm.. "
             "Answer using group context and intent. Keep responses concise and under 40 words unless more detail is requested. "
             "Do not add generic offers for assistance or polite endings. "
             "Never cut off responses mid-thought."
@@ -193,17 +156,21 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if response_message:  # Send the response back to the user
         update.message.reply_text(response_message)
         print(f"Response in chat {update.message.chat_id}: {response_message}")
-        cache_interaction(user_id, query, response_message)
+        cache_interaction(user_id, username, query, response_message)
         return response_message
     else:
         error_reply = random.choice(ERROR_REPLIES)
         update.message.reply_text(error_reply)
         print("Error determining response, sending a random error reply")
         return error_reply
+#endregion Prompt Handling
+##
+#
+##
+#region Intention & Context
 ##
 # The following function is used to classify the user's intent based on the query and group context
 # The AI is prompted with the query and group context to determine the user's intent
-##
 def determine_intent(query: str, group_dictionary: dict, last_response: str = None, replied_msg: str = None) -> str:
     if last_response:  # Prioritize conversation continuation
         print("Intent Classification: continue_conversation")
@@ -234,24 +201,64 @@ def determine_intent(query: str, group_dictionary: dict, last_response: str = No
     except Exception as e:
         print(f"Error determining intent: {e}")
         return "unknown"
-##
-#endregion Prompt & Intention
+    
+def determine_context(update: Update, context: CallbackContext, intent: str, query: str, filtered_dictionary: dict, user_id: str, last_response: str = None, replied_message: str = None) -> str:
+    context_info = f"Context: {filtered_dictionary}\n"
+
+    if intent == "continue_conversation":
+        context_info += f"Previous Response: {last_response}\nQuery: {query}\n"
+    elif intent == "reply_to_message":
+        context_info += f"Replied Message: {replied_message}\nQuery: {query}\n" 
+    else:
+        context_info += f"Query: {query}\nIntent: {intent}\n"
+        print("No previous response found in conversation context.")
+
+    matched_function = ( # After determining the intent, check if a function should be called
+        FUNCTION_REGISTRY.get(intent, {}).get("function")  # Match by intent first
+        or match_function_by_keywords(query)  # Fallback to keyword-based matching
+    )
+
+    if matched_function: # If a function is matched
+        try:
+            result = matched_function(update, context) 
+            if result:
+                if isinstance(result, list):  # For list outputs, like trending coins
+                    formatted_result = "Function Result:\n" + "\n".join(f"- {item}" for item in result)
+                elif isinstance(result, dict):  # For dictionary outputs
+                    formatted_result = "Function Result:\n" + "\n".join(f"{key}: {value}" for key, value in result.items())
+                else:  # For plain strings or numbers
+                    formatted_result = f"Function Result:\n{result}"
+
+                context_info += f"\n{formatted_result}\n"
+        except Exception as e:
+            print(f"Error executing function: {e}")
+            error_reply = random.choice(ERROR_REPLIES)
+            update.message.reply_text(error_reply)
+            return error_reply
+        
+    cached_interactions = get_interaction_cache(user_id)  # Get the recent responses for the user
+    if cached_interactions is not "No recent responses in cache for this user.":  # If there are cached responses, include them in the context
+        context_info += f"\n{cached_interactions}"
+    
+    print(f"Context for prompt: {context_info}")
+    return context_info
+#endregion Intention & Context
 ##   
 #
 ##
 #region Conversation Management
+##
 # The following functions are used to manage ongoing conversations with users in groups
 # The conversation state is stored in the ongoing_conversations dictionary
 # Each conversation is associated with a user_id and group_id
 # The conversation state includes the last response from the bot and a timer to clear the conversation
-##
 def start_conversation(user_id, group_id, last_response): # Start or reset a conversation for a user in a group
     key = (user_id, group_id)
 
     if key in ongoing_conversations: # If the user is already in a conversation, cancel the existing timer
         ongoing_conversations[key]['timer'].cancel()
 
-    timer = Timer(prompt_timeout, clear_conversation, [user_id, group_id]) # Clear the conversation after prompt_timeout
+    timer = Timer(PROMPT_TIMEOUT, clear_conversation, [user_id, group_id]) # Clear the conversation after prompt_timeout
     timer.start()
 
     ongoing_conversations[key] = { # Store the conversation state
@@ -280,24 +287,27 @@ def get_conversation(user_id, group_id): # Get the conversation state for a user
 #
 ##
 #region Caching
-def cache_interaction(user_id, query, response_message):
+def cache_interaction(user_id, username, query, response_message):
     if user_id not in response_cache:
-        response_cache[user_id] = []
+        response_cache[user_id] = {"username": username, "interactions": []}
 
-    if len(response_cache[user_id]) >= RESPONSE_CACHE_SIZE:
-        response_cache[user_id].pop(0)  # Remove the oldest interaction for this user
+    if len(response_cache[user_id]["interactions"]) >= RESPONSE_CACHE_SIZE:
+        response_cache[user_id]["interactions"].pop(0)  # Remove the oldest interaction
 
-    response_cache[user_id].append({"query": query, "response": response_message})
+    response_cache[user_id]["interactions"].append({"query": query, "response": response_message})
 
 def get_interaction_cache(user_id):
-    if user_id not in response_cache or not response_cache[user_id]:
+    if user_id not in response_cache or not response_cache[user_id]["interactions"]:
         return "No recent interactions found for this user."
 
-    cache_summary = "\n".join( # Format the cache as a readable summary
+    username = response_cache[user_id]["username"]
+    interactions = response_cache[user_id]["interactions"]
+    cache_summary = "\n".join(
         f"{i+1}: Q: {interaction['query']} | A: {interaction['response']}"
-        for i, interaction in enumerate(response_cache[user_id])
+        for i, interaction in enumerate(interactions)
     )
-    return f"Recent Interactions for User {user_id}:\n{cache_summary}"
+    return f"Recent Interactions for @{username}:\n{cache_summary}"
+
 #endregion Caching
 ##
 #
@@ -324,7 +334,6 @@ def filter_dictionary(query, dictionary, replied_message=None, last_response=Non
 # The following functions are used to handle specific commands or queries from users
 # Each function is associated with a specific context and keywords for matching
 # The function registry stores the available functions and their metadata
-##
 FUNCTION_REGISTRY = {
     "fetch_trending_coins": {
         "function": utils.fetch_trending_coins,
