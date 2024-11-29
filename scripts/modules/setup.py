@@ -164,7 +164,7 @@ def setup_home_callback(update: Update, context: CallbackContext) -> None:
         update = Update(update.update_id, message=query.message)
 
         if query.data == 'setup_home':
-            setup_home(update, context, user_id)
+            setup_home(update, context)
 
 def setup_home(update: Update, context: CallbackContext) -> None:
     msg = None
