@@ -17,7 +17,7 @@ MAX_RESPONSE_TOKENS = 100  # Maximum tokens for OpenAI response
 TEMPERATURE = 0.6  # AI creativity level
 FREQUENCY = 1  # AI repetition penalty
 PRESENCE = 0.5  # AI context awareness
-OPENAI_MODEL = "gpt-3.5-turbo"  # OpenAI model to use
+OPENAI_MODEL = "gpt-4o-mini"  # OpenAI model to use
 PROMPT_PATTERN = r"^(hey sypher(?:bot)?)\s*(.*)$"  # Matches "hey sypher" or "hey sypherbot" at the start
 
 ongoing_conversations = {} # Dictionary to store ongoing conversations
