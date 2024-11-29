@@ -183,7 +183,7 @@ def determine_intent(query: str, group_dictionary: dict, last_response: str = No
     classification_prompt = (
         "Analyze the following query and classify it based on the context provided below. "
         "Use the context to understand the user's intent and generate a response if necessary. "
-        "If the intent cannot be determined or is unclear, return 'unknown'. "
+        "If the query does not align with the context or is unclear, return 'unknown'. "
         f"\n\nContext:\n{group_dictionary}\n\nQuery:\n{query}"
     )
 
