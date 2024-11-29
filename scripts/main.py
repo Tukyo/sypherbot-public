@@ -169,7 +169,6 @@ def bot_added_to_group(update: Update, context: CallbackContext) -> None:
     inviter = update.message.from_user
 
     if any(member.id != context.bot.id for member in new_members):
-        delete_service_messages(update, context)
         return  # Bot wasn't added
 
     group_id = update.effective_chat.id
@@ -791,6 +790,8 @@ def handle_new_user(update: Update, context: CallbackContext) -> None:
                 when=300, # TODO: Make this after {verification_timeout}
                 context={'chat_id': chat_id, 'message_id': msg.message_id, 'user_id': user_id}
             )
+
+            delete_service_messages(update, context)
 
             if updates:
                 group_doc.update(updates)
