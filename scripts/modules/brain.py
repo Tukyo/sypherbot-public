@@ -117,15 +117,15 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if last_response is not None and replied_message is None: # Last response is found
         filtered_dictionary = filter_dictionary(query, dictionary, None, last_response)
         intent = determine_intent(query, filtered_dictionary, last_response, None) # Determine the user's intent based on the query and group context
-        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, last_response, None)
+        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, username, last_response, None)
     elif replied_message is not None: # Replied message is found
         filtered_dictionary = filter_dictionary(query, dictionary, replied_message)
         intent = determine_intent(query, filtered_dictionary, None, replied_message)
-        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, None, replied_message)
+        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, username, None, replied_message)
     else: # Neither last response nor replied message is found, most likely a new "hey sypher" message
         filtered_dictionary = filter_dictionary(query, dictionary, None, None)
         intent = determine_intent(query, filtered_dictionary)
-        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, None, None)
+        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, username, None, None)
 
     messages = [
         {"role": "system", "content": (
@@ -202,8 +202,9 @@ def determine_intent(query: str, group_dictionary: dict, last_response: str = No
         print(f"Error determining intent: {e}")
         return "unknown"
     
-def determine_context(update: Update, context: CallbackContext, intent: str, query: str, filtered_dictionary: dict, user_id: str, last_response: str = None, replied_message: str = None) -> str:
+def determine_context(update: Update, context: CallbackContext, intent: str, query: str, filtered_dictionary: dict, user_id: str, username: str, last_response: str = None, replied_message: str = None) -> str:
     context_info = f"Context: {filtered_dictionary}\n"
+    context_info += f"Username: @{username}\n"
 
     if intent == "continue_conversation":
         context_info += f"Previous Response: {last_response}\nQuery: {query}\n"
@@ -287,27 +288,24 @@ def get_conversation(user_id, group_id): # Get the conversation state for a user
 #
 ##
 #region Caching
-def cache_interaction(user_id, username, query, response_message):
+def cache_interaction(user_id, query, response_message):
     if user_id not in response_cache:
-        response_cache[user_id] = {"username": username, "interactions": []}
+        response_cache[user_id] = []
 
-    if len(response_cache[user_id]["interactions"]) >= RESPONSE_CACHE_SIZE:
-        response_cache[user_id]["interactions"].pop(0)  # Remove the oldest interaction
+    if len(response_cache[user_id]) >= RESPONSE_CACHE_SIZE:
+        response_cache[user_id].pop(0)  # Remove the oldest interaction for this user
 
-    response_cache[user_id]["interactions"].append({"query": query, "response": response_message})
+    response_cache[user_id].append({"query": query, "response": response_message})
 
 def get_interaction_cache(user_id):
-    if user_id not in response_cache or not response_cache[user_id]["interactions"]:
+    if user_id not in response_cache or not response_cache[user_id]:
         return "No recent interactions found for this user."
 
-    username = response_cache[user_id]["username"]
-    interactions = response_cache[user_id]["interactions"]
-    cache_summary = "\n".join(
+    cache_summary = "\n".join(  # Format the cache as a readable summary
         f"{i+1}: Q: {interaction['query']} | A: {interaction['response']}"
-        for i, interaction in enumerate(interactions)
+        for i, interaction in enumerate(response_cache[user_id])
     )
-    return f"Recent Interactions for @{username}:\n{cache_summary}"
-
+    return f"Recent Interactions for User {user_id}:\n{cache_summary}"
 #endregion Caching
 ##
 #
