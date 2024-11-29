@@ -114,14 +114,13 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
         print(f"No dictionary found for chat {update.message.chat_id}. Proceeding without group-specific context.")
         return None
     
+    intent = determine_intent(query, group_dictionary) # Determine the user's intent
+    
     if last_response is not None and replied_message is None: # Last response is found
-        intent = determine_intent(query, group_dictionary, last_response, None) # Determine the user's intent based on the query and group context
         context_info = determine_context(update, context, intent, query, group_dictionary, user_id, username, last_response, None)
     elif replied_message is not None: # Replied message is found
-        intent = determine_intent(query, group_dictionary, None, replied_message)
         context_info = determine_context(update, context, intent, query, group_dictionary, user_id, username, None, replied_message)
     else: # Neither last response nor replied message is found, most likely a new "hey sypher" message
-        intent = determine_intent(query, group_dictionary)
         context_info = determine_context(update, context, intent, query, group_dictionary, user_id, username, None, None)
 
     messages = [
@@ -168,15 +167,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
 ##
 # The following function is used to classify the user's intent based on the query and group context
 # The AI is prompted with the query and group context to determine the user's intent
-def determine_intent(query: str, group_dictionary: dict, last_response: str = None, replied_msg: str = None) -> str:
-    if last_response:  # Prioritize conversation continuation
-        print("Intent Classification: continue_conversation")
-        return "continue_conversation"
-
-    if replied_msg:
-        print("Intent Classification: reply_to_message")
-        return "reply_to_message"
-    
+def determine_intent(query: str, group_dictionary: dict) -> str:
     classification_prompt = (
         "Analyze the following query and classify it based on the context provided below. "
         "Describe the user's intent as clearly and specifically as possible using the provided query and context. "
