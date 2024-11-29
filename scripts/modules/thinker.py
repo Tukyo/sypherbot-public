@@ -158,19 +158,20 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
             update.message.reply_text(error_reply)
             return error_reply
         
-    cached_responses = get_response_cache(user_id)  # Get the recent responses for the user
-    if cached_responses is not "No recent responses in cache for this user.":  # If there are cached responses, include them in the context
-        context_info += f"\n{cached_responses}"
+    cached_interactions = get_interaction_cache(user_id)  # Get the recent responses for the user
+    if cached_interactions is not "No recent responses in cache for this user.":  # If there are cached responses, include them in the context
+        context_info += f"\n{cached_interactions}"
     
     print(f"Context for prompt: {context_info}")
 
     messages = [
         {"role": "system", "content": (
             "You are Sypherbot a telegram bot created by Tukyo. "
-            "Your users are mostly degens and crypto traders. "
+            "Your users are mostly degens and crypto traders who appreciate wit, humor, and sarcasm.. "
             "Answer using group context and intent. Keep responses concise and under 40 words unless more detail is requested. "
             "Do not add generic offers for assistance or polite endings. "
-            "Never cut off responses mid-thought."
+            "Never cut off responses mid-thought. "
+            "Feel free to embrace humor, crypto memes, or playful banter in your replies."
         )},
         {"role": "user", "content": context_info}
     ]
@@ -193,7 +194,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if response_message:  # Send the response back to the user
         update.message.reply_text(response_message)
         print(f"Response in chat {update.message.chat_id}: {response_message}")
-        cache_response(user_id, response_message)
+        cache_interaction(user_id, response_message)
         return response_message
     else:
         error_reply = random.choice(ERROR_REPLIES)
@@ -280,21 +281,24 @@ def get_conversation(user_id, group_id): # Get the conversation state for a user
 #
 ##
 #region Caching
-def cache_response(user_id, response_message):
+def cache_interaction(user_id, query, response_message):
     if user_id not in response_cache:
         response_cache[user_id] = []
-    
+
     if len(response_cache[user_id]) >= RESPONSE_CACHE_SIZE:
-        response_cache[user_id].pop(0)  # Remove the oldest response for this user
+        response_cache[user_id].pop(0)  # Remove the oldest interaction for this user
 
-    response_cache[user_id].append(response_message)
+    response_cache[user_id].append({"query": query, "response": response_message})
 
-def get_response_cache(user_id):
+def get_interaction_cache(user_id):
     if user_id not in response_cache or not response_cache[user_id]:
-        return "No recent responses in cache for this user."
-    
-    cache_summary = "\n".join(f"{i+1}: {response}" for i, response in enumerate(response_cache[user_id])) # Summarize responses for the user
-    return f"Recent Bot Responses for User {user_id}:\n{cache_summary}"
+        return "No recent interactions found for this user."
+
+    cache_summary = "\n".join( # Format the cache as a readable summary
+        f"{i+1}: Q: {interaction['query']} | A: {interaction['response']}"
+        for i, interaction in enumerate(response_cache[user_id])
+    )
+    return f"Recent Interactions for User {user_id}:\n{cache_summary}"
 #endregion Caching
 ##
 #
