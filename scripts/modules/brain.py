@@ -193,7 +193,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if response_message:  # Send the response back to the user
         update.message.reply_text(response_message)
         print(f"Response in chat {update.message.chat_id}: {response_message}")
-        cache_interaction(user_id, response_message)
+        cache_interaction(user_id, query, response_message)
         return response_message
     else:
         error_reply = random.choice(ERROR_REPLIES)

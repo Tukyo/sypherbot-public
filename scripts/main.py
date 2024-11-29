@@ -25,11 +25,12 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 # {config.py} - Environment variables and global variables used in the bot
 # {utils.py} - Utility functions and variables used in the bot
 # {firebase.py} - Firebase configuration and database initialization
-# {thinker.py} - AI prompt handling and conversation management
+# {brain.py} - AI prompt handling and conversation management
 # {logger.py} - Custom logger for stdout and stderr redirection
 # {setup.py} - Setup commands and functions
 # {admin.py} - Admin commands and functions for group management
-from modules import config, utils, firebase, thinker, logger, setup, admin
+from modules import config, utils, firebase, logger, setup, admin
+from scripts.modules import brain
 #
 ## This is the public version of the bot that was developed by Tukyo for the Sypher project.
 ## This bot has a customizable commands feature and admin controls, along with full charting, price, and buybot functionality.
@@ -420,23 +421,23 @@ def handle_AI_prompt(update: Update, context: CallbackContext) -> None:
 
     if utils.is_reply_to_bot(update, context):
         print(f"Detected reply to bot from user {user_id} in group {group_id}: {msg}")
-        replied_message = thinker.prompt_handler(update, context)  # Capture the response
+        replied_message = brain.prompt_handler(update, context)  # Capture the response
         if replied_message:  # Ensure a valid response exists
-            thinker.start_conversation(user_id, group_id, replied_message)
+            brain.start_conversation(user_id, group_id, replied_message)
         return
 
-    if re.match(thinker.PROMPT_PATTERN, msg, re.IGNORECASE):
+    if re.match(brain.PROMPT_PATTERN, msg, re.IGNORECASE):
         print(f"Detected AI prompt from user {user_id}: {msg}")
-        new_response = thinker.prompt_handler(update, context)  # Capture the response
+        new_response = brain.prompt_handler(update, context)  # Capture the response
         if new_response:  # Ensure a valid response exists
-            thinker.start_conversation(user_id, group_id, new_response)
+            brain.start_conversation(user_id, group_id, new_response)
     else:
-        conversation = thinker.get_conversation(user_id, group_id)
+        conversation = brain.get_conversation(user_id, group_id)
         if conversation:
             print(f"Continuing conversation with user {user_id} in group {group_id}: {msg}")
-            last_response = thinker.prompt_handler(update, context)  # Capture the follow-up response
+            last_response = brain.prompt_handler(update, context)  # Capture the follow-up response
             if last_response:  # Ensure a valid response exists
-                thinker.start_conversation(user_id, group_id, last_response)
+                brain.start_conversation(user_id, group_id, last_response)
         else:
             print(f"Message ignored for AI handling...")
 
@@ -1845,7 +1846,7 @@ def handle_guess(update: Update, context: CallbackContext) -> None:
     key = f"{chat_id}_{user_id}"
     msg = None
 
-    # if re.match(thinker.PROMPT_PATTERN, msg, re.IGNORECASE): # Don't allow guesses and AI prompts
+    # if re.match(brain.PROMPT_PATTERN, msg, re.IGNORECASE): # Don't allow guesses and AI prompts
     #     return # LATER TODO: Uncomment this to stop prompts during guessing msg = None causing nonetype
 
     if key not in context.chat_data:
@@ -2397,7 +2398,7 @@ def main() -> None:
     #
     #endregion Setup Callbacks
 
-    thinker.initialize_openai()
+    brain.initialize_openai()
 
     updater.start_polling() # Start the Bot
     start_monitoring_groups() # Start monitoring premium groups
