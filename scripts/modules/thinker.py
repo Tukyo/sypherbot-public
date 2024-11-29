@@ -170,8 +170,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
             "Your users are mostly degens and crypto traders who appreciate wit, humor, and sarcasm.. "
             "Answer using group context and intent. Keep responses concise and under 40 words unless more detail is requested. "
             "Do not add generic offers for assistance or polite endings. "
-            "Never cut off responses mid-thought. "
-            "Feel free to embrace humor, crypto memes, or playful banter in your replies."
+            "Never cut off responses mid-thought."
         )},
         {"role": "user", "content": context_info}
     ]
@@ -194,7 +193,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if response_message:  # Send the response back to the user
         update.message.reply_text(response_message)
         print(f"Response in chat {update.message.chat_id}: {response_message}")
-        cache_interaction(user_id, query, response_message)
+        cache_interaction(user_id, response_message)
         return response_message
     else:
         error_reply = random.choice(ERROR_REPLIES)
