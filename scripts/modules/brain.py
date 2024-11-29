@@ -14,7 +14,7 @@ from modules import config, utils
 # Configuration variables for easy adjustment
 MAX_INTENT_TOKENS = 20  # Maximum tokens for intent classification
 MAX_RESPONSE_TOKENS = 100  # Maximum tokens for OpenAI response
-TEMPERATURE = 0.4  # AI creativity level
+TEMPERATURE = 0.3  # AI creativity level
 FREQUENCY = 1  # AI repetition penalty
 PRESENCE = 0.25  # AI context awareness
 OPENAI_MODEL = "gpt-4o-mini"  # OpenAI model to use
@@ -130,9 +130,9 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     messages = [
         {"role": "system", "content": (
             "You are Sypherbot a telegram bot created by Tukyo. "
-            "Your users are mostly degens and crypto traders who sparingly appreciate sarcasm.. "
+            "Your users are mostly degens and crypto traders. "
             "Answer using group context and intent. Keep responses concise and under 40 words unless more detail is requested. "
-            "Do not add generic offers for assistance or polite endings. "
+            "Do not add unnecessary generic offers for assistance, polite endings, greetings, or commentary. "
             "Never cut off responses mid-thought."
         )},
         {"role": "user", "content": context_info}
@@ -156,7 +156,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if response_message:  # Send the response back to the user
         update.message.reply_text(response_message)
         print(f"Response in chat {update.message.chat_id}: {response_message}")
-        cache_interaction(user_id, username, query, response_message)
+        cache_interaction(user_id, query, response_message)
         return response_message
     else:
         error_reply = random.choice(ERROR_REPLIES)
@@ -183,7 +183,7 @@ def determine_intent(query: str, group_dictionary: dict, last_response: str = No
     classification_prompt = (
         "Analyze the following query and classify it based on the context provided below. "
         "Use the context to understand the user's intent and generate a response if necessary. "
-        "If the query does not align with the context or is unclear, return 'unknown'. "
+        "If the intent cannot be determined or is unclear, return 'unknown'. "
         f"\n\nContext:\n{group_dictionary}\n\nQuery:\n{query}"
     )
 
@@ -211,7 +211,7 @@ def determine_context(update: Update, context: CallbackContext, intent: str, que
     elif intent == "reply_to_message":
         context_info += f"Replied Message: {replied_message}\nQuery: {query}\n" 
     else:
-        context_info += f"Query: {query}\nIntent: {intent}\n"
+        context_info += f"Query: {query} || Intent: {intent}\n"
         print("No previous response found in conversation context.")
 
     matched_function = ( # After determining the intent, check if a function should be called
