@@ -9,8 +9,13 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 
 # Import custom modules from the scripts directory
+# {main.py} is the core script that contains the main logic to run the bot
+# {config.py} contains all the configuration settings for the bot
+# {utils.py} contains utility functions that are used throughout the bot
+# {firebase.py} contains all the Firebase functions to interact with the database
 from scripts import main
-from modules import utils, config, firebase
+from modules import config, utils, firebase
+##
 
 #region Bot Setup
 def store_setup_message(context, message_id):
@@ -89,7 +94,7 @@ def handle_setup_inputs_from_admin(update: Update, context: CallbackContext) -> 
         print(f"Received medium buy amount in group {update.effective_chat.id}")
         handle_medium_buy(update, context)
 
-def setup(update: Update, context: CallbackContext) -> None:
+def setup_start(update: Update, context: CallbackContext) -> None:
     msg = None
     user_id = update.effective_user.id
     chat_type = update.effective_chat.type

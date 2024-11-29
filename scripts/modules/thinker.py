@@ -1,5 +1,4 @@
 import re
-import sys
 import openai
 import random
 from threading import Timer
@@ -10,19 +9,20 @@ from telegram.ext import CallbackContext
 # {config.py} - Environment variables and global variables used in the bot
 # {firebase.py} - Firebase configuration and database initialization
 # {utils.py} - Utility functions and variables used in the bot
-from modules import config, logger, utils
-
-sys.stdout = logger.StdoutWrapper()  # Redirect stdout
-sys.stderr = logger.StderrWrapper()  # Redirect stderr
+from modules import config, utils
 
 # Configuration variables for easy adjustment
 MAX_INTENT_TOKENS = 20  # Maximum tokens for intent classification
 MAX_RESPONSE_TOKENS = 100  # Maximum tokens for OpenAI response
-TEMPERATURE = 0.7  # AI creativity level
+TEMPERATURE = 0.6  # AI creativity level
+FREQUENCY = 1  # AI repetition penalty
+PRESENCE = 0.5  # AI context awareness
 OPENAI_MODEL = "gpt-3.5-turbo"  # OpenAI model to use
 PROMPT_PATTERN = r"^(hey sypher(?:bot)?)\s*(.*)$"  # Matches "hey sypher" or "hey sypherbot" at the start
 
 ongoing_conversations = {} # Dictionary to store ongoing conversations
+RESPONSE_CACHE_SIZE = 25  # Number of responses to cache
+response_cache = {} # Cached response mapping per user for the AI to use (clears daily)
 prompt_timeout = 10  # Timeout for conversation prompts in seconds
 
 ERROR_REPLIES = [
@@ -157,14 +157,18 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
             error_reply = random.choice(ERROR_REPLIES)
             update.message.reply_text(error_reply)
             return error_reply
+        
+    cached_responses = get_response_cache(user_id)  # Get the recent responses for the user
+    if cached_responses is not "No recent responses in cache for this user.":  # If there are cached responses, include them in the context
+        context_info += f"\n{cached_responses}"
     
     print(f"Context for prompt: {context_info}")
 
     messages = [
         {"role": "system", "content": (
-            "You are Sypherbot a smart telegram bot created by Tukyo. "
+            "You are Sypherbot a telegram bot created by Tukyo. "
             "Your users are mostly degens and crypto traders. "
-            "Answer accurately using group context and intent. Keep responses concise and under 40 words unless more detail is requested. "
+            "Answer using group context and intent. Keep responses concise and under 40 words unless more detail is requested. "
             "Do not add generic offers for assistance or polite endings. "
             "Never cut off responses mid-thought."
         )},
@@ -177,6 +181,8 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
             messages=messages,
             max_tokens=MAX_RESPONSE_TOKENS,
             temperature=TEMPERATURE,
+            frequency_penalty=FREQUENCY,
+            presence_penalty=PRESENCE
         )
         response_message = openai_response.choices[0].message.content.strip()  # Extract the response text
     except Exception as e:
@@ -187,6 +193,7 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     if response_message:  # Send the response back to the user
         update.message.reply_text(response_message)
         print(f"Response in chat {update.message.chat_id}: {response_message}")
+        cache_response(user_id, response_message)
         return response_message
     else:
         error_reply = random.choice(ERROR_REPLIES)
@@ -269,6 +276,26 @@ def get_conversation(user_id, group_id): # Get the conversation state for a user
     return ongoing_conversations.get((user_id, group_id))
 ##
 #endregion Conversation Management
+##
+#
+##
+#region Caching
+def cache_response(user_id, response_message):
+    if user_id not in response_cache:
+        response_cache[user_id] = []
+    
+    if len(response_cache[user_id]) >= RESPONSE_CACHE_SIZE:
+        response_cache[user_id].pop(0)  # Remove the oldest response for this user
+
+    response_cache[user_id].append(response_message)
+
+def get_response_cache(user_id):
+    if user_id not in response_cache or not response_cache[user_id]:
+        return "No recent responses in cache for this user."
+    
+    cache_summary = "\n".join(f"{i+1}: {response}" for i, response in enumerate(response_cache[user_id])) # Summarize responses for the user
+    return f"Recent Bot Responses for User {user_id}:\n{cache_summary}"
+#endregion Caching
 ##
 #
 ##
