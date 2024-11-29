@@ -109,23 +109,20 @@ def prompt_handler(update: Update, context: CallbackContext) -> None:
     # else:
     #     dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
     
-    dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
-    if not dictionary: # You'll always find a dictionary with default values, so if not found, error occurred
+    group_dictionary = utils.fetch_group_dictionary(update, context, True) # If regular user triggered the bot, get the general group dictionary
+    if not group_dictionary: # You'll always find a dictionary with default values, so if not found, error occurred
         print(f"No dictionary found for chat {update.message.chat_id}. Proceeding without group-specific context.")
         return None
     
     if last_response is not None and replied_message is None: # Last response is found
-        filtered_dictionary = filter_dictionary(query, dictionary, None, last_response)
-        intent = determine_intent(query, filtered_dictionary, last_response, None) # Determine the user's intent based on the query and group context
-        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, username, last_response, None)
+        intent = determine_intent(query, group_dictionary, last_response, None) # Determine the user's intent based on the query and group context
+        context_info = determine_context(update, context, intent, query, group_dictionary, user_id, username, last_response, None)
     elif replied_message is not None: # Replied message is found
-        filtered_dictionary = filter_dictionary(query, dictionary, replied_message)
-        intent = determine_intent(query, filtered_dictionary, None, replied_message)
-        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, username, None, replied_message)
+        intent = determine_intent(query, group_dictionary, None, replied_message)
+        context_info = determine_context(update, context, intent, query, group_dictionary, user_id, username, None, replied_message)
     else: # Neither last response nor replied message is found, most likely a new "hey sypher" message
-        filtered_dictionary = filter_dictionary(query, dictionary, None, None)
-        intent = determine_intent(query, filtered_dictionary)
-        context_info = determine_context(update, context, intent, query, filtered_dictionary, user_id, username, None, None)
+        intent = determine_intent(query, group_dictionary)
+        context_info = determine_context(update, context, intent, query, group_dictionary, user_id, username, None, None)
 
     messages = [
         {"role": "system", "content": (
@@ -202,8 +199,8 @@ def determine_intent(query: str, group_dictionary: dict, last_response: str = No
         print(f"Error determining intent: {e}")
         return "unknown"
     
-def determine_context(update: Update, context: CallbackContext, intent: str, query: str, filtered_dictionary: dict, user_id: str, username: str, last_response: str = None, replied_message: str = None) -> str:
-    context_info = f"Context: {filtered_dictionary}\n"
+def determine_context(update: Update, context: CallbackContext, intent: str, query: str, group_dictionary: dict, user_id: str, username: str, last_response: str = None, replied_message: str = None) -> str:
+    context_info = f"Context: {group_dictionary}\n"
     context_info += f"Username: @{username}\n"
 
     if intent == "continue_conversation":
