@@ -1,7 +1,7 @@
 import sys
 import time
 import requests
-from telegram import Update
+from telegram import Bot, Update, Chat
 from telegram.ext import CallbackContext
 from cachetools import TTLCache
 
@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 
 # Import the necessary modules from the modules folder
 from modules import config, firebase
+
+bot = Bot(token=config.TELEGRAM_TOKEN)
 
 #region Message Tracking
 bot_messages = []
@@ -89,6 +91,20 @@ def is_user_owner(update: Update, context: CallbackContext, user_id: int) -> boo
         print(f"User {user_id} is not the owner of group {chat_id}")
 
     return user_is_owner
+
+def is_linked_channel(update: Update, context: CallbackContext) -> int:
+    if update.effective_chat and update.effective_chat.type in ["group", "supergroup"]:
+        chat: Chat = context.bot.get_chat(update.effective_chat.id)
+        if chat.linked_chat_id:
+            linked_channel_chat: Chat = context.bot.get_chat(chat.linked_chat_id)
+            linked_channel_username = linked_channel_chat.username or "No username"
+            print(f"Group {update.effective_chat.id} is linked to channel: {chat.linked_chat_id} (Username: @{linked_channel_username})")
+            return chat.linked_chat_id
+        else:
+            print(f"Group {update.effective_chat.id} has no linked channel.")
+            return None
+    print(f"Chat {update.effective_chat.id if update.effective_chat else 'unknown'} is not a group or supergroup.")
+    return None
 
 def is_user_trusted(update: Update, context: CallbackContext) -> None:
     user_id = str(update.effective_user.id)

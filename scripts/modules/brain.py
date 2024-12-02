@@ -12,7 +12,7 @@ from telegram.ext import CallbackContext
 from modules import config, utils
 
 # Configuration variables for easy adjustment
-MAX_INTENT_TOKENS = 20  # Maximum tokens for intent classification
+MAX_INTENT_TOKENS = 50  # Maximum tokens for intent classification
 MAX_RESPONSE_TOKENS = 100  # Maximum tokens for OpenAI response
 TEMPERATURE = 0.3  # AI creativity level
 FREQUENCY = 1  # AI repetition penalty
@@ -194,11 +194,13 @@ def determine_context(update: Update, context: CallbackContext, intent: str, que
     context_info = f"Context: {group_dictionary}\n"
     context_info += f"Username: @{username}\n"
 
-    if intent == "continue_conversation":
+    if last_response is not None: # If a previous response is found in the conversation context
         context_info += f"Previous Response: {last_response}\nQuery: {query}\n"
-    elif intent == "reply_to_message":
+        print(f"Last response found in conversation context: {last_response}")
+    elif replied_message is not None: # If a replied message is found in the conversation context
         context_info += f"Replied Message: {replied_message}\nQuery: {query}\n" 
-    else:
+        print(f"Replied message found in conversation context: {replied_message}")
+    elif replied_message is None and last_response is None: # No reply or last response found
         context_info += f"Query: {query} || Intent: {intent}\n"
         print("No previous response found in conversation context.")
 
@@ -207,15 +209,22 @@ def determine_context(update: Update, context: CallbackContext, intent: str, que
         or match_function_by_keywords(query)  # Fallback to keyword-based matching
     )
 
-    if matched_function: # If a function is matched
+    matched_function = None
+    for func_name, details in FUNCTION_REGISTRY.items():
+        if details.get("intent") == intent:
+            matched_function = details["function"]
+            print(f"Matched function by intent: {func_name}")
+            break
+
+    if matched_function:  # Execute the matched function if found
         try:
-            result = matched_function(update, context) 
+            result = matched_function(update, context)
             if result:
-                if isinstance(result, list):  # For list outputs, like trending coins
+                if isinstance(result, list):
                     formatted_result = "Function Result:\n" + "\n".join(f"- {item}" for item in result)
-                elif isinstance(result, dict):  # For dictionary outputs
+                elif isinstance(result, dict):
                     formatted_result = "Function Result:\n" + "\n".join(f"{key}: {value}" for key, value in result.items())
-                else:  # For plain strings or numbers
+                else:
                     formatted_result = f"Function Result:\n{result}"
 
                 context_info += f"\n{formatted_result}\n"
@@ -298,24 +307,6 @@ def get_interaction_cache(user_id):
 ##
 #
 ##
-#region Dictionary Filtering
-# Filters the dictionary to include only relevant entries based on the query, replied message, or last response.
-def filter_dictionary(query, dictionary, replied_message=None, last_response=None):
-    query = query.lower() # Convert the query to lowercase for case-insensitive matching
-
-    if replied_message: # Include entries related to the replied message
-        relevant_keys = [key for key in dictionary if key in replied_message.lower()]
-    elif last_response: # Include entries related to the last response
-        relevant_keys = [key for key in dictionary if key in last_response.lower()]
-    else: # Default to entries related to the query
-        relevant_keys = [key for key in dictionary if key in query.lower()]
-    
-    print(f"Filtered dictionary keys: {relevant_keys}")
-    return {key: dictionary[key] for key in relevant_keys} # Return a filtered dictionary with only relevant keys
-#endregion Dictionary Filtering
-##
-#
-##
 #region Function Handling & Registry
 # The following functions are used to handle specific commands or queries from users
 # Each function is associated with a specific context and keywords for matching
@@ -354,11 +345,12 @@ FUNCTION_REGISTRY = {
 }
 def match_function_by_keywords(query: str):
     query = query.lower()
-    for _, details in FUNCTION_REGISTRY.items():
-        for keyword in details["keywords"]:
-            if keyword.lower() in query:
-                print(f"Matched keyword: {keyword}, Function: {details['function'].__name__}")
-                return details["function"]
+    for details in FUNCTION_REGISTRY.items():
+        if details.get("intent") is None:  # Only consider functions without a clear intent
+            for keyword in details.get("keywords", []):
+                if keyword.lower() in query:
+                    print(f"Matched keyword: {keyword}, Function: {details['function'].__name__}")
+                    return details["function"]
     print("No matching keyword found.")
     return None
 #endregion Function Handling & Registry

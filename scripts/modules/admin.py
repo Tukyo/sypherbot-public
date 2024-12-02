@@ -90,7 +90,7 @@ def unmute(update: Update, context: CallbackContext) -> None:
     group_data = group_doc.get().to_dict()
 
     if group_data is None or not group_data.get('admin', {}).get('mute', False):
-        msg = update.message.reply_text("Admins are not allowed to use the unmute command in this group.")
+        msg = update.message.reply_text("Muting is disabled in this group!")
         if msg is not None:
             utils.track_message(msg)
         return

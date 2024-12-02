@@ -338,6 +338,11 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         handle_guess(update, context) # Allow anything including gameplay in private chat, but no AI prompts
         return
     
+    linked_channel_id = utils.is_linked_channel(update, context)  # Fetch the linked channel ID
+
+    if linked_channel_id is not None and update.message.sender_chat and update.message.sender_chat.id == linked_channel_id:
+        return  # Ignore restrictions for messages from the linked channel
+    
     if utils.is_user_admin(update, context):
         setup.handle_setup_inputs_from_admin(update, context) # LATER TODO: Add context to know when admin is in setup 
         handle_guess(update, context)
@@ -1068,7 +1073,7 @@ def authentication_failed(update: Update, context: CallbackContext, group_id, us
 
     context.bot.send_message( # Send a message to the user instructing them to start the authentication process again
         chat_id=user_id,
-        text="Authentication failed. Please start the authentication process again by clicking on the 'Start Authentication' button."
+        text="Authentication failed. Please start the authentication process again by clicking on the 'Authenticate' button above."
     )
 
 def delete_join_message(context: CallbackContext) -> None:
