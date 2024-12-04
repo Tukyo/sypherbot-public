@@ -2,18 +2,13 @@ import os
 import re
 import sys
 import time
-import pytz
 import json
 import random
 import inspect
 import requests
-import pandas as pd
-import mplfinance as mpf
-from decimal import Decimal
 from collections import deque, defaultdict
 from firebase_admin import firestore
-from datetime import datetime, timedelta, timezone
-from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime, timezone
 
 ## Import the needed modules from the telegram library
 import telegram
@@ -25,12 +20,13 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandle
 # {config.py} - Environment variables and global variables used in the bot
 # {utils.py} - Utility functions and variables used in the bot
 # {firebase.py} - Firebase configuration and database initialization
-# {brain.py} - AI prompt handling and conversation management
 # {logger.py} - Custom logger for stdout and stderr redirection
+# {brain.py} - AI prompt handling and conversation management
+# {crypto.py} - Crypto functions and variables used in the bot
 # {setup.py} - Setup commands and functions
 # {admin.py} - Admin commands and functions for group management
-from modules import config, utils, firebase, logger, setup, admin
-from scripts.modules import brain
+# {auth.py} - User authentication and verification functions
+from modules import config, utils, firebase, logger, brain, crypto, setup, admin, auth
 #
 ## This is the public version of the bot that was developed by Tukyo for the Sypher project.
 ## This bot has a customizable commands feature and admin controls, along with full charting, price, and buybot functionality.
@@ -315,6 +311,121 @@ def start(update: Update, context: CallbackContext) -> None:
             )
     else:
         setup(update, context)
+
+    if msg is not None:
+        utils.track_message(msg)
+
+def handle_new_user(update: Update, context: CallbackContext) -> None:
+    bot_added_to_group(update, context)
+    msg = None
+    group_id = update.message.chat.id
+    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
+    if not result:
+        print("Failed to fetch group info. No action taken.")
+        return
+
+    group_data, group_doc = result  # Unpack the tuple
+    if group_data is None:
+        group_name = "the group"  # Default text if group name not available
+        print("Group data not found.")
+    else:
+        group_name = group_data.get('group_info', {}).get('group_username', "the group")
+
+    sypher_trust_enabled = (
+        group_data.get('premium_features', {}).get('sypher_trust') if group_data else False
+    )
+
+    updates = {} # Initialize the updates to send to the database at the end of the function
+        
+    for member in update.message.new_chat_members:
+            user_id = member.id
+            chat_id = update.message.chat.id
+
+            if user_id == context.bot.id:
+                return
+            
+            print(f"New user {user_id} joined group {chat_id}")
+
+            if not utils.is_user_admin(update, context):
+                context.bot.restrict_chat_member( # Mute the new user
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    permissions=ChatPermissions(can_send_messages=False)
+                )
+
+                print(f"User {user_id} restricted in group {chat_id}")
+
+            if anti_raid.is_raid():
+                msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
+                
+                user_id = update.message.new_chat_members[0].id # Get the user_id of the user that just joined
+
+                context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id) # Kick the user that just joined
+                return
+            else: # If not a raid
+                print(f"No raid detected... Allowing user {user_id} to join.")
+
+            current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
+
+            if sypher_trust_enabled:
+                print(f"Sypher Trust is enabled for group {group_id}. Adding user {user_id} to untrusted_users.")
+                updates[f'untrusted_users.{user_id}'] = current_time
+            
+            auth_url = f"https://t.me/{config.BOT_USERNAME}?start=authenticate_{chat_id}_{user_id}"
+            keyboard = [ [InlineKeyboardButton("Start Authentication", url=auth_url)] ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
+                welcome_media_url = group_data.get('premium_features', {}).get('welcome_header_url')
+
+                if not welcome_media_url:
+                    print(f"No URL found for welcome header in group {group_id}. Sending text-only message.")
+                    msg = update.message.reply_text(
+                        f"Welcome to {group_name}! Please press the button below to authenticate.",
+                        reply_markup=reply_markup
+                    )
+                else:
+                    print(f"Group {group_id} has premium features enabled, and a header uploaded... Determining media type.")
+
+                if welcome_media_url.endswith('.gif') or welcome_media_url.endswith('.mp4'): # Determine the correct method to send media
+                    msg = update.message.reply_animation(
+                        animation=welcome_media_url,
+                        caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
+                        reply_markup=reply_markup
+                    )
+                    print(f"Sending welcome message as animation for group {group_id}.")
+                else:
+                    msg = update.message.reply_photo(
+                        photo=welcome_media_url,
+                        caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
+                        reply_markup=reply_markup
+                    )
+                    print(f"Sending welcome message as photo for group {group_id}.")
+            else:
+                msg = update.message.reply_text(
+                    f"Welcome to {group_name}! Please press the button below to authenticate.",
+                    reply_markup=reply_markup
+                )
+                print(f"Group {group_id} does not have premium features enabled. Sending welcome message without image.")
+
+            updates[f'unverified_users.{user_id}'] = { # Collect updates for Firestore
+                'timestamp': current_time,
+                'challenge': None,  # Initializes with no challenge
+                'join_message_id': msg.message_id
+            }
+            print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
+
+            context.job_queue.run_once( # Schedule the deletion of the join message after 5 minutes
+                auth.delete_welcome_message,
+                when=300, # TODO: Make this after {verification_timeout}
+                context={'chat_id': chat_id, 'message_id': msg.message_id, 'user_id': user_id}
+            )
+
+            delete_service_messages(update, context)
+
+            if updates:
+                group_doc.update(updates)
+                utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
 
     if msg is not None:
         utils.track_message(msg)
@@ -689,894 +800,6 @@ def delete_service_messages(update, context):
 ##
 #
 ##
-#region User Authentication
-def handle_new_user(update: Update, context: CallbackContext) -> None:
-    bot_added_to_group(update, context)
-    msg = None
-    group_id = update.message.chat.id
-    result = utils.fetch_group_info(update, context, return_both=True) # Fetch both group_data and group_doc
-    if not result:
-        print("Failed to fetch group info. No action taken.")
-        return
-
-    group_data, group_doc = result  # Unpack the tuple
-    if group_data is None:
-        group_name = "the group"  # Default text if group name not available
-        print("Group data not found.")
-    else:
-        group_name = group_data.get('group_info', {}).get('group_username', "the group")
-
-    sypher_trust_enabled = (
-        group_data.get('premium_features', {}).get('sypher_trust') if group_data else False
-    )
-
-    updates = {} # Initialize the updates to send to the database at the end of the function
-        
-    for member in update.message.new_chat_members:
-            user_id = member.id
-            chat_id = update.message.chat.id
-
-            if user_id == context.bot.id:
-                return
-            
-            print(f"New user {user_id} joined group {chat_id}")
-
-            if not utils.is_user_admin(update, context):
-                context.bot.restrict_chat_member( # Mute the new user
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    permissions=ChatPermissions(can_send_messages=False)
-                )
-
-                print(f"User {user_id} restricted in group {chat_id}")
-
-            if anti_raid.is_raid():
-                msg = update.message.reply_text(f'Anti-raid triggered! Please wait {anti_raid.time_to_wait()} seconds before new users can join.')
-                
-                user_id = update.message.new_chat_members[0].id # Get the user_id of the user that just joined
-
-                context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id) # Kick the user that just joined
-                return
-            else: # If not a raid
-                print(f"No raid detected... Allowing user {user_id} to join.")
-
-            current_time = datetime.now(timezone.utc).isoformat()  # Get the current date/time in ISO 8601 format
-
-            if sypher_trust_enabled:
-                print(f"Sypher Trust is enabled for group {group_id}. Adding user {user_id} to untrusted_users.")
-                updates[f'untrusted_users.{user_id}'] = current_time
-            
-            auth_url = f"https://t.me/{config.BOT_USERNAME}?start=authenticate_{chat_id}_{user_id}"
-            keyboard = [ [InlineKeyboardButton("Start Authentication", url=auth_url)] ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            if group_data is not None and group_data.get('premium') and group_data.get('premium_features', {}).get('welcome_header'):
-                welcome_media_url = group_data.get('premium_features', {}).get('welcome_header_url')
-
-                if not welcome_media_url:
-                    print(f"No URL found for welcome header in group {group_id}. Sending text-only message.")
-                    msg = update.message.reply_text(
-                        f"Welcome to {group_name}! Please press the button below to authenticate.",
-                        reply_markup=reply_markup
-                    )
-                else:
-                    print(f"Group {group_id} has premium features enabled, and a header uploaded... Determining media type.")
-
-                if welcome_media_url.endswith('.gif') or welcome_media_url.endswith('.mp4'): # Determine the correct method to send media
-                    msg = update.message.reply_animation(
-                        animation=welcome_media_url,
-                        caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
-                        reply_markup=reply_markup
-                    )
-                    print(f"Sending welcome message as animation for group {group_id}.")
-                else:
-                    msg = update.message.reply_photo(
-                        photo=welcome_media_url,
-                        caption=f"Welcome to {group_name}! Please press the button below to authenticate.",
-                        reply_markup=reply_markup
-                    )
-                    print(f"Sending welcome message as photo for group {group_id}.")
-            else:
-                msg = update.message.reply_text(
-                    f"Welcome to {group_name}! Please press the button below to authenticate.",
-                    reply_markup=reply_markup
-                )
-                print(f"Group {group_id} does not have premium features enabled. Sending welcome message without image.")
-
-            updates[f'unverified_users.{user_id}'] = { # Collect updates for Firestore
-                'timestamp': current_time,
-                'challenge': None,  # Initializes with no challenge
-                'join_message_id': msg.message_id
-            }
-            print(f"New user {user_id} added to unverified users in group {group_id} at {current_time}")
-
-            context.job_queue.run_once( # Schedule the deletion of the join message after 5 minutes
-                delete_join_message,
-                when=300, # TODO: Make this after {verification_timeout}
-                context={'chat_id': chat_id, 'message_id': msg.message_id, 'user_id': user_id}
-            )
-
-            delete_service_messages(update, context)
-
-            if updates:
-                group_doc.update(updates)
-                utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-
-    if msg is not None:
-        utils.track_message(msg)
-            
-def authentication_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-
-    _, group_id, user_id = query.data.split('_')
-
-    print(f"Authenticating user {user_id} for group {group_id}")
-
-    group_doc = firebase.DATABASE.collection('groups').document(group_id)
-    group_data = group_doc.get().to_dict()
-
-    if group_data:
-        unverified_users = group_data.get('unverified_users', {})  # Get as dictionary
-        authentication_info = group_data.get('verification_info', {})
-        authentication_type = authentication_info.get('verification_type', 'simple')
-
-        print(f"Authentication type: {authentication_type}")
-
-        if str(user_id) in unverified_users: # Check if the user ID is in the KEYS of the unverified_users mapping
-            if authentication_type == 'simple':
-                authenticate_user(context, group_id, user_id)
-            elif authentication_type == 'math' or authentication_type == 'word':
-                authentication_challenge(
-                    update, context, authentication_type, group_id, user_id
-                )
-            else:
-                query.edit_message_text(text="Invalid authentication type configured.")
-        else:
-            query.edit_message_text(
-                text="You are already verified, not a member or need to restart authentication."
-            )
-    else:
-        query.edit_message_text(text="No such group exists.")
-
-def authentication_challenge(update: Update, context: CallbackContext, authentication_type, group_id, user_id):
-    group_doc = utils.fetch_group_info(update, context, return_doc=True, group_id=group_id)
-
-    if authentication_type == 'math':
-        challenges = [config.MATH_0, config.MATH_1, config.MATH_2, config.MATH_3, config.MATH_4]
-        index = random.randint(0, 4)
-        math_challenge = challenges[index]
-
-        blob = firebase.BUCKET.blob(f'sypherbot/private/auth/math_{index}.jpg')
-        image_url = blob.generate_signed_url(expiration=timedelta(minutes=firebase.BLOB_EXPIRATION))
-
-        response = requests.get(image_url)
-        print(f"Response: {response}")
-
-        print(f"Math challenge: {math_challenge}")
-
-        keyboard = [
-            [
-                InlineKeyboardButton("1", callback_data=f'mauth_{user_id}_{group_id}_1'),
-                InlineKeyboardButton("2", callback_data=f'mauth_{user_id}_{group_id}_2'),
-                InlineKeyboardButton("3", callback_data=f'mauth_{user_id}_{group_id}_3')
-            ],
-            [
-                InlineKeyboardButton("4", callback_data=f'mauth_{user_id}_{group_id}_4'),
-                InlineKeyboardButton("5", callback_data=f'mauth_{user_id}_{group_id}_5'),
-                InlineKeyboardButton("6", callback_data=f'mauth_{user_id}_{group_id}_6')
-            ],
-            [
-                InlineKeyboardButton("7", callback_data=f'mauth_{user_id}_{group_id}_7'),
-                InlineKeyboardButton("8", callback_data=f'mauth_{user_id}_{group_id}_8'),
-                InlineKeyboardButton("9", callback_data=f'mauth_{user_id}_{group_id}_9')
-            ],
-            [
-                InlineKeyboardButton("0", callback_data=f'mauth_{user_id}_{group_id}_0')
-            ]
-        ]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        context.bot.send_photo(
-            chat_id=update.effective_chat.id,
-            photo=image_url,
-            caption="What is the answer to this math equation?",
-            reply_markup=reply_markup
-        )
-
-        group_doc.update({ # Update Firestore with the challenge
-            f'unverified_users.{user_id}.challenge': math_challenge
-        })
-        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-        print(f"Stored math challenge for user {user_id} in group {group_id}: {math_challenge}")
-
-    elif authentication_type == 'word':
-        challenges = [config.WORD_0, config.WORD_1, config.WORD_2, config.WORD_3, config.WORD_4, config.WORD_5, config.WORD_6, config.WORD_7, config.WORD_8]
-        original_challenges = challenges.copy()  # Copy the original list before shuffling
-        random.shuffle(challenges)
-        word_challenge = challenges[0]  # The word challenge is the first word in the shuffled list
-        index = original_challenges.index(word_challenge)  # Get the index of the word challenge in the original list
-
-        blob = firebase.BUCKET.blob(f'sypherbot/private/auth/word_{index}.jpg')
-        image_url = blob.generate_signed_url(expiration=timedelta(minutes=15), version="v4")
-    
-        keyboard = []
-
-        print(f"Word challenge: {word_challenge}")
-    
-        num_buttons_per_row = 3
-        for i in range(0, len(challenges), num_buttons_per_row):
-            row = [InlineKeyboardButton(word, callback_data=f'wauth_{user_id}_{group_id}_{word}') 
-                for word in challenges[i:i + num_buttons_per_row]]
-            keyboard.append(row)
-    
-        reply_markup = InlineKeyboardMarkup(keyboard)
-    
-        context.bot.send_photo(
-            chat_id=update.effective_chat.id,
-            photo=image_url,
-            caption="Identify the correct word in the image:",
-            reply_markup=reply_markup
-        )
-    
-        group_doc.update({ # Update Firestore with the challenge
-            f'unverified_users.{user_id}.challenge': word_challenge
-        })
-        utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-        print(f"Stored word challenge for user {user_id} in group {group_id}: {word_challenge}")
-    
-    else:
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="Invalid authentication type. Please try again."
-        )
-
-def callback_word_response(update: Update, context: CallbackContext):
-    query = update.callback_query
-    query.answer()
-
-    print("Processing word response.")
-
-    _, user_id, group_id, response = query.data.split('_')
-    user_id = str(user_id)
-    group_id = str(group_id)
-
-    print(f"User ID: {user_id} - Group ID: {group_id} - Response: {response}")
-
-    group_doc = firebase.DATABASE.collection('groups').document(group_id)
-    group_data = group_doc.get()
-
-    if group_data.exists:
-        group_data_dict = group_data.to_dict()
-
-        if str(user_id) in group_data_dict.get('unverified_users', {}): # Check if the user is in the unverified users mapping
-            user_challenge_data = group_data_dict['unverified_users'][str(user_id)] # Get the user's challenge data
-            challenge_answer = user_challenge_data.get('challenge')  # Extract only the challenge value as the required answer
-
-            print(f"Challenge answer: {challenge_answer}")
-
-            if response == challenge_answer:
-                authenticate_user(context, group_id, user_id)
-            else:
-                authentication_failed(update, context, group_id, user_id)
-
-        else:
-            query.edit_message_caption(
-                caption="Authentication data not found. Please start over or contact an admin."
-            )
-    else:
-        query.edit_message_caption(
-            caption="Group data not found. Please start over or contact an admin."
-        )
-
-def callback_math_response(update: Update, context: CallbackContext):
-    query = update.callback_query
-    query.answer()
-
-    print("Processing math response.")
-
-    _, user_id, group_id, response = query.data.split('_')
-    user_id = str(user_id)
-    group_id = str(group_id)
-    response = int(response)
-
-    print(f"User ID: {user_id} - Group ID: {group_id} - Response: {response}")
-
-    group_doc = firebase.DATABASE.collection('groups').document(group_id)
-    group_data = group_doc.get()
-
-    if group_data.exists:
-        group_data_dict = group_data.to_dict()
-
-        if str(user_id) in group_data_dict.get('unverified_users', {}): # Check if the user is in the unverified users mapping
-            user_challenge_data = group_data_dict['unverified_users'][str(user_id)] # Get the user's challenge data
-            challenge_answer = user_challenge_data.get('challenge')  # Extract only the challenge value as the required answer
-
-            print(f"Challenge answer: {challenge_answer}")
-
-            if response == challenge_answer:
-                authenticate_user(context, group_id, user_id)
-            else:
-                authentication_failed(update, context, group_id, user_id)
-        else:
-            query.edit_message_caption(
-                caption="Authentication data not found. Please start over or contact an admin."
-            )
-    else:
-        query.edit_message_caption(
-            caption="Group data not found. Please start over or contact an admin."
-        )
-
-def authenticate_user(context, group_id, user_id):
-    # Always check the database when authenticating the user
-    # This is to avoid using stale cached data
-    group_doc = firebase.DATABASE.collection('groups').document(group_id)
-    group_data = group_doc.get().to_dict()
-
-    print(f"Authenticating user {user_id} in group {group_id}")
-
-    if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
-        join_message_id = group_data['unverified_users'][user_id].get('join_message_id')
-        if join_message_id:
-            try: # Attempt to delete the join message
-                context.bot.delete_message(
-                    chat_id=int(group_id),
-                    message_id=join_message_id
-                )
-                print(f"Deleted join message {join_message_id} for user {user_id} in group {group_id}")
-            except Exception as e:
-                print(f"Failed to delete join message {join_message_id} for user {user_id}: {e}")
-
-        del group_data['unverified_users'][user_id]
-        print(f"Removed user {user_id} from unverified users in group {group_id}")
-
-        group_doc.set(group_data) # Write the updated group data back to Firestore
-        utils.clear_group_cache(str(group_id)) # Clear the cache on all database updates
-
-    context.bot.send_message(
-        chat_id=user_id,
-        text="Authentication successful! You may now participate in the group chat."
-    )
-
-    # Lift restrictions in the group chat for the authenticated user
-    context.bot.restrict_chat_member(
-        chat_id=int(group_id),
-        user_id=int(user_id),
-        permissions=ChatPermissions(
-            can_send_messages=True,
-            can_add_web_page_previews=True,
-            can_send_media_messages=True,
-            can_send_other_messages=True,
-            can_invite_users=False
-        )
-    )
-    print(f"User {user_id} authenticated. Restrictions lifted in group {group_id}")
-
-def authentication_failed(update: Update, context: CallbackContext, group_id, user_id):
-    print(f"Authentication failed for user {user_id} in group {group_id}")
-    group_doc = utils.fetch_group_info(update, context, return_doc=True, group_id=group_id)
-    group_data = group_doc.get().to_dict()
-
-    if 'unverified_users' in group_data and user_id in group_data['unverified_users']:
-        group_data['unverified_users'][user_id] = None
-
-    print(f"Reset challenge for user {user_id} in group {group_id}")
-
-    group_doc.set(group_data) # Write the updated group data back to Firestore
-    utils.clear_group_cache(str(update.effective_chat.id)) # Clear the cache on all database updates
-
-    context.bot.delete_message(
-        chat_id=update.effective_chat.id,
-        message_id=update.callback_query.message.message_id
-    )
-
-    context.bot.send_message( # Send a message to the user instructing them to start the authentication process again
-        chat_id=user_id,
-        text="Authentication failed. Please start the authentication process again by clicking on the 'Authenticate' button above."
-    )
-
-def delete_join_message(context: CallbackContext) -> None:
-    job_data = context.job.context
-    chat_id = job_data['chat_id']
-    message_id = job_data['message_id']
-    user_id = job_data['user_id']
-
-    try:
-        context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        print(f"Deleted join message {message_id} for user {user_id} in chat {chat_id}.")
-    except Exception as e:
-        print(f"Failed to delete join message {message_id} for user {user_id} in chat {chat_id}: {e}")
-# endregion User Authentication
-#
-#region Crypto Logic
-##
-#
-##
-#region Chart
-def fetch_ohlcv_data(time_frame, chain, liquidity_address):
-    now = datetime.now()
-    one_hour_ago = now - timedelta(hours=1)
-    start_of_hour_timestamp = int(one_hour_ago.timestamp())
-    chain_lowercase = chain.lower()
-    if chain_lowercase == "ethereum":
-        chain_lowercase = "eth"
-    if chain_lowercase == "polygon":
-        chain_lowercase = "polygon_pos"
-    url = f"https://api.geckoterminal.com/api/v2/networks/{chain_lowercase}/pools/{liquidity_address}/ohlcv/{time_frame}" # TODO: REMOVE API
-    params = {
-        'aggregate': '1' + time_frame[0],  # '1m', '1h', '1d' depending on the time frame
-        'before_timestamp': start_of_hour_timestamp,
-        'limit': '60',  # Fetch only the last hour data
-        'currency': 'usd'
-    }
-    print(f"Fetching OHLCV data from URL: {url} with params: {params}")
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print("Failed to fetch data:", response.status_code, response.text)
-        return None
-
-def prepare_data_for_chart(ohlcv_data):
-    ohlcv_list = ohlcv_data['data']['attributes']['ohlcv_list']
-    data = [{
-        'Date': pd.to_datetime(item[0], unit='s'),
-        'Open': item[1],
-        'High': item[2],
-        'Low': item[3],
-        'Close': item[4],
-        'Volume': item[5]
-    } for item in ohlcv_list]
-
-    data_frame = pd.DataFrame(data)
-    data_frame.sort_values('Date', inplace=True)
-    data_frame.set_index('Date', inplace=True)
-    return data_frame
-
-def plot_candlestick_chart(data_frame, group_id):
-    mc = mpf.make_marketcolors(
-        up='#2dc60e',
-        down='#ff0000',
-        edge='inherit',
-        wick='inherit',
-        volume='inherit'
-    )
-    s = mpf.make_mpf_style(
-        marketcolors=mc,
-        rc={
-            'font.size': 8,
-            'axes.labelcolor': '#2dc60e',
-            'axes.edgecolor': '#2dc60e',
-            'xtick.color': '#2dc60e',
-            'ytick.color': '#2dc60e',
-            'grid.color': '#0f3e07',
-            'grid.linestyle': '--',
-            'figure.facecolor': 'black',
-            'axes.facecolor': 'black'
-        }
-    )
-    save_path = f'/tmp/candlestick_chart_{group_id}.png'
-    mpf.plot(data_frame, type='candle', style=s, volume=True, savefig=save_path)
-    print(f"Chart saved to {save_path}")
-#endregion Chart
-#
-#region Buybot
-MONITOR_INTERVAL = 20 # Interval for monitoring jobs (seconds)
-scheduler = BackgroundScheduler()
-def start_monitoring_groups():
-    groups_snapshot = firebase.DATABASE.collection('groups').get()
-    for group_doc in groups_snapshot:
-        group_data = group_doc.to_dict()
-        group_data['group_id'] = group_doc.id
-
-        if group_data.get('premium', False):  # Check if premium is True
-            schedule_group_monitoring(group_data)
-        else:
-            print(f"Group {group_data['group_id']} is not premium. Skipping monitoring.")
-
-    scheduler.start()
-
-def schedule_group_monitoring(group_data):
-    group_id = str(group_data['group_id'])
-    job_id = f"monitoring_{group_id}"
-    token_info = group_data.get('token')
-
-    if token_info:
-        chain = token_info.get('chain')
-        liquidity_address = token_info.get('liquidity_address')
-        web3_instance = config.WEB3_INSTANCES.get(chain)
-
-        if web3_instance and web3_instance.is_connected():
-            existing_job = scheduler.get_job(job_id)  # Check for existing job with ID
-            if existing_job:
-                existing_job.remove()  # Remove existing job to update with new information
-
-            scheduler.add_job(
-                monitor_transfers,
-                'interval',
-                seconds=MONITOR_INTERVAL,
-                args=[web3_instance, liquidity_address, group_data],
-                id=job_id,  # Unique ID for the job
-                timezone=pytz.utc  # Use the UTC timezone from the pytz library
-            )
-            print(f"Scheduled monitoring for premium group {group_id}")
-        else:
-            print(f"Web3 instance not connected for group {group_id} on chain {chain}")
-    else:
-        print(f"No token info found for group {group_id} - Not scheduling monitoring.")
-
-def monitor_transfers(web3_instance, liquidity_address, group_data):
-    abi_path = os.path.join(config.CONFIG_DIR, 'erc20.abi.json')
-
-    with open(abi_path, 'r') as abi_file:
-        abi = json.load(abi_file)
-    
-    contract_address = group_data['token']['contract_address']
-    
-    contract = web3_instance.eth.contract(address=contract_address, abi=abi)
-
-    # Initialize static tracking of the last seen block
-    if not hasattr(monitor_transfers, "last_seen_block"):
-        lookback_range = 100 # Check the last block on boot
-        monitor_transfers.last_seen_block = web3_instance.eth.block_number - lookback_range
-
-    last_seen_block = monitor_transfers.last_seen_block
-    latest_block = web3_instance.eth.block_number
-
-    if last_seen_block >= latest_block:
-        print(f"No new blocks to process for group {group_data['group_id']}.")
-        return  # Exit if no new blocks
-
-    print(f"Processing blocks {last_seen_block + 1} to {latest_block} for group {group_data['group_id']}")
-
-    try:
-        logs = contract.events.Transfer().get_logs( # Fetch Transfer events in the specified block range
-            from_block=last_seen_block + 1,
-            to_block=latest_block,
-            argument_filters={'from': liquidity_address}
-        )
-
-        for log in logs: # Process each log
-            handle_transfer_event(log, group_data)  # Pass the decoded log to your handler
-
-        monitor_transfers.last_seen_block = latest_block # Update static last_seen_block
-
-    except Exception as e:
-        print(f"Error during transfer monitoring for group {group_data['group_id']}: {e}")
-
-def handle_transfer_event(event, group_data):
-    fetched_data, group_doc = utils.fetch_group_info(
-        update=None,  # No update object is available in this context
-        context=None,  # No context object is used here
-        return_both=True,
-        group_id=group_data['group_id']
-    )
-
-    if fetched_data is None:
-        print(f"Failed to fetch group data for group ID {group_data['group_id']}.")
-        return
-    
-    buybot_config = fetched_data.get('premium_features', {}).get('buybot', {})
-    minimum_buy_amount = buybot_config.get('minimumbuy', 1000)  # Default to 1000 if not set
-    small_buy_amount = buybot_config.get('smallbuy', 2500)  # Default to 2500 if not set
-    medium_buy_amount = buybot_config.get('mediumbuy', 5000) # Default to 5000
-
-    amount = event['args']['value']
-    tx_hash = event['transactionHash'].hex()
-
-    if not tx_hash.startswith("0x"):
-        tx_hash = "0x" + tx_hash
-
-    decimals = group_data['token'].get('decimals', 18)  # Convert amount to token decimal
-    token_amount = Decimal(amount) / (10 ** decimals)
-
-    print(f"Received transfer event for {token_amount} tokens.")
-    print(f"Transaction hash: {tx_hash}")
-    
-    chain = group_data['token']['chain'] # Fetch the USD price of the token using Uniswap V3 and Chainlink1
-    lp_address = group_data['token']['liquidity_address']
-    token_price_in_usd = get_token_price_in_usd(chain, lp_address)
-
-    if token_price_in_usd is not None:
-        token_price_in_usd = Decimal(token_price_in_usd)
-        total_value_usd = token_amount * token_price_in_usd
-        if total_value_usd < minimum_buy_amount:
-            print(f"Ignoring small buy below the minimum threshold: ${total_value_usd:.2f}")
-            return  # Ignore small buy events
-        value_message = f" (${total_value_usd:.2f})"
-        header_emoji, buyer_emoji = categorize_buyer(total_value_usd, small_buy_amount, medium_buy_amount)
-    else:
-        print("Failed to fetch token price in USD.")
-        return
-
-    token_name = group_data['token'].get('symbol', 'TOKEN')
-    blockscanner = config.BLOCKSCANNERS.get(chain.upper())
-    
-    if blockscanner:
-        transaction_link = f"https://{blockscanner}/tx/{tx_hash}"
-        message = (
-            f"{header_emoji} BUY ALERT {header_emoji}\n\n"
-            f"{buyer_emoji} {token_amount:,.4f} {token_name}{value_message}"
-        )
-        print(f"Sending buy message with transaction link for group {group_data['group_id']}")
-
-        keyboard = [[InlineKeyboardButton("View Transaction", url=transaction_link)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        send_buy_message(message, group_data['group_id'], reply_markup)
-    else:
-        message = ( # Fallback message when blockscanner is unknown
-            f"{header_emoji} BUY ALERT {header_emoji}\n\n"
-            f"{buyer_emoji} {token_amount:.4f} {token_name}{value_message}\n\n"
-            f"Transaction hash: {tx_hash}"
-        )
-        print(f"Sending fallback buy message for group {group_data['group_id']}")
-        send_buy_message(message, group_data['group_id'])
-
-def categorize_buyer(usd_value, small_buy, medium_buy):
-    if usd_value < small_buy:
-        return "💸", "🐟"
-    elif usd_value < medium_buy:
-        return "💰", "🐬"
-    else:
-        return "🤑", "🐳"
-    
-def send_buy_message(text, group_id, reply_markup=None):
-    msg = None
-    bot = telegram.Bot(token=config.TELEGRAM_TOKEN)
-    group_data = utils.fetch_group_info(None, None, group_id)
-    
-    if not utils.rate_limit_check(group_id):
-        msg = bot.send_message(chat_id=group_id, text="Bot rate limit exceeded. Please try again later.")
-        return
-    
-    try:
-        if group_data and group_data.get('premium') and group_data.get('premium_features', {}).get('buybot_header'):
-            buybot_header_url = group_data['premium_features'].get('buybot_header_url')
-
-            if not buybot_header_url:
-                print(f"No buybot header URL found for group {group_id}. Sending message without media.")
-
-            print(f"Group {group_id} has premium features enabled, and has a buybot header uploaded... Determining media type.")
-            
-            if buybot_header_url.endswith('.gif') or buybot_header_url.endswith('.mp4'):
-                msg = bot.send_animation(
-                    chat_id=group_id,
-                    animation=buybot_header_url,
-                    caption=text,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
-                print(f"Sending buybot message as animation for group {group_id}.")
-            else:
-                msg = bot.send_photo(
-                    chat_id=group_id,
-                    photo=buybot_header_url,
-                    caption=text,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
-                print(f"Sending buybot message as photo for group {group_id}.")
-        else: # Default behavior: send as text-only message
-            print(f"Group {group_id} does not have premium features or buybot header enabled. Sending message without media.")
-            msg = bot.send_message(
-                chat_id=group_id,
-                text=text,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-    except Exception as e:
-        print(f"Error sending message: {e}")
-
-    if msg is not None:
-        utils.track_message(msg)
-#endregion Buybot
-#
-#region Price Fetching
-def get_token_price_in_usd(chain, lp_address):
-    try:
-        eth_price_in_usd = check_eth_price() # Step 1: Get ETH price in USD using Chainlink
-        if eth_price_in_usd is None:
-            print("Failed to fetch ETH price from Chainlink.")
-            return None
-
-        pool_type = determine_pool_type(chain, lp_address)
-        if pool_type not in ["v3", "v2"]:
-            return None
-        
-        price_in_weth = get_uniswap_position_data(chain, lp_address, pool_type)
-
-        if price_in_weth is None:
-            print("Failed to fetch token price in WETH from Uniswap V3.")
-            return None
-
-        token_price_in_usd = price_in_weth * Decimal(eth_price_in_usd) # Step 3: Convert token price from WETH to USD
-        print(f"Token price in USD: {token_price_in_usd}")
-        return token_price_in_usd
-
-    except Exception as e:
-        print(f"Error fetching token price in USD: {e}")
-        return None
-    
-def check_eth_price():
-    try:
-        latest_round_data = config.CHAINLINK_CONTRACT.functions.latestRoundData().call()
-        price = latest_round_data[1] / 10 ** 8
-        print(f"ETH price: ${price}")
-        return price
-    except Exception as e:
-        print(f"Failed to get ETH price: {e}")
-        return None
-
-def determine_pool_type(chain, lp_address):
-    try:
-        web3_instance = config.WEB3_INSTANCES.get(chain)
-        if not web3_instance:
-            print(f"Web3 instance for chain {chain} not found or not connected.")
-            return None
-        
-        abi_path = os.path.join(config.CONFIG_DIR, 'uniswap_v3.abi.json')
-        with open(abi_path, 'r') as abi_file:
-            abi = json.load(abi_file)
-
-        address = web3_instance.to_checksum_address(lp_address)
-
-        pair_contract = web3_instance.eth.contract(address=address, abi=abi)
-
-        pair_contract.functions.slot0().call() # Attempt to call the slot0 function
-        print("Pool is a Uniswap V3 pool.")
-        return "v3"
-    except Exception as e:
-        if "execution reverted" in str(e) or "no data" in str(e):
-            print("Pool is a Uniswap V2 pool.")
-            return "v2"
-        print(f"Error determining pool type: {e}")
-        return None
-    
-def get_uniswap_position_data(chain, lp_address, pool_type):
-    try:
-        web3_instance = config.WEB3_INSTANCES.get(chain)
-        if not web3_instance:
-            print(f"Web3 instance for chain {chain} not found or not connected.")
-            return None
-
-        abi_path = os.path.join(config.CONFIG_DIR, f'uniswap_{pool_type}.abi.json')
-        with open(abi_path, 'r') as abi_file:
-            abi = json.load(abi_file)
-
-        address = web3_instance.to_checksum_address(lp_address)
-        pair_contract = web3_instance.eth.contract(address=address, abi=abi)
-
-        erc20_abi_path = os.path.join(config.CONFIG_DIR, 'erc20.abi.json')
-        with open(erc20_abi_path, 'r') as erc20_abi_file:
-            erc20_abi = json.load(erc20_abi_file)
-
-        if pool_type == "v2":
-            reserves = pair_contract.functions.getReserves().call()
-            reserve0 = Decimal(reserves[0])
-            reserve1 = Decimal(reserves[1])
-            print(f"Raw reserves: reserve0={reserve0}, reserve1={reserve1}")
-
-            token0_address = pair_contract.functions.token0().call()
-            token1_address = pair_contract.functions.token1().call()
-
-            token0_contract = web3_instance.eth.contract(address=token0_address, abi=erc20_abi)
-            token1_contract = web3_instance.eth.contract(address=token1_address, abi=erc20_abi)
-            decimals0 = token0_contract.functions.decimals().call()
-            decimals1 = token1_contract.functions.decimals().call()
-
-            print(f"Token0 decimals: {decimals0}, Token1 decimals: {decimals1}")
-
-            weth_address = config.WETH_ADDRESSES.get(chain).lower()
-            print(f"WETH address on {chain}: {weth_address}")
-
-            
-            if token0_address.lower() == weth_address:
-                reserve_weth = reserve0 / (10 ** decimals0)
-                reserve_token = reserve1 / (10 ** decimals1)
-            elif token1_address.lower() == weth_address:
-                reserve_weth = reserve1 / (10 ** decimals1)
-                reserve_token = reserve0 / (10 ** decimals0)
-            else:
-                print("Neither token0 nor token1 is WETH. Unable to calculate price.")
-                return None
-
-            print(f"Adjusted reserves: reserve_token={reserve_token}, reserve_weth={reserve_weth}")
-
-            price_in_weth = reserve_weth / reserve_token # Calculate token price in WETH
-            print(f"Token price in WETH (Uniswap V2): {price_in_weth:.18f}")
-            return price_in_weth
-        if pool_type == "v3":
-            slot0 = pair_contract.functions.slot0().call()  # Fetch slot0 data (contains sqrtPriceX96)
-            sqrt_price_x96 = slot0[0]
-            print(f"Raw sqrtPriceX96: {sqrt_price_x96}")
-
-            token0_address = pair_contract.functions.token0().call()
-            token1_address = pair_contract.functions.token1().call()
-
-            token0_contract = web3_instance.eth.contract(address=token0_address, abi=erc20_abi)
-            token1_contract = web3_instance.eth.contract(address=token1_address, abi=erc20_abi)
-            decimals0 = token0_contract.functions.decimals().call()
-            decimals1 = token1_contract.functions.decimals().call()
-
-            print(f"Token0 decimals: {decimals0}, Token1 decimals: {decimals1}")
-
-            sqrt_price_x96_decimal = Decimal(sqrt_price_x96) # Adjust sqrtPriceX96 for price calculation
-            price_in_weth = (sqrt_price_x96_decimal ** 2) / Decimal(2 ** 192)
-
-            weth_address = config.WETH_ADDRESSES.get(chain).lower()
-            print(f"WETH address on {chain}: {weth_address}")
-
-            if token1_address.lower() == weth_address: # If token1 is WETH; price_in_weth is already correct
-                price_in_weth_adjusted = price_in_weth * (10 ** (decimals0 - decimals1))
-                print(f"Price of token0 in WETH: {price_in_weth_adjusted:.18f}")
-            elif token0_address.lower() == weth_address: # If token0 is WETH; invert the price
-                price_in_weth_adjusted = (1 / price_in_weth) * (10 ** (decimals1 - decimals0))
-                print(f"Price of token1 in WETH: {price_in_weth_adjusted:.18f}")
-            else:
-                print("Neither token0 nor token1 is WETH. Unable to calculate price.")
-                return None
-            return price_in_weth_adjusted
-        
-    except Exception as e:
-        print(f"Error fetching Uniswap {pool_type} reserves: {e}")
-        return None
-      
-def get_token_price(update: Update, context: CallbackContext) -> None:
-    print("Fetching token price...")
-
-    args = context.args
-    modifier = args[0].upper() if args else "USD"  # Default to "USD" if no modifier provided
-
-    if modifier not in ["USD", "ETH"]:
-        print(f"Invalid modifier: {modifier}")
-        update.message.reply_text("Invalid modifier! Use /price USD or /price ETH.")
-        return
-
-    group_data = utils.fetch_group_info(update, context)
-    if group_data is None:
-        return
-
-    token_data = utils.fetch_group_token(group_data, update, context)
-    if not token_data:
-        return
-
-    lp_address = token_data["liquidity_address"]
-    chain = token_data["chain"]
-
-    if not lp_address or not chain:
-        print("Liquidity address or chain not found for this group.")
-        update.message.reply_text("Liquidity address or chain not found for this group.")
-        return
-
-    try:
-        pool_type = determine_pool_type(chain, lp_address)
-        if pool_type not in ["v3", "v2"]:
-            update.message.reply_text("Failed to determine pool type.")
-            return
-        
-        if modifier == "USD":
-            token_price_in_usd = get_token_price_in_usd(chain, lp_address) # Use the existing get_token_price_in_usd function
-            if token_price_in_usd is None:
-                update.message.reply_text("Failed to fetch token price in USD.")
-                return
-            update.message.reply_text(f"${token_price_in_usd:.9f}")
-        elif modifier == "ETH":
-            price_in_weth = get_uniswap_position_data(chain, lp_address, pool_type)
-            if price_in_weth is None:
-                print("Failed to fetch Uniswap V3 position data.")
-                update.message.reply_text("Failed to fetch Uniswap V3 position data.")
-                return
-            update.message.reply_text(f"{price_in_weth:.12f} ETH")
-    except Exception as e:
-        print(f"Unexpected error occurred: {e}")
-        update.message.reply_text("An unexpected error occurred while fetching the token price.")
-#endregion Price Fetching
-##
-#
-##
-#endregion Crypto Logic
-#
 #region User Controls
 def commands(update: Update, context: CallbackContext) -> None:
     msg = None
@@ -1653,7 +876,7 @@ def command_buttons(update: Update, context: CallbackContext) -> None:
         elif command_key == 'commands_website':
             website(update, context)
         elif command_key == 'commands_price':
-            get_token_price(update, context)
+            price(update, context)
         elif command_key == 'commands_chart':
             chart(update, context)
         elif command_key == 'commands_liquidity':
@@ -2190,6 +1413,56 @@ def get_volume(chain, lp_address):
         print(f"Failed to fetch volume data: {str(e)}")
         return None
 
+def price(update: Update, context: CallbackContext) -> None:
+    print("Fetching token price...")
+
+    args = context.args
+    modifier = args[0].upper() if args else "USD"  # Default to "USD" if no modifier provided
+
+    if modifier not in ["USD", "ETH"]:
+        print(f"Invalid modifier: {modifier}")
+        update.message.reply_text("Invalid modifier! Use /price USD or /price ETH.")
+        return
+
+    group_data = utils.fetch_group_info(update, context)
+    if group_data is None:
+        return
+
+    token_data = utils.fetch_group_token(group_data, update, context)
+    if not token_data:
+        return
+
+    lp_address = token_data["liquidity_address"]
+    chain = token_data["chain"]
+
+    if not lp_address or not chain:
+        print("Liquidity address or chain not found for this group.")
+        update.message.reply_text("Liquidity address or chain not found for this group.")
+        return
+
+    try:
+        pool_type = crypto.determine_pool_type(chain, lp_address)
+        if pool_type not in ["v3", "v2"]:
+            update.message.reply_text("Failed to determine pool type.")
+            return
+        
+        if modifier == "USD":
+            token_price_in_usd = crypto.get_token_price_in_usd(chain, lp_address) # Use the existing get_token_price_in_usd function
+            if token_price_in_usd is None:
+                update.message.reply_text("Failed to fetch token price in USD.")
+                return
+            update.message.reply_text(f"${token_price_in_usd:.9f}")
+        elif modifier == "ETH":
+            price_in_weth = crypto.get_uniswap_position_data(chain, lp_address, pool_type)
+            if price_in_weth is None:
+                print("Failed to fetch Uniswap V3 position data.")
+                update.message.reply_text("Failed to fetch Uniswap V3 position data.")
+                return
+            update.message.reply_text(f"{price_in_weth:.12f} ETH")
+    except Exception as e:
+        print(f"Unexpected error occurred: {e}")
+        update.message.reply_text("An unexpected error occurred while fetching the token price.")
+
 def chart(update: Update, context: CallbackContext) -> None:
     msg = None
     args = context.args
@@ -2235,12 +1508,12 @@ def chart(update: Update, context: CallbackContext) -> None:
         return
 
     group_id = str(update.effective_chat.id)  # Ensuring it's always the chat ID if not found in group_data
-    ohlcv_data = fetch_ohlcv_data(time_frame, chain, liquidity_address)
+    ohlcv_data = crypto.fetch_ohlcv_data(time_frame, chain, liquidity_address)
     
     if ohlcv_data:
         chain_lower = chain.lower()
-        data_frame = prepare_data_for_chart(ohlcv_data)
-        plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
+        data_frame = crypto.prepare_data_for_chart(ohlcv_data)
+        crypto.plot_candlestick_chart(data_frame, group_id)  # Pass group_id here
 
         dexscreener_url = f"https://dexscreener.com/{chain_lower}/{liquidity_address}"
         if chain_lower == "ethereum":
@@ -2320,7 +1593,7 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("endgame", end_game))
     dispatcher.add_handler(CommandHandler(['contract', 'ca'], contract))
     dispatcher.add_handler(CommandHandler(['buy', 'purchase'], buy))
-    dispatcher.add_handler(CommandHandler("price", get_token_price, pass_args=True))
+    dispatcher.add_handler(CommandHandler("price", price, pass_args=True))
     dispatcher.add_handler(CommandHandler("chart", chart))
     dispatcher.add_handler(CommandHandler(['liquidity', 'lp'], liquidity))
     dispatcher.add_handler(CommandHandler("volume", volume))
@@ -2360,9 +1633,9 @@ def main() -> None:
     #endregion General Callbacks
     ##
     #region Authentication Callbacks
-    dispatcher.add_handler(CallbackQueryHandler(authentication_callback, pattern='^authenticate_'))
-    dispatcher.add_handler(CallbackQueryHandler(callback_math_response, pattern='^mauth_'))
-    dispatcher.add_handler(CallbackQueryHandler(callback_word_response, pattern='^wauth_'))
+    dispatcher.add_handler(CallbackQueryHandler(auth.authentication_callback, pattern='^authenticate_'))
+    dispatcher.add_handler(CallbackQueryHandler(auth.callback_math_response, pattern='^mauth_'))
+    dispatcher.add_handler(CallbackQueryHandler(auth.callback_word_response, pattern='^wauth_'))
     #endregion Authentication Callbacks
     ##
     #region Buybot Callbacks
@@ -2407,7 +1680,7 @@ def main() -> None:
     brain.initialize_openai()
 
     updater.start_polling() # Start the Bot
-    start_monitoring_groups() # Start monitoring premium groups
+    crypto.start_monitoring_groups() # Start monitoring premium groups
     updater.idle() # Run the bot until stopped
 
 if __name__ == '__main__':

@@ -345,7 +345,7 @@ FUNCTION_REGISTRY = {
 }
 def match_function_by_keywords(query: str):
     query = query.lower()
-    for details in FUNCTION_REGISTRY.items():
+    for func_name, details in FUNCTION_REGISTRY.items():  # Unpack key-value pairs from FUNCTION_REGISTRY
         if details.get("intent") is None:  # Only consider functions without a clear intent
             for keyword in details.get("keywords", []):
                 if keyword.lower() in query:
